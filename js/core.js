@@ -377,6 +377,26 @@ const App = (() => {
     el.textContent = `${fecha} · ${hora}`;
   }
 
+  // Última actualización SIEMPRE visible en la cabecera ("Datos al DD/MM · HH:MM"). En la
+  // app la lee de /actualizar/ultima; en el visor, de manifest.json (lo escribe el publicador).
+  async function mostrarUltima() {
+    const el = document.getElementById("topbar-sync");
+    if (!el) return;
+    let fecha = null;
+    try {
+      if (window.HIDROMET_VISOR) {
+        const m = await (await fetch("manifest.json?_=" + Date.now())).json();
+        fecha = m && (m.generado || m.fecha);
+      } else {
+        const u = await api("/actualizar/ultima");
+        fecha = u && u.fecha;
+      }
+    } catch (e) { /* aún sin marca */ }
+    if (!fecha) { el.textContent = window.HIDROMET_VISOR ? "Visor en línea" : "Datos locales"; return; }
+    const m = String(fecha).replace("T", " ").match(/(\d{4})-(\d{2})-(\d{2})\D+(\d{2}):(\d{2})/);
+    el.textContent = m ? `Datos al ${m[3]}/${m[2]} · ${m[4]}:${m[5]}` : ("Datos al " + String(fecha).slice(0, 16));
+  }
+
   /* §B.8: estilos del bloqueo global + barra de cancelar (autocontenidos en
      core.js para no tocar archivos de otros agentes; se inyectan una vez). */
   function inyectarEstilosBloqueo() {
@@ -424,6 +444,8 @@ const App = (() => {
     pintarNav();
     actualizarReloj();
     setInterval(actualizarReloj, 30000);
+    mostrarUltima();
+    setInterval(mostrarUltima, 300000);
     window.addEventListener("hashchange", pintarVista);
     await pintarVista();
   }
