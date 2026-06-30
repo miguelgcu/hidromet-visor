@@ -30,22 +30,48 @@ const App = (() => {
   // Mapeo determinista ruta-de-API → archivo de producto (IDÉNTICO en el exportador del
   // motor). Ej: "/cartas/alertas?fecha=X" → "productos/cartas/alertas/fecha=X.json";
   // rutas que ya son un archivo (.geojson) se sirven tal cual bajo productos/.
-  function rutaAProducto(ruta) {
+  // Construye el path del producto con el MISMO stripping que el exportador (exportar_web.py):
+  // carta_datos ignora fin/corrido (redundantes dado archivo+record); mlnwp ignora deps (y
+  // familia salvo en el resumen de validación); sngr/eventos = lista completa. 'drop' añade
+  // parámetros volátiles a ignorar para el fallback difuso.
+  function _slugProducto(ruta, drop) {
     const [path, query] = String(ruta).split("?");
     const base = path.replace(/^\//, "");
     if (/\.(geojson|json|png|csv)$/i.test(base) && !query) return "productos/" + base;
-    const slug = query
-      ? query.split("&").filter(Boolean).sort().join("&").replace(/[^a-zA-Z0-9=._-]/g, "_")
+    let pares = query ? query.split("&").filter(Boolean) : [];
+    const quita = new Set(drop || []);
+    if (base === "cartas/carta_datos") { quita.add("fin"); quita.add("corrido"); }
+    if (base.indexOf("mlnwp/") === 0) { quita.add("deps"); if (base !== "mlnwp/validacion") quita.add("familia"); }
+    if (base === "sngr/eventos") pares = [];
+    if (quita.size) pares = pares.filter(p => !quita.has(p.split("=")[0]));
+    // canónico: decodifica los valores (el exportador usa el valor crudo) antes del slug,
+    // así "familia=Mejor%20desempe%C3%B1o" y "familia=Mejor desempeño" mapean igual.
+    const norm = pares.map(p => {
+      const i = p.indexOf("=");
+      if (i < 0) return p;
+      let v = p.slice(i + 1);
+      try { v = decodeURIComponent(v); } catch (e) { /* dejar como está */ }
+      return p.slice(0, i) + "=" + v;
+    });
+    const slug = norm.length
+      ? norm.sort().join("&").replace(/[^a-zA-Z0-9=._-]/g, "_")
       : "index";
     return "productos/" + base + "/" + slug + ".json";
   }
+  function rutaAProducto(ruta) { return _slugProducto(ruta, []); }
 
   async function apiVisor(ruta, opts = {}) {
     if ((opts.method || "GET").toUpperCase() !== "GET")
       throw new Error("Acción no disponible en el visor en línea (es de solo lectura).");
-    const resp = await fetch(rutaAProducto(ruta), { cache: "no-cache" });
-    if (!resp.ok) throw new Error("Este dato aún no está publicado en el visor.");
-    return resp.json();
+    // Intenta el archivo exacto; si no está, cae a versiones canónicas quitando filtros
+    // volátiles (familia/deps/lookback) que no cambian la estructura del dato.
+    for (const drop of [[], ["familia"], ["familia", "deps", "lookback", "ventana"]]) {
+      let resp;
+      try { resp = await fetch(_slugProducto(ruta, drop), { cache: "no-cache" }); }
+      catch (e) { continue; }
+      if (resp && resp.ok) return resp.json();
+    }
+    throw new Error("Este dato aún no está publicado en el visor.");
   }
 
   /* ---------------- avisos (toasts) ---------------- */
