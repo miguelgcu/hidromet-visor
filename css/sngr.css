@@ -1,0 +1,170 @@
+/* ============================================================
+   HidroMet · Eventos de Ríos (SNGR) — clases específicas del módulo.
+   Acento: cian (--cyan). Valores tomados literalmente de
+   Diseño/HANDOFF/diseno/HidroMet.dc.html (data-screen-label="Eventos de Ríos").
+   Usa los tokens y clases de base.css; aquí solo lo propio del módulo.
+   ============================================================ */
+
+/* ---------- cabecera propia del módulo ---------- */
+.sngr-cabecera { display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 20px; margin-bottom: 14px; flex-wrap: wrap; }
+.sngr-cabecera .kicker { color: var(--cyan); }
+.sngr-cabecera h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -.01em; color: var(--ink); }
+.sngr-cabecera .sub { color: var(--muted); font-size: 13.5px; margin-top: 3px; }
+.sngr-acciones { display: flex; gap: 8px; }
+
+/* botón secundario de la cabecera con hover de acento cian */
+.sngr-acciones .boton:hover { border-color: var(--cyan); }
+
+/* ---------- conteos: pills compactas, clicables y dinámicas por filtro ---------- */
+.sngr-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.sngr-pill { display: inline-flex; align-items: center; gap: 7px; padding: 6px 13px;
+  border-radius: 999px; border: 1px solid var(--line); background: var(--surface);
+  cursor: pointer; box-shadow: var(--shadow-card); transition: border-color .12s, background .12s; }
+.sngr-pill .punto { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 9px; }
+.sngr-pill .punto.todos { background: linear-gradient(135deg, var(--blue), var(--ml-purple)); }
+.sngr-pill .et { font: 600 12px var(--fuente); color: var(--muted); }
+.sngr-pill .num { font: 700 13px var(--mono); color: var(--ink); }
+.sngr-pill:hover { border-color: var(--cyan); }
+.sngr-pill.activa { border-color: var(--cyan); background: var(--surface-3); }
+.sngr-pill.activa .et { color: var(--ink); }
+
+/* ---------- filtros en cascada (una fila) ---------- */
+.sngr-filtros { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 11px;
+  padding: 13px 15px; margin-bottom: 14px; box-shadow: var(--shadow-card); }
+.sngr-filtros label { display: block; }
+.sngr-filtros .tit { font: 600 10px var(--mono); letter-spacing: .08em; color: var(--faint);
+  text-transform: uppercase; margin-bottom: 6px; }
+.sngr-filtros select { font: 500 13px var(--fuente); color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line-2); border-radius: 8px; padding: 8px 10px; cursor: pointer; }
+.sngr-filtros input[type="date"] { font: 500 12.5px var(--mono); color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line-2); border-radius: 8px; padding: 7px 10px; }
+/* select deshabilitado por la cascada: gris y atenuado (igual que el diseño) */
+.sngr-filtros select:disabled { color: var(--muted-2); background: var(--surface-3); cursor: not-allowed; }
+
+/* ---------- grid mapa (1.5fr) + tabla (1fr) ---------- */
+.sngr-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 14px; align-items: start; }
+
+/* ---------- tarjeta del mapa ---------- */
+.sngr-mapa-tarjeta { background: var(--surface); border: 1px solid var(--line);
+  border-radius: 13px; padding: 14px; box-shadow: var(--shadow-card); }
+.sngr-mapa-cab { display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.sngr-mapa-cab strong { font-size: 14px; color: var(--ink); }
+.sngr-mapa-controles { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sngr-mapa-controles .micro { font: 600 10px var(--mono); letter-spacing: .06em;
+  color: var(--faint); text-transform: uppercase; }
+
+/* selector de capa base (provincias/cantones/parroquias/cuencas N1–N4) */
+.sngr-capa-sel { display: inline-flex; align-items: center; gap: 7px; }
+.sngr-capa-sel select { font: 500 12.5px var(--fuente); color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line-2); border-radius: 8px; padding: 5px 9px; cursor: pointer; }
+.sngr-capa-sel select:hover { border-color: var(--cyan-bd); }
+
+/* segmentado de capa (Provincias/Cantones/Cuencas) — pequeño, activo cian */
+.sngr-seg { display: flex; gap: 5px; }
+.sngr-seg button { border: 1px solid var(--line-2); background: var(--surface); cursor: pointer;
+  border-radius: 8px; padding: 6px 12px; font: 600 12px var(--fuente); color: var(--ink-2); transition: all .14s; }
+.sngr-seg button:hover { border-color: var(--cyan-bd); }
+.sngr-seg button.activo { background: var(--cyan); color: #fff; border-color: var(--cyan); }
+
+/* toggle Ríos */
+.sngr-rios { border: 1px solid var(--line-2); background: var(--surface); cursor: pointer;
+  border-radius: 8px; padding: 6px 12px; font: 600 12px var(--fuente); color: var(--ink-2); transition: all .14s; }
+.sngr-rios:hover { border-color: var(--cyan-bd); }
+.sngr-rios.activo { background: var(--cyan-50); color: var(--cyan); border-color: var(--cyan-bd); }
+
+/* zoom −/+/Reset */
+.sngr-zoom { display: flex; gap: 4px; align-items: center; margin-left: 4px; }
+.sngr-zoom .zb { width: 30px; height: 30px; border: 1px solid var(--line-2); background: var(--surface);
+  border-radius: 8px; cursor: pointer; color: var(--ink-2); line-height: 1; }
+.sngr-zoom .zb.menos { font-size: 17px; }
+.sngr-zoom .zb.mas { font-size: 16px; }
+.sngr-zoom .zb.reset { width: auto; padding: 0 11px; font: 600 11px var(--fuente); }
+.sngr-zoom .zb:hover { border-color: var(--cyan-bd); }
+
+/* contenedor del mapa (Leaflet) con degradado de mar para no ver letterbox */
+.sngr-mapa { position: relative; height: 460px; border: 1px solid var(--line-2);
+  border-radius: 10px; overflow: hidden;
+  background: linear-gradient(180deg, var(--sea-top), var(--sea-bottom)); }
+.sngr-mapa .leaflet-container { background: transparent; font-family: var(--fuente); }
+/* etiquetas flotantes sobre el mapa (esquinas) */
+.sngr-mapa .sello { position: absolute; z-index: 500; font: 600 10px var(--mono); letter-spacing: .06em;
+  color: var(--muted); background: rgba(255,255,255,.8); padding: 3px 8px; border-radius: 6px; pointer-events: none; }
+.sngr-mapa .sello.arriba { left: 14px; top: 12px; }
+.sngr-mapa .sello.abajo { left: 14px; bottom: 12px; font-weight: 500; background: rgba(255,255,255,.82); }
+html[data-tema="oscuro"] .sngr-mapa .sello { background: rgba(20,32,58,.82); }
+
+/* leyenda de ríos (abajo-derecha del mapa) */
+.sngr-leyenda-mapa { position: absolute; right: 12px; bottom: 12px; z-index: 500;
+  display: flex; flex-direction: column; gap: 4px; padding: 7px 10px; border-radius: 8px;
+  background: rgba(255,255,255,.86); border: 1px solid var(--line-2); box-shadow: 0 2px 8px rgba(8,18,38,.12);
+  font: 500 10.5px var(--fuente); color: var(--ink-2); backdrop-filter: blur(3px); }
+html[data-tema="oscuro"] .sngr-leyenda-mapa { background: rgba(20,32,58,.86); }
+.sngr-leyenda-mapa.oculto { display: none; }
+.sngr-leyenda-mapa span { display: flex; align-items: center; gap: 7px; }
+.sngr-leyenda-mapa i { width: 16px; height: 0; border-radius: 2px; flex: none; }
+.sngr-leyenda-mapa i.rio-may { border-top: 2.4px solid #2B6FB0; }
+.sngr-leyenda-mapa i.rio-men { border-top: 1.4px solid #A9C7E2; }
+html[data-tema="oscuro"] .sngr-leyenda-mapa i.rio-may { border-top-color: #5AA9E6; }
+html[data-tema="oscuro"] .sngr-leyenda-mapa i.rio-men { border-top-color: #37557A; }
+
+/* clúster coloreado por tipo dominante (color dinámico vía --c) */
+.sngr-cluster { display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; color: #fff; font: 700 12px var(--mono);
+  border: 2px solid #fff; box-shadow: 0 2px 6px rgba(15,27,45,.25);
+  background: var(--c, var(--cyan)); }
+/* marcador individual (punto pequeño coloreado por tipo) */
+.sngr-punto { border-radius: 50%; border: 1.5px solid #fff; box-shadow: 0 1px 3px rgba(15,27,45,.3);
+  background: var(--c, var(--cyan)); }
+
+/* popup */
+.sngr-popup { font: 500 12px var(--fuente); color: var(--ink-2); line-height: 1.5; }
+.sngr-popup b { color: var(--ink); }
+.sngr-popup .tt { display: inline-block; font: 600 10px var(--mono); padding: 1px 7px;
+  border-radius: 999px; margin-bottom: 4px; }
+
+/* Globo de popup + tooltip Leaflet con TOKENS del tema (coherente en claro y oscuro;
+   antes leaflet.css los fijaba en blanco y .sngr-tt no tenía regla → caja blanca en
+   modo oscuro). Prefijo .leaflet-container para ganar a los defaults de la librería. */
+.leaflet-container .leaflet-popup-content-wrapper,
+.leaflet-container .leaflet-popup-tip { background: var(--surface); color: var(--ink-2); box-shadow: var(--shadow-pop); }
+.leaflet-container .leaflet-popup-content-wrapper { border: 1px solid var(--line-2); border-radius: 12px; }
+.leaflet-container a.leaflet-popup-close-button { color: var(--muted); }
+.leaflet-container a.leaflet-popup-close-button:hover { color: var(--ink); background: transparent; }
+.leaflet-container .leaflet-tooltip, .leaflet-container .sngr-tt {
+  background: var(--surface); color: var(--ink-2); border: 1px solid var(--line-2);
+  border-radius: 8px; box-shadow: var(--shadow-card); font: 600 11px var(--fuente); padding: 5px 9px; }
+.leaflet-container .leaflet-tooltip-top:before    { border-top-color: var(--surface); }
+.leaflet-container .leaflet-tooltip-bottom:before { border-bottom-color: var(--surface); }
+.leaflet-container .leaflet-tooltip-left:before   { border-left-color: var(--surface); }
+.leaflet-container .leaflet-tooltip-right:before  { border-right-color: var(--surface); }
+
+/* polígonos de la capa base (estilados desde JS con colores del token) */
+
+/* ---------- tarjeta de la tabla ---------- */
+.sngr-tabla-tarjeta { background: var(--surface); border: 1px solid var(--line);
+  border-radius: 12px; padding: 14px; box-shadow: var(--shadow-card); }
+.sngr-tabla-tarjeta .tit { font: 600 10px var(--mono); letter-spacing: .08em; color: var(--faint);
+  text-transform: uppercase; margin-bottom: 10px; }
+.sngr-tabla { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.sngr-tabla th { text-align: left; padding: 6px; font: 600 10px var(--mono); color: var(--faint);
+  text-transform: uppercase; border-bottom: 1px solid var(--line); }
+.sngr-tabla td { padding: 7px 6px; border-bottom: 1px solid var(--line-3); color: var(--ink-2); }
+.sngr-tabla tbody tr:last-child td { border-bottom: none; }
+.sngr-tabla td.fecha { font-family: var(--mono); color: var(--muted); white-space: nowrap; }
+.sngr-tabla-scroll { max-height: 460px; overflow: auto; }
+
+/* badge de tipo por color (color/fondo dinámicos vía --c / --bg) */
+.sngr-badge { font: 600 10px var(--mono); padding: 1px 7px; border-radius: 999px;
+  color: var(--c, var(--muted)); background: var(--bg, var(--surface-3)); white-space: nowrap; }
+
+/* ---------- responsive ---------- */
+@media (max-width: 1100px) {
+  .sngr-conteos { grid-template-columns: repeat(2, 1fr); }
+  .sngr-grid { grid-template-columns: 1fr; }
+}
+
+.sngr-popup-desc { margin-top: 5px; max-width: 240px; white-space: normal; line-height: 1.35; }
+.sngr-popup { max-width: 270px; }

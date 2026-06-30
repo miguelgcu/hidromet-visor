@@ -1,0 +1,237 @@
+/* ============================================================
+   HidroMet — Módulo INICIO (Dashboard + Centro de actualización)
+   Clases ESPECÍFICAS del módulo. Usa los tokens y clases de base.css
+   (.tarjeta, .boton, .etiqueta, .metrica, .kicker, .mono…); no redefine
+   el sistema. Valores tomados literalmente de
+   Diseño/HANDOFF/diseno/HidroMet.dc.html (bloque vInicio).
+   Acento del módulo: azul (--blue).
+   ============================================================ */
+
+.ini-raiz { max-width: 1320px; margin: 0 auto; }
+
+/* ---------- cabecera propia (kicker + saludo + subtítulo + botón) ---------- */
+.ini-cabecera {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 20px; margin-bottom: 20px;
+}
+.ini-saludo { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -.6px; color: var(--ink); }
+.ini-subtitulo { color: var(--muted); font-size: 14px; margin-top: 4px; }
+.ini-cabecera .boton.primario { flex: none; }
+.ini-cabecera .boton.primario svg { width: 15px; height: 15px; }
+
+/* ---------- tarjetas de módulo (grid 4 · gap 14) ---------- */
+.ini-modulos {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px; margin-bottom: 16px;
+}
+.ini-card-mod {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 13px;
+  padding: 17px; cursor: pointer; box-shadow: var(--shadow-card);
+  transition: transform .12s, box-shadow .12s; outline: none;
+}
+.ini-card-mod:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); }
+.ini-card-mod:focus-visible { box-shadow: 0 0 0 3px rgba(47,107,224,.28), var(--shadow-card); }
+.ini-card-skel { cursor: default; }
+.ini-card-skel:hover { transform: none; box-shadow: var(--shadow-card); }
+
+.ini-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.ini-card-ico {
+  width: 38px; height: 38px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  background: #EEF1F6; color: var(--slate);
+}
+.ini-card-titulo { margin: 0; font-weight: 650; font-size: 15px; color: var(--ink); }
+.ini-card-detalle { font-size: 12px; color: var(--muted-2); margin-top: 2px; line-height: 1.35; }
+
+.ini-card-metricas {
+  display: flex; gap: 18px; margin-top: 14px; padding-top: 13px;
+  border-top: 1px solid var(--line-3);
+}
+.ini-card-metricas .metrica .valor { font: 600 22px var(--mono); }
+.ini-card-metricas .metrica .etiqueta-metrica { margin-top: 1px; }
+
+.ini-card-pie {
+  display: inline-flex; align-items: center; gap: 5px;
+  font: 500 11px var(--mono); color: var(--muted-2); margin-top: 11px;
+}
+.ini-card-pie svg { opacity: .85; }
+
+/* ---------- fila inferior (1.55fr / 1fr) ---------- */
+.ini-inferior { display: grid; grid-template-columns: 1.55fr 1fr; gap: 14px; }
+.ini-columna { display: flex; flex-direction: column; gap: 14px; }
+
+/* ---------- Centro de actualización ---------- */
+.ini-centro { padding: 19px; }
+.ini-centro-cab {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 14px; margin-bottom: 15px;
+}
+.ini-centro-cab h3 { margin: 0; font-size: 16px; font-weight: 650; }
+.ini-centro-sub { color: var(--muted-2); font-size: 12.5px; margin-top: 3px; }
+.ini-centro-cab .boton.oscuro { flex: none; padding: 9px 16px; }
+.ini-centro-cab .boton.oscuro svg { width: 14px; height: 14px; }
+
+.ini-act-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ini-act-tarjeta {
+  border: 1px solid var(--line-4); border-radius: 10px; padding: 12px 13px;
+  background: var(--surface-2); transition: opacity .15s, border-color .15s;
+}
+.ini-act-tarjeta.apagada { opacity: .5; }
+.ini-act-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ini-act-nombre {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-weight: 650; font-size: 13px; color: var(--ink);
+}
+.ini-act-nombre svg { color: var(--slate); }
+.ini-act-desc { font-size: 11.5px; color: var(--muted-2); line-height: 1.45; margin-top: 6px; }
+
+/* interruptor (toggle) — 34×18, bola 14 */
+.ini-switch {
+  flex: none; width: 34px; height: 18px; border-radius: 999px; border: none;
+  background: var(--line-2); position: relative; cursor: pointer; padding: 0;
+  transition: background .16s;
+}
+.ini-switch.activo { background: var(--blue); }
+.ini-switch-bola {
+  position: absolute; top: 2px; left: 2px; width: 14px; height: 14px;
+  border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(15,27,45,.25);
+  transition: transform .16s;
+}
+.ini-switch.activo .ini-switch-bola { transform: translateX(16px); }
+
+/* chips de modelo (GFS·IFS·ICON) */
+.ini-act-chips { display: flex; gap: 5px; margin-top: 9px; }
+.ini-act-chip {
+  font: 600 10px var(--mono); padding: 2px 7px; border-radius: 6px; cursor: pointer;
+  background: var(--surface-3); color: var(--muted-2); border: 1px solid var(--line-2);
+  transition: all .14s; user-select: none;
+}
+.ini-act-chip.activo { background: var(--blue-50); color: var(--blue); border-color: var(--blue-100); }
+
+/* ---------- Riesgo de hoy ---------- */
+/* mensajes transitorios (cargando / no disponible) y vacío a todo el ancho */
+.ini-msg { font-size: 12.5px; }
+.ini-vacio-full { grid-column: 1 / -1; }
+
+.ini-riesgo-tarjeta, .ini-cred-tarjeta { padding: 17px; }
+.ini-mini-cab { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.ini-mini-cab h3 { margin: 0; font-size: 14px; font-weight: 650; }
+.ini-mini-fecha { font: 500 11px var(--mono); color: var(--muted-2); }
+
+#ini-riesgo { display: flex; flex-direction: column; gap: 8px; }
+.ini-riesgo-fila { display: flex; align-items: center; justify-content: space-between; }
+.ini-riesgo-reg { font-size: 13px; color: var(--ink-2); }
+.ini-riesgo-der { display: inline-flex; align-items: center; gap: 6px; }
+.ini-riesgo-nivel { font: 600 11px var(--mono); }
+.ini-riesgo-pista { width: 54px; height: 6px; border-radius: 3px; overflow: hidden; display: inline-block; }
+.ini-riesgo-barra { display: block; height: 100%; border-radius: 3px; }
+
+/* ---------- Credenciales ---------- */
+.ini-cred-tarjeta h3 { margin: 0 0 12px; font-size: 14px; font-weight: 650; }
+.ini-cred-lista { display: flex; flex-direction: column; gap: 9px; }
+.ini-cred-linea { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ini-cred-nombre { font-size: 12.5px; color: var(--ink-2); }
+.ini-cred-linea .etiqueta { font-size: 10.5px; }
+.ini-cred-boton {
+  margin-top: 13px; width: 100%; gap: 6px;
+}
+.ini-cred-boton svg { width: 14px; height: 14px; }
+
+/* ---------- Modal de progreso a medida ---------- */
+.ini-modal { width: min(560px, 92vw); }
+.ini-modal header { align-items: flex-start; }
+.ini-modal-tit { display: flex; flex-direction: column; gap: 3px; }
+.ini-modal-tit > span:first-child { font-size: 15px; font-weight: 650; color: var(--ink); }
+.ini-modal-sub { font: 500 12px var(--mono); color: var(--muted-2); letter-spacing: .01em; }
+.ini-modal-x {
+  border: none; background: transparent; cursor: pointer; color: var(--muted-2);
+  font-size: 22px; line-height: 1; padding: 0 2px; border-radius: 7px; transition: color .15s, background .15s;
+}
+.ini-modal-x:hover { color: var(--ink); background: var(--surface-3); }
+/* acciones del header del modal + botón Minimizar (cierra sin cancelar la tarea) */
+.ini-modal-acc { display: flex; align-items: center; gap: 8px; }
+.ini-modal-min { font: 600 11px var(--fuente); color: var(--blue); background: var(--blue-50);
+  border: 1px solid var(--blue-100); border-radius: 7px; padding: 5px 10px; cursor: pointer; white-space: nowrap; }
+.ini-modal-min:hover { background: var(--blue-100); }
+/* chip de modelo OPCIONAL (opt-in: IFS ENS / AIFS): borde punteado cuando está apagado */
+.ini-act-chip.opcional { border-style: dashed; }
+.ini-act-chip.opcional.activo { border-style: solid; }
+/* estado de DESCARGA POR MODELO en el modal de progreso (✓ OK / ✗ sin actualizar) */
+.ini-modelos-estado { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 13px; }
+.ini-modelos-estado:empty { display: none; }
+.ime-tit { width: 100%; font-size: 10.5px; color: var(--muted-2); margin-bottom: 1px; letter-spacing: .02em; }
+.ime-badge { font: 600 11px var(--mono); padding: 3px 9px; border-radius: 6px; }
+.ime-badge.ok { background: var(--ok-bg); color: var(--ok); border: 1px solid var(--ok-bd); }
+.ime-badge.fail { background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger-bd); }
+/* Consola/bitácora del motor dentro del modal de actualización/prueba */
+.ini-log-cab { display: flex; align-items: center; justify-content: space-between; margin: 14px 0 5px;
+  font-size: 11px; font-weight: 700; letter-spacing: .03em; color: var(--muted-2); text-transform: uppercase; }
+.ini-log-vivo { color: var(--ok); font-weight: 700; letter-spacing: 0; text-transform: none; font-size: 11px; }
+.ini-log-vivo.off { color: var(--muted-2); }
+.ini-log { margin: 0; max-height: 230px; min-height: 96px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;
+  background: #0b1320; color: #cdd7e6; border: 1px solid var(--line); border-radius: 9px;
+  padding: 10px 12px; font: 500 11.5px/1.55 var(--mono); }
+.ini-log:empty::before { content: "Esperando al motor…"; color: #6b7a90; }
+/* grupo de acciones del Centro (Probar descargas + Ejecutar) + nota del modal de prueba */
+.ini-centro-acc { display: flex; align-items: center; gap: 8px; }
+.ini-nota { font-size: 11.5px; color: var(--muted-2); line-height: 1.5; margin: 12px 0 0; }
+
+.ini-prog { margin-bottom: 18px; }
+.ini-prog-fila { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
+.ini-prog-et { font: 600 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
+.ini-prog-pct { font: 600 13px var(--mono); color: var(--ink); }
+.ini-prog-pista { height: 8px; border-radius: 999px; background: var(--track); overflow: hidden; }
+.ini-prog-barra {
+  height: 100%; width: 0; border-radius: 999px;
+  background: linear-gradient(90deg, var(--blue), var(--blue-bright));
+  transition: width .4s ease;
+}
+
+.ini-pasos { display: flex; flex-direction: column; gap: 8px; }
+.ini-paso {
+  display: flex; align-items: center; gap: 11px;
+  border: 1px solid var(--line-2); border-radius: 10px; padding: 11px 13px;
+  background: var(--surface-2); transition: border-color .15s, background .15s;
+}
+.ini-paso-num {
+  flex: none; width: 22px; height: 22px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font: 600 11px var(--mono); background: var(--surface-3); color: var(--muted);
+  border: 1px solid var(--line-2);
+}
+.ini-paso-nombre { flex: 1; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.ini-paso-estado {
+  display: inline-flex; align-items: center; gap: 6px;
+  font: 600 11px var(--mono); color: var(--muted-2);
+}
+
+.ini-paso.en-curso { border-color: var(--blue-100); background: var(--blue-50); }
+.ini-paso.en-curso .ini-paso-num { background: var(--blue); color: #fff; border-color: var(--blue); }
+.ini-paso.en-curso .ini-paso-estado { color: var(--blue); }
+
+.ini-paso.listo { border-color: var(--ok-bd); background: var(--ok-bg); }
+.ini-paso.listo .ini-paso-num { background: var(--ok); color: #fff; border-color: var(--ok); }
+.ini-paso.listo .ini-paso-estado { color: var(--ok); }
+.ini-paso.listo .ini-paso-estado::before { content: "✓"; font-weight: 700; }
+
+.ini-paso.con-error { border-color: var(--warn-bd); background: var(--warn-bg); }
+.ini-paso.con-error .ini-paso-num { background: var(--warn); color: #fff; border-color: var(--warn); }
+.ini-paso.con-error .ini-paso-estado { color: var(--warn); }
+
+.ini-spin {
+  width: 12px; height: 12px; flex: none; border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--blue) 30%, transparent);
+  border-top-color: var(--blue); animation: ini-girar .8s linear infinite;
+}
+@keyframes ini-girar { to { transform: rotate(360deg); } }
+
+/* ---------- responsive ---------- */
+@media (max-width: 1100px) {
+  .ini-modulos { grid-template-columns: repeat(2, 1fr); }
+  .ini-inferior { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .ini-modulos { grid-template-columns: 1fr; }
+  .ini-act-grid { grid-template-columns: 1fr; }
+  .ini-cabecera { flex-direction: column; align-items: flex-start; }
+}

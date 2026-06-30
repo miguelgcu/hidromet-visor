@@ -1,0 +1,1 @@
+{"fecha":"","hidroestimadores":["IMERG","PDIR"],"n":2,"opciones":[{"etiqueta":"IMERG","id":"IMERG","tipo":"hidroestimador"},{"etiqueta":"PDIR","id":"PDIR","tipo":"hidroestimador"},{"etiqueta":"Consenso corregido","id":"consenso","nota":"Combinaci\u00f3n ponderada por desempe\u00f1o de los hidroestimadores con dato esta fecha.","tipo":"consenso"}]}

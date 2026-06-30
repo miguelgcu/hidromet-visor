@@ -1,0 +1,132 @@
+/* ============================================================
+   Configuración — clases específicas del módulo.
+   Usa los tokens y clases base de base.css; aquí SOLO van los
+   componentes propios de esta vista, con los valores EXACTOS del
+   dc.html (data-screen-label="Configuración").
+   ============================================================ */
+
+/* Lienzo y rejilla principal (1.4fr / 1fr) */
+.cfg-lienzo { max-width: 1100px; margin: 0 auto; }
+.cfg-rejilla {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 14px;
+  align-items: start;
+}
+.cfg-columna { display: flex; flex-direction: column; gap: 14px; }
+
+/* Cabecera de tarjeta con acción a la derecha (Claves Meteoblue) */
+.cfg-cab-tarjeta {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+/* ---------- Claves Meteoblue ---------- */
+.cfg-claves { display: flex; flex-direction: column; gap: 9px; }
+.cfg-clave {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--surface-2); border: 1px solid var(--line-2);
+  border-radius: 9px; padding: 11px 13px;
+}
+.cfg-clave.obsoleta { opacity: .7; }
+.cfg-clave-mascara { font: 600 12.5px var(--mono); color: var(--ink); }
+.cfg-clave-uso { font-size: 11px; color: var(--muted-2); margin-top: 2px; }
+
+.cfg-badge {
+  font: 600 10px var(--mono); padding: 2px 9px; border-radius: 999px;
+}
+.cfg-badge.activa { color: var(--ok); background: var(--ok-bg); border: 1px solid var(--ok-bd); }
+.cfg-badge.obsoleta { color: var(--muted-2); background: var(--surface-3); border: 1px solid var(--line-2); }
+
+/* ---------- Rutas de los motores ---------- */
+.cfg-nota { font-size: 12px; color: var(--muted-2); margin: 0 0 12px; }
+.cfg-nota code {
+  background: var(--surface-3); border: 1px solid var(--line);
+  border-radius: 5px; padding: 1px 6px; font-size: 11px;
+}
+.cfg-rutas {
+  display: flex; flex-direction: column; gap: 8px;
+  font: 500 11.5px var(--mono);
+}
+.cfg-ruta {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--surface-2); border: 1px solid var(--line-2);
+  border-radius: 8px; padding: 9px 12px;
+}
+.cfg-ruta .etiqueta-ruta { color: var(--muted); }
+.cfg-ruta .valor-ruta { color: var(--ok); }
+.cfg-ruta.falta .valor-ruta { color: var(--danger); }
+
+/* ---------- Apariencia (2 tiles) ---------- */
+.cfg-temas { display: flex; gap: 10px; }
+.cfg-tema {
+  flex: 1; border: 1px solid var(--line); border-radius: 10px;
+  padding: 11px; cursor: pointer; background: var(--surface);
+  transition: border-color .15s ease;
+}
+.cfg-tema.activo { border: 2px solid var(--blue); padding: 10px; }
+.cfg-tema-muestra {
+  height: 40px; border-radius: 6px; margin-bottom: 8px;
+}
+.cfg-tema-muestra.claro {
+  background: linear-gradient(135deg, #EEF1F5, #fff);
+  border: 1px solid var(--line);
+}
+.cfg-tema-muestra.oscuro {
+  background: linear-gradient(135deg, #0B1C33, #16335a);
+}
+.cfg-tema-nombre {
+  font: 600 12px var(--fuente); color: var(--muted);
+  display: flex; align-items: center; gap: 6px;
+}
+.cfg-tema.activo .cfg-tema-nombre { color: var(--ink); }
+.cfg-tema-punto {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--blue);
+}
+
+/* ---------- Acerca de ---------- */
+.cfg-acerca { display: flex; flex-direction: column; gap: 9px; font-size: 12.5px; }
+.cfg-fila-acerca { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.cfg-fila-acerca .clave-acerca { color: var(--muted-2); }
+.cfg-fila-acerca .valor-acerca { color: var(--ink); text-align: right; }
+.cfg-fila-acerca .valor-acerca.mono { font-family: var(--mono); }
+.cfg-fila-acerca .valor-acerca.ok { color: var(--ok); font-family: var(--mono); }
+
+/* Creador editable: el texto y el lápiz comparten una línea clicable */
+.cfg-creador {
+  display: inline-flex; align-items: center; gap: 6px;
+  color: var(--ink); cursor: pointer; border: none; background: none;
+  font: inherit; padding: 0; text-align: right;
+}
+.cfg-creador:hover { color: var(--blue); }
+.cfg-creador .lapiz { color: var(--faint); width: 13px; height: 13px; }
+.cfg-creador:hover .lapiz { color: var(--blue); }
+.cfg-creador-edit {
+  font: inherit; color: var(--ink); text-align: right;
+  border: 1px solid var(--line-2); border-radius: 7px;
+  padding: 5px 8px; background: var(--surface); min-width: 180px;
+}
+.cfg-creador-edit:focus { outline: none; border-color: var(--blue); }
+
+/* ---------- Diagnóstico ---------- */
+.cfg-diag { display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; }
+.cfg-diag-fila { display: flex; align-items: center; gap: 8px; color: var(--ink-2); }
+.cfg-diag-punto {
+  width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%;
+  background: var(--ok);
+}
+.cfg-diag-punto.aviso { background: var(--warn); }
+.cfg-diag-punto.malo { background: var(--danger); }
+
+.cfg-btn-diag {
+  width: 100%; margin-top: 13px;
+  background: var(--surface-3); color: var(--ink-2);
+  border: 1px solid var(--line-2); border-radius: 8px;
+  padding: 9px; font: 600 12px var(--fuente); cursor: pointer;
+}
+.cfg-btn-diag:hover { background: #E8EDF4; }
+.cfg-btn-diag:disabled { opacity: .6; cursor: progress; }
+
+@media (max-width: 860px) {
+  .cfg-rejilla { grid-template-columns: 1fr; }
+}

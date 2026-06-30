@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>HidroMet Ecuador</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="favicon.png">
+<link rel="stylesheet" href="lib/leaflet/leaflet.css">
+<link rel="stylesheet" href="lib/leaflet/MarkerCluster.css">
+<link rel="stylesheet" href="lib/leaflet/MarkerCluster.Default.css">
+<link rel="stylesheet" href="css/fonts.css">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/inicio.css">
+<link rel="stylesheet" href="css/mlnwp.css">
+<link rel="stylesheet" href="css/cartas.css">
+<link rel="stylesheet" href="css/sngr.css">
+<link rel="stylesheet" href="css/geoglows.css">
+<link rel="stylesheet" href="css/datos.css">
+<link rel="stylesheet" href="css/configuracion.css">
+</head>
+<body>
+<div id="capa-app">
+  <aside id="sidebar">
+    <div class="marca">
+      <div class="marca-logo">HM</div>
+      <div class="marca-texto">
+        <span class="marca-nombre">HidroMet</span>
+        <span class="marca-sub">Ecuador · INAMHI</span>
+      </div>
+    </div>
+    <nav id="nav-principal"></nav>
+    <div class="sidebar-pie">
+      <div id="tareas-activas"></div>
+      <div class="sidebar-estado">
+        <span class="punto"></span>
+        <div class="et"><b>Sistema autocontenido</b><span>offline · v9.0</span></div>
+      </div>
+      <button id="btn-tema" class="boton-fantasma" title="Alternar tema claro / oscuro">◐ Tema</button>
+    </div>
+  </aside>
+  <main id="contenedor-vista">
+    <div id="topbar">
+      <div class="ruta">
+        <span class="actual">Estación de trabajo</span><span class="sep">/</span><span id="topbar-modulo">Inicio</span>
+      </div>
+      <div class="estado">
+        <div class="sync"><span class="punto"></span><span id="topbar-sync">Datos locales</span></div>
+        <div class="reloj" id="topbar-reloj">—</div>
+      </div>
+    </div>
+    <header id="cabecera-vista">
+      <h1 id="titulo-vista">…</h1>
+      <div id="acciones-vista"></div>
+    </header>
+    <section id="vista"></section>
+  </main>
+</div>
+<div id="avisos"></div>
+
+<script src="lib/leaflet/leaflet.js"></script>
+<script src="lib/leaflet/leaflet.markercluster.js"></script>
+<script src="lib/plotly/plotly.min.js"></script>
+<script>window.HIDROMET_VISOR = true;  /* MODO VISOR: la UI lee productos publicados, sin backend */</script>
+<script src="js/core.js"></script>
+<script src="js/modules/mlnwp.js"></script>
+<script src="js/modules/cartas.js"></script>
+<script src="js/modules/sngr.js"></script>
+<script src="js/modules/geoglows.js"></script>
+<script src="js/modules/clima.js"></script>
+<script src="js/modules/glosario.js"></script>
+<script>App.iniciar();</script>
+</body>
+</html>
