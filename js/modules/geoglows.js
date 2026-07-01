@@ -119,7 +119,9 @@
     estado.tiles = L.tileLayer(urlTiles(), { subdomains: "abcd", maxZoom: 19, crossOrigin: true }).addTo(map);
     map.createPane("pRios").style.zIndex = 370;
     estado.lienzoRios = L.canvas({ padding: 0.5, pane: "pRios" });
-    map.on("click", (e) => consultarPunto(e.latlng.lat, e.latlng.lng));
+    // Clic libre = consulta por lat/lon (on-demand, requiere backend). En el visor (sin backend)
+    // solo se navegan los tramos vigilados con river_id congelado → se omite el clic libre.
+    if (!window.HIDROMET_VISOR) map.on("click", (e) => consultarPunto(e.latlng.lat, e.latlng.lng));
     cargarRios();
   }
 
@@ -149,11 +151,12 @@
     for (const it of items) {
       if (typeof it.lat !== "number" || typeof it.lon !== "number") continue;
       const m = L.circleMarker([it.lat, it.lon], {
-        radius: 8, color: "#0b0d12", weight: 1.4, fillColor: colorNivel(it.nivel_alerta), fillOpacity: 0.95 });
+        radius: 8, color: (App.tema && App.tema() === "oscuro") ? "#AEBBD0" : "#0b0d12", weight: 1.4, fillColor: colorNivel(it.nivel_alerta), fillOpacity: 0.95 });
       const na = it.nivel_alerta ? it.nivel_alerta.etiqueta : "sin pronóstico (pulsa Actualizar)";
       m.bindTooltip(`<b>${esc(it.nombre)}</b><br>${esc(na)}`, { direction: "top", sticky: true });
       m.on("click", (e) => { L.DomEvent.stopPropagation(e);
-        if (it.river_id) cargarHidrograma(it.river_id, it.nombre, it.lat, it.lon); else consultarPunto(it.lat, it.lon); });
+        if (it.river_id) cargarHidrograma(it.river_id, it.nombre, it.lat, it.lon);
+        else if (!window.HIDROMET_VISOR) consultarPunto(it.lat, it.lon); });
       grupo.addLayer(m);
     }
     grupo.addTo(estado.mapa);
@@ -202,6 +205,7 @@
   function pintarHidrograma(el, r) {
     if (!el) return;
     el.innerHTML = "";
+    const osc = (App.tema && App.tema() === "oscuro");
     const f = r.forecast || {};
     const x = f.tiempo || [];
     const linea = (y, nombre, color, dash, width) => ({
@@ -215,10 +219,10 @@
         connectgaps: true, fill: "tonexty", fillcolor: color, hoverinfo: "skip", showlegend: true },
     ]);
     const traces = [];
-    if (f.min && f.max) traces.push(...banda(f.min, f.max, "rgba(23,99,182,0.12)", "Rango mín–máx"));
-    if (f.p25 && f.p75) traces.push(...banda(f.p25, f.p75, "rgba(23,99,182,0.28)", "Rango 25–75 %"));
-    if (f.med) traces.push(linea(f.med, "Mediana", "#1763B6", "solid", 2.4));
-    if (f.high_res) traces.push(linea(f.high_res, "Alta resolución", "#0E94A4", "dot", 1.6));
+    if (f.min && f.max) traces.push(...banda(f.min, f.max, osc ? "rgba(93,169,230,0.18)" : "rgba(23,99,182,0.12)", "Rango mín–máx"));
+    if (f.p25 && f.p75) traces.push(...banda(f.p25, f.p75, osc ? "rgba(93,169,230,0.34)" : "rgba(23,99,182,0.28)", "Rango 25–75 %"));
+    if (f.med) traces.push(linea(f.med, "Mediana", osc ? "#5AA9E6" : "#1763B6", "solid", 2.4));
+    if (f.high_res) traces.push(linea(f.high_res, "Alta resolución", osc ? "#2FC2D4" : "#0E94A4", "dot", 1.6));
     for (const rp of (r.retornos || [])) {
       traces.push({ x: [x[0], x[x.length - 1]], y: [rp.caudal, rp.caudal], type: "scatter",
         mode: "lines", name: `RP ${rp.anios} a`, line: { color: rp.color, width: 1.2, dash: "dash" },
@@ -245,7 +249,7 @@
       <div class="gg-plot" data-rol="retro-plot" style="min-height:200px;height:200px"></div>`;
     const el = document.querySelector('[data-rol="retro-plot"]');
     const trace = { x: MES, y: r.promedio_mensual || [], type: "bar",
-      marker: { color: "#1763B6" }, hovertemplate: "%{x}: %{y:.0f} m³/s<extra></extra>" };
+      marker: { color: (App.tema && App.tema() === "oscuro") ? "#5AA9E6" : "#1763B6" }, hovertemplate: "%{x}: %{y:.0f} m³/s<extra></extra>" };
     const layout = App.plotlyLayoutSerie("", { height: 200, showlegend: false,
       margin: { l: 50, r: 10, t: 6, b: 24 }, yaxis: { title: "m³/s", rangemode: "tozero" } });
     Plotly.newPlot(el, [trace], layout, App.plotlyConfig());

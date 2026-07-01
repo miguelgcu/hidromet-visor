@@ -124,7 +124,7 @@
   border: 1px solid var(--line-2); border-radius: 8px;
   padding: 9px; font: 600 12px var(--fuente); cursor: pointer;
 }
-.cfg-btn-diag:hover { background: #E8EDF4; }
+.cfg-btn-diag:hover { background: color-mix(in srgb, var(--surface-3) 84%, var(--ink)); }
 .cfg-btn-diag:disabled { opacity: .6; cursor: progress; }
 
 @media (max-width: 860px) {

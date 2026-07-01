@@ -50,7 +50,7 @@
 .datos-editar { display: inline-flex; align-items: center; justify-content: center;
   min-height: 30px; min-width: 34px; background: #F0F3F8; border: 1px solid #E0E6EF; border-radius: 6px;
   padding: 4px 11px; font: 600 12px var(--fuente); color: var(--muted); cursor: pointer; }
-.datos-editar:hover { background: #E8EDF4; color: var(--ink-2); }
+.datos-editar:hover { background: color-mix(in srgb, var(--surface-3) 84%, var(--ink)); color: var(--ink-2); }
 html[data-tema="oscuro"] .datos-editar { background: var(--surface-3); border-color: var(--line); }
 
 /* badge de región (color por región natural — dc.html) */
@@ -69,7 +69,7 @@ html[data-tema="oscuro"] .datos-editar { background: var(--surface-3); border-co
 .datos-pag { display: inline-flex; align-items: center; justify-content: center;
   min-height: 30px; min-width: 34px; background: #F0F3F8; border: 1px solid #E0E6EF; border-radius: 7px;
   padding: 5px 13px; font: 600 12px var(--fuente); color: var(--muted); cursor: pointer; }
-.datos-pag:hover:not(:disabled) { background: #E8EDF4; }
+.datos-pag:hover:not(:disabled) { background: color-mix(in srgb, var(--surface-3) 84%, var(--ink)); }
 .datos-pag:disabled { opacity: .45; cursor: not-allowed; }
 html[data-tema="oscuro"] .datos-pag { background: var(--surface-3); border-color: var(--line); }
 

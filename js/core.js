@@ -620,7 +620,8 @@ if (window.HIDROMET_VISOR) {
       '[data-rol="guardar"]', '[data-rol="descargar"]', '[data-rol="ffr-exportar"]',
       '[data-rol="probar"]', '[data-rol="ingreso"]', '[data-rol="sincronizar"]',
       '[data-rol="probar_api"]', '[data-rol="regenerar_html"]',
-      "#ct-actualizar", "#ini-actualizar-todo", "#ini-probar"];
+      ".ct-dl", ".ct-dl-shp",
+      "#ct-actualizar", "#ini-actualizar-todo", "#ini-probar", "#ini-ejecutar"];
     const TXT = /\b(actualizar|exportar|probar descargas|probar api|editar umbral|agregar estaci|añadir estaci|nueva estaci|sincronizar|generar informe)\b/i;
     function marcar(raiz) {
       try {

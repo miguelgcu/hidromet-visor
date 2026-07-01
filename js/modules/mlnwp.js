@@ -47,7 +47,7 @@
   const RDYLGN = ["#D73027", "#F46D43", "#FDAE61", "#FEE08B", "#D9EF8B",
                   "#A6D96A", "#66BD63", "#1A9850"];
   function calColor(r) {
-    if (r === null || r === undefined || Number.isNaN(r)) return ["#F0F3F8", "#5A6678"];
+    if (r === null || r === undefined || Number.isNaN(r)) return (App.tema && App.tema() === "oscuro") ? ["#222F49", "#9DAABF"] : ["#F0F3F8", "#5A6678"];
     const t = Math.max(0, Math.min(1, (Number(r) - 1) / 9));
     const bg = RDYLGN[Math.min(RDYLGN.length - 1, Math.floor(t * RDYLGN.length))];
     // texto blanco solo en el verde oscuro (notas altas); oscuro en el resto.
@@ -525,9 +525,11 @@
     }
     if (!xs.length) return [];
     const base = { type: "scatter", mode: "lines", x: xs, y: ys, hoverinfo: "skip", showlegend: false };
+    // Outline geográfico: en OSCURO se invierte (halo oscuro + línea clara) para no desaparecer.
+    const _osc = (App.tema && App.tema() === "oscuro");
     return [
-      Object.assign({}, base, { line: { color: "#ffffff", width: 3.4 } }),
-      Object.assign({}, base, { line: { color: "#0b0d12", width: 1.5 } }),
+      Object.assign({}, base, { line: { color: _osc ? "#0B1322" : "#ffffff", width: 3.4 } }),
+      Object.assign({}, base, { line: { color: _osc ? "#AEBBD0" : "#0b0d12", width: 1.5 } }),
     ];
   }
 
@@ -639,6 +641,12 @@
   function pintarSerie(card, d) {
     const unidad = d.unidad || "mm";
     const esPrecip = !!d.es_precip;
+    // Colores TEMA-CONSCIENTES (modo oscuro): observado, mediana, abanico y anotación. Sin esto,
+    // el negro del observado y el azul oscuro del abanico quedaban invisibles sobre fondo oscuro.
+    const oscuro = (App.tema && App.tema() === "oscuro");
+    const C = oscuro
+      ? { obs: "#E8EDF6", p50: "#6BB1EE", fan80: "rgba(120,165,225,.14)", fan50: "rgba(120,165,225,.30)", anot: "#9DAABF" }
+      : { obs: "#0F1B2D", p50: "#0052A3", fan80: "rgba(27,58,107,.10)", fan50: "rgba(27,58,107,.24)", anot: "#5A6678" };
     const tit = `${esc(d.variable === "precip" ? "Precipitación 7-7" : (d.variable === "tmax" ? "T. máxima" : "T. mínima"))} — ${esc(d.nombre || "")} (${esc(d.codigo)})`;
     card.innerHTML = `
       <div class="ml-serie-tit">${tit}</div>
@@ -666,12 +674,12 @@
         traces.push({ type: "scatter", mode: "lines", x: xs, y: ys, fill: "toself",
           fillcolor: color, line: { width: 0 }, hoverinfo: "skip", showlegend: false });
       };
-      poligono(b.p10 || b.bajo || [], b.p90 || b.alto || [], "rgba(27,58,107,.10)");   // 80 %
-      if (b.p25 && b.p75) poligono(b.p25, b.p75, "rgba(27,58,107,.24)");                // 50 %
+      poligono(b.p10 || b.bajo || [], b.p90 || b.alto || [], C.fan80);   // 80 %
+      if (b.p25 && b.p75) poligono(b.p25, b.p75, C.fan50);                // 50 %
       if (b.p50) {
         const intr = !!(b.p25 && b.p75);
         traces.push({ type: "scatter", mode: "lines", x: b.fechas, y: b.p50,
-          line: { color: "#0052A3", width: 2.4 }, name: "P50 (mediana)", showlegend: false,
+          line: { color: C.p50, width: 2.4 }, name: "P50 (mediana)", showlegend: false,
           customdata: b.fechas.map((_, i) => [b.p10[i], b.p90[i], intr ? b.p25[i] : null, intr ? b.p75[i] : null]),
           hovertemplate: `Mediana P50: %{y} mm`
             + (intr ? `<br>50 % probable: %{customdata[2]}–%{customdata[3]} mm` : ``)
@@ -698,9 +706,9 @@
     if (d.observado && d.observado.fechas && d.observado.fechas.length) {
       traces.push({ type: "scatter", mode: "lines+markers+text", x: d.observado.fechas, y: d.observado.valores,
         text: d.observado.valores.map(v => (v == null ? "" : (esPrecip && Number(v) === 0 ? "" : num(v, 1)))),
-        textposition: "top center", textfont: { size: 9, color: "#0F1B2D" }, cliponaxis: false,
-        name: "Observado", line: { color: "#0F1B2D", width: 2.8 },
-        marker: { color: "#0F1B2D", size: 8, symbol: "circle" },
+        textposition: "top center", textfont: { size: 9, color: C.obs }, cliponaxis: false,
+        name: "Observado", line: { color: C.obs, width: 2.8 },
+        marker: { color: C.obs, size: 8, symbol: "circle" },
         hovertemplate: `Observado: %{y} ${unidad}<extra></extra>` });
     }
 
@@ -712,7 +720,10 @@
       barmode: "overlay",
       showlegend: false,   // única leyenda = la HTML (ml-serie-leyenda); evita leyenda doble
       yaxis: { title: { text: unidad, font: { size: 11 } }, rangemode: esPrecip ? "tozero" : "normal" },
-      xaxis: { type: "date", tickformat: "%d/%m", tickangle: 0, nticks: 10 },
+      // Eje X: TODAS las fechas (un tick por día), no solo algunas. Rotadas -45° y fuente pequeña
+      // para que entre el periodo completo (lookback + pronóstico).
+      xaxis: { type: "date", tickformat: "%d/%m", tickmode: "linear", dtick: 86400000,
+               tickangle: -45, tickfont: { size: 9 }, automargin: true },
     });
     // Distinción HISTORIA vs PRONÓSTICO: franja de fondo desde "hoy" hasta el final +
     // línea divisoria marcada. El eje X es de fecha → se alinea exacto con los datos.
@@ -727,7 +738,7 @@
       ];
       layout.annotations = [{ x: d.hoy, yref: "paper", y: 1, yanchor: "bottom", xanchor: "left",
         text: "inicio pronóstico →", showarrow: false,
-        font: { family: "IBM Plex Mono", size: 10, color: "#5A6678" } }];
+        font: { family: "IBM Plex Mono", size: 10, color: C.anot } }];
     }
     Plotly.newPlot(el, traces, layout, App.plotlyConfig());
 
@@ -742,25 +753,29 @@
     if (probsEl) {
       const pu = d.probs_umbral;
       if (esPrecip && pu && pu.fechas && pu.fechas.length) {
+        // SOLO fechas de pronóstico (>= hoy), TODAS (sin tope de 14). Tabla TRANSPUESTA: una
+        // COLUMNA por fecha y una FILA por umbral → se extiende a TODO el ancho de la serie,
+        // fecha por fecha, alineada con el eje temporal del gráfico.
         let idx = pu.fechas.map((_, i) => i).filter(i => !d.hoy || pu.fechas[i] >= d.hoy);
-        if (!idx.length) idx = pu.fechas.map((_, i) => i).slice(-14);
-        idx = idx.slice(0, 14);
-        const cab = pu.umbrales.map(u => `<th style="padding:3px 8px;border-bottom:1px solid var(--linea,#d4d9e0);font-weight:600">≥${u} mm</th>`).join("");
-        const alfa = p => p < 20 ? 0.08 : p < 50 ? 0.18 : p < 75 ? 0.35 : 0.55;  // tramos lineales semánticos
-        const cel = p => p == null
-          ? "padding:3px 8px;text-align:center;color:var(--tenue,#9aa3b0)"
-          : `padding:3px 8px;text-align:center;background:rgba(43,93,170,${alfa(p).toFixed(2)});color:${p >= 50 ? '#fff' : 'var(--texto,#1E1E1E)'};font-variant-numeric:tabular-nums`;
-        const filas = idx.map(i => {
-          const f = pu.fechas[i];
-          const celdas = pu.probs[i].map(p => `<td style="${cel(p)}">${p == null ? "—" : p + "%"}</td>`).join("");
-          return `<tr><td style="padding:3px 8px;white-space:nowrap;font-variant-numeric:tabular-nums">${f.slice(8, 10)}/${f.slice(5, 7)}</td>${celdas}</tr>`;
+        if (!idx.length) idx = pu.fechas.map((_, i) => i).slice(-10);
+        const alfa = p => p < 20 ? 0.08 : p < 50 ? 0.20 : p < 75 ? 0.38 : 0.58;
+        const celStyle = p => p == null
+          ? "color:var(--faint)"
+          : `background:rgba(43,93,170,${alfa(p).toFixed(2)});color:${p >= 50 ? "#fff" : "var(--ink)"}`;
+        const dd = f => `${f.slice(8, 10)}/${f.slice(5, 7)}`;
+        const cabFechas = idx.map(i => `<th class="ml-pb-f">${dd(pu.fechas[i])}</th>`).join("");
+        const filasU = (pu.umbrales || []).map((u, j) => {
+          const celdas = idx.map(i => {
+            const p = (pu.probs[i] || [])[j];
+            return `<td class="ml-pb-c" style="${celStyle(p)}">${p == null ? "—" : p + "%"}</td>`;
+          }).join("");
+          return `<tr><th class="ml-pb-u">≥${u} mm</th>${celdas}</tr>`;
         }).join("");
         probsEl.innerHTML =
-          `<div style="margin:10px 0 4px;font-weight:600;font-size:12px">Probabilidad de lluvia por umbral (pronóstico)</div>
-           <div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:11.5px">
-           <thead><tr><th style="padding:3px 8px;text-align:left;border-bottom:1px solid var(--linea,#d4d9e0)">Fecha</th>${cab}</tr></thead>
-           <tbody>${filas}</tbody></table></div>
-           <div style="font-size:10.5px;color:var(--tenue,#7a8699);margin-top:4px">Probabilidad calibrada (promedio de clasificadores). Ej.: “≥25 mm = 30%” = 30% de probabilidad de que llueva más de 25 mm ese día.</div>`;
+          `<div class="ml-pb-tit">Probabilidad de lluvia por umbral (pronóstico)</div>
+           <table class="ml-pb-tabla"><thead><tr><th class="ml-pb-esq">Umbral</th>${cabFechas}</tr></thead>
+           <tbody>${filasU}</tbody></table>
+           <div class="ml-pb-nota">Probabilidad calibrada (promedio de clasificadores). Ej.: “≥25 mm = 30 %” = 30 % de probabilidad de que llueva más de 25 mm ese día.</div>`;
       } else {
         probsEl.innerHTML = "";
       }
@@ -882,13 +897,11 @@
   }
 
   /* ============================================================
-     PESTAÑA 4 — RESUMEN (regiones plegables + Informes PDF)
+     PESTAÑA 4 — RESUMEN (regiones plegables)
      ============================================================ */
   async function tabResumen(c) {
-    c.innerHTML = `
-      <div id="ml-resumen-top">${cargando("Cargando resumen del día…")}</div>
-      <div class="ml-card" style="margin-top:14px" id="ml-informes">${cargando("Cargando informes…")}</div>`;
-    await Promise.all([cargarResumen(), cargarInformes()]);
+    c.innerHTML = `<div id="ml-resumen-top">${cargando("Cargando resumen del día…")}</div>`;
+    await cargarResumen();
   }
 
   async function cargarResumen() {
@@ -967,64 +980,8 @@
     if (next) next.onclick = () => { if (S.resumenDia < fechas.length - 1) { S.resumenDia++; cargarResumen(); } };
   }
 
-  async function cargarInformes() {
-    const cont = document.getElementById("ml-informes");
-    if (!cont) return;
-    let d = { informes: [] };
-    try { d = await App.api("/mlnwp/informes"); } catch (e) { /* lista vacía si falla */ }
-    pintarInformes(cont, d.informes || []);
-  }
-
-  function pintarInformes(cont, informes) {
-    // Redes a incluir en el informe: INAMHI / CELEC / Hidronación o CUALQUIER combinación.
-    // Pre-marca las activas en el control deck (S.deps); el usuario las ajusta aquí para
-    // este informe. El motor (cell10, vía METEO_DEPENDENCIAS) filtra las estaciones por estas redes.
-    const REDES = ["INAMHI", "CELEC", "Hidronación"];
-    cont.innerHTML = `
-      <h3 class="ml-titulo">Informes en PDF <span class="ml-sutil">(se generan desde aquí, en Validación ML-NWP)</span></h3>
-      <div class="ml-informes-fila">
-        <div class="campo"><span>Redes a incluir</span>
-          <div class="ml-inf-redes" style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;padding-top:4px">
-            ${REDES.map(r => `<label style="display:inline-flex;align-items:center;gap:5px;font-weight:500;cursor:pointer"><input type="checkbox" class="ml-inf-red" value="${r}" ${S.deps.includes(r) ? "checked" : ""}> ${r}</label>`).join("")}
-          </div></div>
-        <button class="ml-btn-generar boton" id="ml-inf-gen" data-bloquea>Generar informe</button>
-      </div>
-      <div class="ml-informes-lista">
-        ${informes.length ? informes.map(infoFila).join("") : `<div class="suave" style="font-size:12.5px;padding:6px 4px">Aún no hay informes generados.</div>`}
-      </div>`;
-
-    cont.querySelector("#ml-inf-gen").onclick = async () => {
-      const redes = [...cont.querySelectorAll(".ml-inf-red:checked")].map(c => c.value);
-      if (!redes.length) { App.aviso("Elige al menos una red (INAMHI, CELEC o Hidronación).", "error"); return; }
-      // 'producto' solo decide el título/nombre del PDF; el filtrado real va por 'deps' (redes).
-      const producto = redes.includes("INAMHI") ? "general" : "hydro";
-      try {
-        // Solo el INFORME (stage "report"): usa el último entrenamiento de la actualización,
-        // NO re-entrena. Antes llamaba "all" → re-entrenaba todo aquí (lento e innecesario).
-        const id = await App.tarea("/mlnwp/pipeline", { etapa: "report", producto, deps: redes },
-          { alTerminar: cargarInformes });
-        App.modalTarea("Generar informe ML-NWP", id);
-      } catch (e) { App.aviso(e.message, "error"); }
-    };
-    cont.querySelectorAll("[data-abrir]").forEach(b => b.onclick = async () => {
-      try { await App.api("/mlnwp/abrir_informe", { method: "POST", body: { ruta: b.dataset.abrir } }); }
-      catch (e) { App.aviso(e.message, "error"); }
-    });
-  }
-
-  function infoFila(inf) {
-    // forma tolerante: el endpoint devuelve nombre/tamaño/fecha/ruta (campos del pipeline).
-    const nombre = inf.nombre || inf.archivo || inf.ruta || "informe.pdf";
-    const ruta = inf.ruta || inf.archivo || nombre;
-    const tam = inf.tamano || inf.tamaño || inf.size || inf.mb;
-    const fecha = inf.fecha || inf.modificado || inf.mtime;
-    const det = [tam ? esc(typeof tam === "number" ? tam.toFixed(1) + " MB" : tam) : null,
-                 fecha ? esc(fmtFechaCorta(fecha)) : null].filter(Boolean).join(" · ");
-    return `<div class="ml-informe">
-      <span class="nombre">📄 ${esc(nombre)}${det ? ` <span class="det">· ${det}</span>` : ""}</span>
-      <button class="boton chico" data-abrir="${esc(ruta)}">Abrir</button>
-    </div>`;
-  }
+  // Informe operativo en PDF ELIMINADO de HidroMet: ya no se generan informes en esta instancia
+  // (se quitaron cargarInformes/pintarInformes/infoFila y las rutas /mlnwp/informes + /abrir_informe).
 
   /* ============================================================
      PESTAÑA 5 — GLOSARIO (3 tarjetas: modelos · métricas · calif+conf)

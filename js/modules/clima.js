@@ -56,9 +56,9 @@
       .cl-kpi .v small{font-size:11px;color:var(--muted-2,#8a93a3);font-weight:600}
       .cl-kpi .e{font:600 10px var(--mono,monospace);letter-spacing:.05em;text-transform:uppercase;color:var(--faint,#8a93a3);margin-top:3px}
       .cl-conf{display:inline-flex;align-items:center;gap:7px;font-size:12px;border-radius:999px;padding:4px 11px;margin-top:2px}
-      .cl-conf.ok{background:rgba(34,150,90,.12);color:#1d7a47}
-      .cl-conf.med{background:rgba(216,150,30,.14);color:#9a6a12}
-      .cl-conf.baja{background:rgba(196,60,40,.13);color:#a8341f}
+      .cl-conf.ok{background:var(--ok-bg);color:var(--ok)}
+      .cl-conf.med{background:var(--warn-bg);color:var(--warn)}
+      .cl-conf.baja{background:var(--danger-bg);color:var(--danger)}
       .cl-tabla{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums;margin-top:6px}
       .cl-tabla th{font:600 10px var(--mono,monospace);letter-spacing:.04em;text-transform:uppercase;color:var(--faint,#8a93a3);
         text-align:right;padding:5px 7px;border-bottom:1px solid var(--line,#e2e7ee)}
@@ -96,8 +96,8 @@
       .cl-adv-d{font:600 12px var(--mono,monospace);color:var(--muted,#5b6678);min-width:130px}
       .cl-adv-v{font-size:12px;color:var(--ink-2,#3a4656);flex:1;min-width:200px}
       .cl-adv-badge{margin-left:auto;font:600 11px var(--mono,monospace);border-radius:999px;padding:3px 11px;white-space:nowrap}
-      .cl-adv-badge.conf{background:rgba(34,150,90,.13);color:#1d7a47}
-      .cl-adv-badge.no{background:rgba(150,160,175,.16);color:#6b7686}`;
+      .cl-adv-badge.conf{background:var(--ok-bg);color:var(--ok)}
+      .cl-adv-badge.no{background:var(--surface-3);color:var(--muted)}`;
     document.head.appendChild(s);
   }
 
@@ -148,6 +148,8 @@
   // Climograma (barras precip + líneas temp + PET + obs) ----------------------
   function pintarClimograma(host, p) {
     if (!window.Plotly || !host) return;
+    // Observado = casi negro en claro; en OSCURO se aclara para no desaparecer sobre el fondo.
+    const obsCol = (App.tema && App.tema() === "oscuro") ? "#E8EDF6" : COL.obs;
     const meses = p.meses || MESES.slice(1);
     const V = p.vars || {};
     const traces = [];
@@ -162,13 +164,13 @@
     const o = p.observado;
     if (o) {
       if (o.precip) traces.push({ type: "scatter", mode: "markers", x: meses, y: o.precip, name: "Precip. observada",
-        marker: { color: COL.obs, symbol: "circle-open", size: 7, line: { width: 1.6 } }, yaxis: "y",
+        marker: { color: obsCol, symbol: "circle-open", size: 7, line: { width: 1.6 } }, yaxis: "y",
         hovertemplate: "%{y} mm<extra>Obs</extra>" });
       if (o.tmax) traces.push({ type: "scatter", mode: "markers", x: meses, y: o.tmax, name: "Tmáx observada",
-        marker: { color: COL.obs, symbol: "x-thin-open", size: 7, line: { width: 1.6 } }, yaxis: "y2", showlegend: false,
+        marker: { color: obsCol, symbol: "x-thin-open", size: 7, line: { width: 1.6 } }, yaxis: "y2", showlegend: false,
         hovertemplate: "%{y} °C<extra>Obs</extra>" });
       if (o.tmin) traces.push({ type: "scatter", mode: "markers", x: meses, y: o.tmin, name: "Tmín observada",
-        marker: { color: COL.obs, symbol: "x-thin-open", size: 7, line: { width: 1.6 } }, yaxis: "y2", showlegend: false,
+        marker: { color: obsCol, symbol: "x-thin-open", size: 7, line: { width: 1.6 } }, yaxis: "y2", showlegend: false,
         hovertemplate: "%{y} °C<extra>Obs</extra>" });
     }
     const layout = App.plotlyLayoutBase({
@@ -445,6 +447,9 @@
     try { ests = (await App.api("/clima/records_estaciones")).estaciones || []; } catch (e) {}
     if (!ests.length) { c.innerHTML = `<div class="cl-vacio">No hay base de observaciones unificada disponible.</div>`; return; }
     const anioActual = new Date().getFullYear();
+    // En el visor solo hay récords congelados de los últimos VISOR_RECORDS_ANIOS=3 años
+    // (exportar_web.py) → capar el input para no ofrecer años sin producto ("no publicado").
+    const minAnio = window.HIDROMET_VISOR ? (anioActual - 2) : 1990;
     const inp = "border:1px solid var(--line,#d7dde6);border-radius:9px;padding:8px 11px;background:var(--surface,#fff);color:var(--ink,#1f2a3a)";
     const opt = ests.map(e => `<option value="${esc(e.codigo)}">${esc(e.nombre || e.codigo)} (${esc(e.codigo)})${e.region ? " · " + esc(e.region) : ""}</option>`).join("");
     c.innerHTML = `<div class="cl-wrap">
@@ -453,7 +458,7 @@
           <select data-rol="est" style="${inp};font:500 13px var(--fuente,sans-serif)">${opt}</select></div>
         <div class="cl-grupo"><span>Variable</span><div class="cl-pills" data-rol="vars"></div></div>
         <div class="cl-grupo"><span>Año</span>
-          <input data-rol="anio" type="number" value="${anioActual}" min="1990" max="${anioActual}" style="${inp};width:92px;font:600 13px var(--mono,monospace)"></div>
+          <input data-rol="anio" type="number" value="${anioActual}" min="${minAnio}" max="${anioActual}" style="${inp};width:92px;font:600 13px var(--mono,monospace)"></div>
         <div class="cl-grupo"><span>Bandas</span>
           <label style="display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted,#5b6678);cursor:pointer;padding-bottom:6px">
             <input type="checkbox" data-rol="pct" checked> percentiles P10–P90 · P25–P75</label></div>
@@ -513,7 +518,8 @@
           { id: "mapas", etiqueta: "Mapas", render: tabMapas },
           { id: "estacion", etiqueta: "Por estación", render: tabEstacion },
           { id: "records", etiqueta: "Récords", render: tabRecords },
-          { id: "punto", etiqueta: "Por coordenada", render: tabPunto },
+          // "Por coordenada" consulta lat/lon libres (imposible de congelar) → oculta en el visor.
+          window.HIDROMET_VISOR ? null : { id: "punto", etiqueta: "Por coordenada", render: tabPunto },
           { id: "glosario", etiqueta: "Metodología", render: tabGlosario },
         ],
       });

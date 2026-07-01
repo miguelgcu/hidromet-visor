@@ -38,7 +38,7 @@
 .ini-card-ico {
   width: 38px; height: 38px; border-radius: 10px;
   display: flex; align-items: center; justify-content: center;
-  background: #EEF1F6; color: var(--slate);
+  background: var(--surface-3); color: var(--slate);
 }
 .ini-card-titulo { margin: 0; font-weight: 650; font-size: 15px; color: var(--ink); }
 .ini-card-detalle { font-size: 12px; color: var(--muted-2); margin-top: 2px; line-height: 1.35; }

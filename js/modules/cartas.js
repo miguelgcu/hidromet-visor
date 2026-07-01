@@ -111,9 +111,12 @@
     }
     if (!xs.length) return [];
     const base = { type: "scatter", mode: "lines", x: xs, y: ys, hoverinfo: "skip", showlegend: false, xaxis: ejeX, yaxis: ejeY };
+    // Outline geográfico = halo + línea. En OSCURO se invierte (halo oscuro + línea clara) para
+    // que el contorno no desaparezca sobre el mar oscuro.
+    const _osc = (App.tema && App.tema() === "oscuro");
     return [
-      Object.assign({}, base, { line: { color: "#ffffff", width: wWhite || 4.5 } }),
-      Object.assign({}, base, { line: { color: "#0b0d12", width: wBlack || 2 } }),
+      Object.assign({}, base, { line: { color: _osc ? "#0B1322" : "#ffffff", width: wWhite || 4.5 } }),
+      Object.assign({}, base, { line: { color: _osc ? "#AEBBD0" : "#0b0d12", width: wBlack || 2 } }),
     ];
   }
 
@@ -708,7 +711,7 @@
             ? await App.api(`/cartas/series/estacion?codigo=${encodeURIComponent(cod)}&variable=${obsVar}&dias=20&tipo=${encodeURIComponent(tipoId)}`)
             : await App.api(`/cartas/series/grilla?codigo=${encodeURIComponent(cod)}&variable=${encodeURIComponent(g.varId)}&periodo=${g.horas}&tipo=${encodeURIComponent(tipoId)}`);
           E.serieCache[key] = r;
-        } catch (e) { plot.innerHTML = `<p class="suave" style="padding:16px;color:var(--peligro,#c0392b)">No se pudo cargar la serie.</p>`; return; }
+        } catch (e) { plot.innerHTML = `<p class="suave" style="padding:16px;color:var(--danger)">No se pudo cargar la serie.</p>`; return; }
       }
       if (!host.isConnected) return;
       if (!r || r.error || !(r.trazas && r.trazas.length)) {
@@ -722,8 +725,8 @@
         xaxis: { type: "date", tickformat: "%d/%m", tickangle: 0, nticks: 12 },
       });
       if (r.hoy) {
-        layout.shapes = [{ type: "line", x0: r.hoy, x1: r.hoy, yref: "paper", y0: 0, y1: 1, line: { color: "#95A1B2", width: 1.2, dash: "dot" } }];
-        layout.annotations = [{ x: r.hoy, yref: "paper", y: 1, yanchor: "bottom", text: "presente", showarrow: false, font: { family: "IBM Plex Mono", size: 10, color: "#5A6678" } }];
+        layout.shapes = [{ type: "line", x0: r.hoy, x1: r.hoy, yref: "paper", y0: 0, y1: 1, line: { color: (App.tema && App.tema() === "oscuro") ? "#75859D" : "#95A1B2", width: 1.2, dash: "dot" } }];
+        layout.annotations = [{ x: r.hoy, yref: "paper", y: 1, yanchor: "bottom", text: "presente", showarrow: false, font: { family: "IBM Plex Mono", size: 10, color: (App.tema && App.tema() === "oscuro") ? "#9DAABF" : "#5A6678" } }];
       }
       window.Plotly.newPlot(plot, r.trazas, layout, App.plotlyConfig());
       nota.textContent = `Comparativa multimodelo — ${etiqV} a ${g.horas} h.` +
@@ -1100,9 +1103,12 @@
       b.onclick = async () => {
         a.modo = b.dataset.modo;
         // Cambiar de modo COPIA la variante pre-calculada sobre alertas_diarias.nc; sin
-        // esto el toggle no cambiaba el archivo y fija/zph se veían idénticos.
-        try { await App.api("/cartas/umbrales_modo", { method: "POST", body: { modo: a.modo } }); }
-        catch (e) { App.aviso(e.message, "error"); }
+        // esto el toggle no cambiaba el archivo y fija/zph se veían idénticos. En el visor
+        // (solo lectura) se omite el POST: re() re-lee los productos ya congelados.
+        if (!window.HIDROMET_VISOR) {
+          try { await App.api("/cartas/umbrales_modo", { method: "POST", body: { modo: a.modo } }); }
+          catch (e) { App.aviso(e.message, "error"); }
+        }
         re(); cargarFechas();
       });
     cont.querySelector('[data-rol="editar"]').onclick = abrirEditorUmbrales;
@@ -1374,7 +1380,7 @@
       const ss = s.filter(x => x.variable === v);
       return { type: "scatter", mode: "markers", name: ETV[v] || v,
         x: ss.map(x => x.fecha), y: ss.map(x => x.eventos_pct), customdata: ss.map(x => x.no),
-        marker: { size: 9, color: COLV[v] || "#888", line: { width: 1, color: "rgba(255,255,255,.5)" } },
+        marker: { size: 9, color: COLV[v] || "#888", line: { width: 1, color: (App.tema && App.tema() === "oscuro") ? "rgba(20,31,56,.6)" : "rgba(255,255,255,.5)" } },
         hovertemplate: `N.º %{customdata} · %{x}<br>%{y:.0f}% eventos cubiertos<extra>${esc(ETV[v] || v)}</extra>` };
     });
     const tinta = oscuro ? "#9DAABF" : "#58667A", rejilla = oscuro ? "rgba(223,230,247,.10)" : "rgba(70,89,122,.12)";
@@ -1469,15 +1475,15 @@
     try { r = await App.api("/clima/advertencias"); } catch (e) { host.innerHTML = ""; return; }
     if (!r || !r.disponible || !(r.advertencias || []).length) { host.innerHTML = ""; return; }
     const s = r.resumen;
-    const bg = ok => ok ? "background:rgba(34,150,90,.13);color:#1d7a47" : "background:rgba(150,160,175,.16);color:#6b7686";
+    const bg = ok => ok ? "background:var(--ok-bg);color:var(--ok)" : "background:var(--surface-3);color:var(--muted)";
     const pill = (ok, t) => `<span style="margin-left:auto;font:600 11px var(--mono,monospace);border-radius:999px;padding:3px 10px;white-space:nowrap;${bg(ok)}">${esc(t)}</span>`;
     const filas = r.advertencias.map(a => {
       const dias = a.dias.map(d =>
-        `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:6px 0;border-top:1px solid var(--linea,#eef1f6)">
-          <span style="font:600 12px var(--mono,monospace);color:var(--tenue,#5b6678);min-width:130px">${esc(d.dia)} · ${esc(d.fecha)}</span>
+        `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:6px 0;border-top:1px solid var(--line-3)">
+          <span style="font:600 12px var(--mono);color:var(--muted);min-width:130px">${esc(d.dia)} · ${esc(d.fecha)}</span>
           <span style="font-size:12px;flex:1;min-width:210px"><b>${fmtNum(d.max)} mm</b> máx · ${fmtNum(d.media)} mm medio · ${Math.round(d.frac_umbral * 100)} % del área ≥ ${s.umbral_mm} mm</span>
           ${pill(d.confirma, d.confirma ? "Confirmada" : "Sin lluvia")}</div>`).join("");
-      return `<div style="padding:8px 0;border-top:1px solid var(--linea,#e2e7ee)">
+      return `<div style="padding:8px 0;border-top:1px solid var(--line)">
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="font-size:13px">Advertencia N.º ${a.no}</b>
         ${pill(a.confirma, a.confirma ? "✓ Confirmada" : "✗ No confirmada")}</div>${dias}</div>`;
     }).join("");
@@ -1570,6 +1576,16 @@
       } catch (e) { valida.innerHTML = `<span class="suave" style="font-size:12px">Validación no disponible.</span>`; }
     };
     const pinta = () => {
+      if (window.HIDROMET_VISOR) {
+        // El mapa FFR es un PNG generado por el backend (no se congela); en el visor se muestra
+        // solo la validación (que sí está publicada), con una nota en lugar de la imagen rota.
+        img.style.display = "none";
+        if (img.parentElement && !img.parentElement.querySelector(".ffr-novisor"))
+          img.parentElement.insertAdjacentHTML("beforeend",
+            '<div class="vacio ffr-novisor" style="padding:22px">El mapa de zonas de riesgo FFR no está disponible en el visor en línea; debajo se muestra su validación.</div>');
+        cargarValida();
+        return;
+      }
       img.style.opacity = .55; img.onload = () => { img.style.opacity = 1; };
       img.src = api("/cartas/riesgo_ffr.png?" + qs({ buffer: sel.value, record: rec() }));
       cargarValida();
@@ -1985,7 +2001,7 @@
       <div data-rol="s-plot" style="min-height:400px"></div>
       <p class="ml-serie-pie" data-rol="s-pie"></p>`;
     const sel = r => cont.querySelector(`[data-rol="${r}"]`);
-    if (!ests.length) { sel("s-plot").innerHTML = `<p style="padding:20px;color:var(--tenue,#7a8699)">No hay estaciones disponibles. Actualiza las cartas primero.</p>`; return; }
+    if (!ests.length) { sel("s-plot").innerHTML = `<p style="padding:20px;color:var(--muted)">No hay estaciones disponibles. Actualiza las cartas primero.</p>`; return; }
 
     async function pintar() {
       const v = sel("s-var").value, cod = sel("s-est").value;
@@ -1994,15 +2010,15 @@
       sel("s-freq").disabled = esTemp;            // la temperatura solo es diaria (Tmax/Tmin)
       if (esTemp) sel("s-freq").value = "24";
       const f = sel("s-freq").value;
-      plot.innerHTML = `<p style="padding:20px;color:var(--tenue,#7a8699)">Cargando serie…</p>`; pie.textContent = "";
+      plot.innerHTML = `<p style="padding:20px;color:var(--muted)">Cargando serie…</p>`; pie.textContent = "";
       let r;
       try {
         r = (f === "24")
-          ? await App.api(`/cartas/series/estacion?codigo=${encodeURIComponent(cod)}&variable=${v}&dias=20`)
+          ? await App.api(`/cartas/series/estacion?codigo=${encodeURIComponent(cod)}&variable=${v}&dias=20&tipo=pronostico`)
           : await App.api(`/cartas/series/grilla?codigo=${encodeURIComponent(cod)}&variable=${v}&periodo=${f}&tipo=pronostico`);
-      } catch (e) { plot.innerHTML = `<p style="padding:20px;color:var(--peligro,#c0392b)">No se pudo cargar la serie.</p>`; return; }
+      } catch (e) { plot.innerHTML = `<p style="padding:20px;color:var(--danger)">No se pudo cargar la serie.</p>`; return; }
       if (!r || r.error || !(r.trazas && r.trazas.length)) {
-        plot.innerHTML = `<p style="padding:20px;color:var(--tenue,#7a8699)">Sin datos para ${esc(v)} a ${esc(f)} h en esta estación (las series sub-diarias requieren cartas cargadas de ese período).</p>`;
+        plot.innerHTML = `<p style="padding:20px;color:var(--muted)">Sin datos para ${esc(v)} a ${esc(f)} h en esta estación (las series sub-diarias requieren cartas cargadas de ese período).</p>`;
         return;
       }
       plot.innerHTML = "";
@@ -2014,8 +2030,8 @@
         xaxis: { type: "date", tickformat: "%d/%m", tickangle: 0, nticks: 12 },
       });
       if (r.hoy) {
-        layout.shapes = [{ type: "line", x0: r.hoy, x1: r.hoy, yref: "paper", y0: 0, y1: 1, line: { color: "#95A1B2", width: 1.2, dash: "dot" } }];
-        layout.annotations = [{ x: r.hoy, yref: "paper", y: 1, yanchor: "bottom", text: "presente", showarrow: false, font: { family: "IBM Plex Mono", size: 10, color: "#5A6678" } }];
+        layout.shapes = [{ type: "line", x0: r.hoy, x1: r.hoy, yref: "paper", y0: 0, y1: 1, line: { color: (App.tema && App.tema() === "oscuro") ? "#75859D" : "#95A1B2", width: 1.2, dash: "dot" } }];
+        layout.annotations = [{ x: r.hoy, yref: "paper", y: 1, yanchor: "bottom", text: "presente", showarrow: false, font: { family: "IBM Plex Mono", size: 10, color: (App.tema && App.tema() === "oscuro") ? "#9DAABF" : "#5A6678" } }];
       }
       window.Plotly.newPlot(plot, r.trazas, layout, App.plotlyConfig());
       pie.innerHTML = `Comparativa multimodelo — ${f === "24" ? "diario (24 h)" : f + " h"}.` +

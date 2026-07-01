@@ -22,7 +22,7 @@
     { clave: "Monitoreo normal",                   etq: "Monitoreo",      badge: "Monitoreo", color: "var(--blue)",   bg: "var(--blue-50)"   },
     { clave: "Desbordamiento / posible inundacion", etq: "Desbordamiento", badge: "Desbord.",  color: "var(--danger)", bg: "var(--danger-bg)" },
     { clave: "Crecida / aumento de caudal",         etq: "Crecida",        badge: "Crecida",   color: "var(--warn)",   bg: "var(--warn-bg)"   },
-    { clave: "Estiaje / bajo caudal",               etq: "Estiaje",        badge: "Estiaje",   color: "#C99A2E",       bg: "#FAF3E0"          },
+    { clave: "Estiaje / bajo caudal",               etq: "Estiaje",        badge: "Estiaje",   color: "var(--warn)",   bg: "var(--warn-bg)"   },
     { clave: "Alerta GEOGLOWS",                     etq: "GEOGLOWS",       badge: "GEOGLOWS",  color: "var(--ml-purple)", bg: "var(--ml-purple-bg)" },
   ];
   const PORCLAVE = Object.fromEntries(TIPOS.map(t => [t.clave, t]));
@@ -325,7 +325,7 @@
       ? (f) => ({ color: "#FFFFFF", weight: 0.7, opacity: 0.65,
           fillColor: hashColor((f.properties || {}).codigo || (f.properties || {}).nombre),
           fillOpacity: 0.5 })
-      : () => ({ color: "#0b0d12", weight: 1.3, opacity: 0.95, fillOpacity: 0, fill: false });
+      : () => ({ color: (App.tema && App.tema() === "oscuro") ? "#AEBBD0" : "#0b0d12", weight: 1.3, opacity: 0.95, fillOpacity: 0, fill: false });
     if (!esCuenca) {
       estado.capaBaseCasing = L.geoJSON(gj, { pane: "pTematica", interactive: false,
         style: () => ({ color: "#ffffff", weight: 3.4, opacity: 0.9, fillOpacity: 0, fill: false }) }).addTo(estado.mapa);
