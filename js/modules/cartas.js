@@ -284,8 +284,10 @@
     // Descarga = carta FORMAL: todas las capas de presentación activas.
     const pngParams = Object.assign({}, base,
       { titulo: 1, escala: 1, galapagos: 1, interpolar: 1, grilla: 1, isolineas: 0, estaciones: 0 });
-    const pngUrl = api("/cartas/carta.png?" + qs(pngParams));
-    const fname = String(alt || "carta").replace(/[^\w\-]+/g, "_").slice(0, 60) + ".png";
+    // Descarga = JPG GUARDADO en Descargas por el servidor (el <a download> del PNG NO descarga en
+    // WebView2). Se reusa carta_descargar (renderiza el PNG formal → JPG). nombre = de la carta.
+    const jpgRuta = "/cartas/carta_descargar?" + qs(Object.assign({}, pngParams,
+      { nombre: String(alt || "carta").replace(/[^\w\-]+/g, "_").slice(0, 55) }));
     // Botón SHP: SOLO en cartas de alerta por nivel → zip con .shp + .qml de QGIS de la
     // advertencia EXACTA mostrada (misma variable, modelo y instante).
     const esAlertaNivel = /^alerta_(lluvia|tmin|tmax)_/.test(String(params.capa || ""));
@@ -300,8 +302,8 @@
            title="Descargar en formato shapefile" aria-label="Descargar en formato shapefile">SHP</a>` : "";
     return `
       <div class="ct-lienzo" data-datos="${esc(datosUrl)}">
-        <a class="ct-dl" href="${esc(pngUrl)}" download="${esc(fname)}"
-           title="Descargar carta (PNG formal)" aria-label="Descargar carta">
+        <a class="ct-dl ct-dl-jpg" role="button" tabindex="0" data-jpg="${esc(jpgRuta)}"
+           title="Descargar carta (JPG)" aria-label="Descargar carta en JPG">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
@@ -1942,19 +1944,21 @@
     else E._stale = true;   // NO destruir E.productos: rompería un panel FFGS montado bajo Hidrología; re-fetch perezoso en asegurarEstado
   });
 
-  // Descarga de shapefile (alertas / FFGS): se GUARDA en la carpeta Descargas desde el
+  // Descarga de shapefile (alertas / FFGS) O carta JPG: se GUARDA en la carpeta Descargas desde el
   // servidor (el <a download> de WebView2 no descarga) y se avisa, como el resto de exports.
   document.addEventListener("click", async (ev) => {
-    const b = ev.target && ev.target.closest && ev.target.closest(".ct-dl-shp[data-shp]");
+    const b = ev.target && ev.target.closest && ev.target.closest("[data-shp],[data-jpg]");
     if (!b) return;
     ev.preventDefault();
     if (b.dataset.busy) return;
+    const ruta = b.dataset.shp || b.dataset.jpg;
+    const esShp = !!b.dataset.shp;
     b.dataset.busy = "1"; b.style.opacity = ".45";
     try {
-      const r = await App.api(b.dataset.shp);
-      App.aviso(`Shapefile guardado en Descargas: ${r.archivo}`, "ok", 6000);
+      const r = await App.api(ruta);
+      App.aviso(`${esShp ? "Shapefile" : "Carta JPG"} guardada en Descargas: ${r.archivo}`, "ok", 6000);
     } catch (e) {
-      App.aviso(e.message || "No se pudo descargar el shapefile", "error", 7000);
+      App.aviso(e.message || "No se pudo descargar", "error", 7000);
     } finally {
       delete b.dataset.busy; b.style.opacity = "";
     }
