@@ -1569,21 +1569,16 @@
         </div>`;
       } catch (e) { valida.innerHTML = `<span class="suave" style="font-size:12px">Validación no disponible.</span>`; }
     };
-    const pinta = () => { renderFFRZona(plot, { buffer: sel.value, record: rec() }); cargarValida(); };
+    const pinta = () => {
+      renderFFRZona(plot, { buffer: sel.value, record: rec() });
+      // El botón SHP (esquina, al lado del de imagen) usa el handler genérico [data-shp]:
+      // app = lo guarda el servidor; visor = baja el .zip PRE-CONGELADO. SIN fecha, para que
+      // la ruta calce con el .zip congelado por (buffer+record).
+      if (shpBtn) shpBtn.dataset.shp = "/cartas/riesgo_ffr/descarga?" + qs({ buffer: sel.value, record: rec() });
+      cargarValida();
+    };
     sel.onchange = pinta;
     if (selF) selF.onchange = pinta;
-    // SHP: botón en la ESQUINA del mapa (al lado del de imagen). Guarda el shapefile
-    // (.shp + .qml QGIS) con el MISMO estilo/zona que se ve. Oculto en el visor (necesita backend).
-    if (shpBtn) shpBtn.onclick = async () => {
-      if (shpBtn.dataset.busy) return;
-      shpBtn.dataset.busy = "1"; shpBtn.style.opacity = ".45";
-      const fch = (selF && selF.selectedIndex >= 0 && selF.options[selF.selectedIndex]) ? selF.options[selF.selectedIndex].text : "";
-      try {
-        const r = await App.api("/cartas/riesgo_ffr/descarga?" + qs({ buffer: sel.value, record: rec(), fecha: fch }));
-        App.aviso(`Shapefile guardado en Descargas: ${r.archivo}`, "ok", 6000);
-      } catch (e) { App.aviso(e.message || "No se pudo exportar", "error", 6000); }
-      finally { delete shpBtn.dataset.busy; shpBtn.style.opacity = ""; }
-    };
     // Poblar el selector con las fechas FFR disponibles y pintar la última.
     (async () => {
       try {
@@ -1990,8 +1985,12 @@
         const r = await App.api(b.dataset.jpg);   // app: carta FORMAL renderizada por el servidor
         App.aviso(`Carta guardada en Descargas: ${r.archivo}`, "ok", 6000);
       } else if (b.dataset.shp) {
-        const r = await App.api(b.dataset.shp);
-        App.aviso(`Shapefile guardado en Descargas: ${r.archivo}`, "ok", 6000);
+        if (window.HIDROMET_VISOR) {
+          await _descargarShpVisor(b.dataset.shp);   // baja el .zip PRE-CONGELADO
+        } else {
+          const r = await App.api(b.dataset.shp);
+          App.aviso(`Shapefile guardado en Descargas: ${r.archivo}`, "ok", 6000);
+        }
       }
     } catch (e) {
       App.aviso(e.message || "No se pudo descargar", "error", 7000);
@@ -1999,6 +1998,21 @@
       delete b.dataset.busy; b.style.opacity = "";
     }
   });
+
+  // VISOR: descarga el shapefile de una advertencia del PROGRAMA desde el .zip PRE-CONGELADO
+  // (misma ruta que el exportador, con extensión .zip). No hay motor que lo genere en vivo.
+  async function _descargarShpVisor(rutaApi) {
+    const prod = App.rutaAProducto(rutaApi).replace(/\.json$/, ".zip");
+    const resp = await fetch(prod, { cache: "no-cache" });
+    if (!resp.ok) throw new Error("El shapefile de esta advertencia aún no está publicado en el visor");
+    const blob = await resp.blob();
+    const nombre = prod.split("/").pop() || "shapefile.zip";
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = nombre;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 8000);
+    App.aviso("Shapefile descargado", "ok", 4000);
+  }
 
   // Descarga el mapa Plotly vecino al botón como una CARTA (con su título y leyenda). VISOR
   // (navegador real): compone el PNG con Plotly y lo baja con <a download>. APP (WebView2 no

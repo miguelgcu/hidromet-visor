@@ -603,7 +603,8 @@ const App = (() => {
   }
 
   return { api, aviso, tarea, seguirTarea, modalTarea, tema, registrar, navegar, iniciar, el, fmtFecha, plotlyLayoutBase,
-           plotlyLayoutSerie, plotlyConfig, hayTareaActiva, cancelarTarea, cancelarTodas, panel, vistaPestanas, restaurador };
+           plotlyLayoutSerie, plotlyConfig, hayTareaActiva, cancelarTarea, cancelarTodas, panel, vistaPestanas, restaurador,
+           rutaAProducto };
 })();
 
 /* ---------------- MODO VISOR: SOLO EXPLORACIÓN ----------------
@@ -620,7 +621,8 @@ if (window.HIDROMET_VISOR) {
       '[data-rol="guardar"]', '[data-rol="descargar"]', '[data-rol="ffr-exportar"]',
       '[data-rol="probar"]', '[data-rol="ingreso"]', '[data-rol="sincronizar"]',
       '[data-rol="probar_api"]', '[data-rol="regenerar_html"]',
-      ".ct-dl-shp",   // el SHP necesita backend; el botón de imagen (.ct-dl-jpg) SÍ funciona en el visor (descarga cliente)
+      // .ct-dl-shp NO se oculta: en el visor el SHP de las advertencias del PROGRAMA se baja
+      // desde el .zip PRE-CONGELADO (productos/…/*.zip); el handler detecta el modo visor.
       "#ct-actualizar", "#ini-actualizar-todo", "#ini-probar", "#ini-ejecutar"];
     const TXT = /\b(actualizar|exportar|probar descargas|probar api|editar umbral|agregar estaci|añadir estaci|nueva estaci|sincronizar|generar informe)\b/i;
     function marcar(raiz) {
