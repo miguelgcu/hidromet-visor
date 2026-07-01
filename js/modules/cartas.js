@@ -563,6 +563,11 @@
     const c = div.querySelector(".cargando"); if (c) c.remove();
     const plot = div.querySelector(".ct-mapa-plot");
     Plotly.newPlot(plot, traces, layout, App.plotlyConfig({ scrollZoom: true, displayModeBar: false, doubleClick: "reset" }));
+    // Datos para reconstruir la carta FORMAL al descargar en el VISOR (título + leyenda/
+    // colorbar), ya que ahí no hay backend que renderice el PNG formal. En la app se usa
+    // el render del servidor. Se guardan en el propio div del plot.
+    plot._carta = { titulo: d.titulo, subtitulo: d.subtitulo, unidad: d.unidad,
+                    tick_labels: d.tick_labels, tickvals: d.tickvals, vmin: d.vmin, vmax: d.vmax };
     // Zoom con rueda SOLO con Ctrl: sin Ctrl, el evento no llega a Plotly (lo paramos
     // en captura) y la PÁGINA hace scroll normal; con Ctrl, Plotly recibe la rueda y hace zoom.
     plot.addEventListener("wheel", (e) => { if (!e.ctrlKey && !e.metaKey) e.stopPropagation(); },
@@ -1072,9 +1077,6 @@
       <div class="ct-panel" id="ct-desempeno">
         <div class="ct-panel-cab">
           <h3>Validación de desempeño <span class="suave" data-rol="dsub">· cargando…</span></h3>
-          <label class="ct-exp-modelo" style="display:inline-flex;align-items:center;gap:6px;margin-left:auto"><span class="et">Exportar modelo</span>
-            <select data-rol="exp-fuente">${_lista.map(s => `<option value="${esc(s)}" ${s === "CONSENSO" ? "selected" : ""}>${esc(ALERTA_FUENTE_ROTULO[s] || s)}</option>`).join("")}</select></label>
-          <button class="boton azulclaro chico" data-rol="exportar">⤓ Exportar a shapefile</button>
         </div>
         <div class="ct-puntaje-headline" data-rol="puntaje-headline"></div>
         <div class="ct-desenlaces" data-rol="desenlaces">
@@ -1122,8 +1124,6 @@
     cont.querySelector('[data-rol="aprev"]').onclick = () => { if (a.inst > 0) { a.inst--; re(); } };
     cont.querySelector('[data-rol="anext"]').onclick = () => { if (p && a.inst < p.instantes.length - 1) { a.inst++; re(); } };
     cont.querySelectorAll('.ct-toggle[data-capa]').forEach(b => b.onclick = () => { E.capas[b.dataset.capa] = !E.capas[b.dataset.capa]; re(); });
-
-    cont.querySelector('[data-rol="exportar"]').onclick = exportarShapefile;
 
     cargarDesempeno();
     conectarRiesgoFFR(cont);
@@ -1229,17 +1229,6 @@
       const r = await App.api("/cartas/alertas_programa/fechas?" + qs({ variable: varVal, modo: a.modo }));
       a.fechasEmitidas = r.fechas || [];
     } catch (e) { /* el navegador sigue usando los instantes del árbol */ }
-  }
-
-  async function exportarShapefile() {
-    const a = E.alerta;
-    const varVal = (VAR_ALERTA.find(x => x.id === a.varId) || VAR_ALERTA[0]).val;
-    const sel = document.querySelector('[data-rol="exp-fuente"]');
-    const fuente = (sel && sel.value) || "CONSENSO";
-    try {
-      const r = await App.api("/cartas/alertas_programa/descarga?" + qs({ variable: varVal, modo: a.modo, fuente }));
-      App.aviso(`Catálogo de ${ALERTA_FUENTE_ROTULO[fuente] || fuente} exportado: ${r.archivo} (${(r.bytes / 1024).toFixed(0)} KB) en ${r.carpeta}`, "ok", 7000);
-    } catch (e) { App.aviso("No se pudo exportar: " + e.message, "error"); }
   }
 
   /* ============================================================
@@ -1523,11 +1512,14 @@
                 <option value="rios">Corredor fluvial</option>
                 <option value="ambos" selected>Ambos</option>
               </select></label>
-            <button class="boton" data-rol="ffr-exportar">⤓ Exportar shapefile</button>
           </div>
         </div>
-        <div class="ct-ffr-mapa"><img data-rol="ffr-img" alt="Zonas de riesgo de crecida (FFR)"
-             onerror="this.style.opacity=.3"></div>
+        <figure class="ct-ffr-mapa ct-det-mapa" style="position:relative;margin:0">
+          <a class="ct-dl ct-dl-jpg" role="button" tabindex="0" data-dlimg="1" data-nombre="zonas_riesgo_crecida_FFR"
+             title="Descargar mapa (imagen)" aria-label="Descargar mapa"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></a>
+          <a class="ct-dl ct-dl-shp" role="button" tabindex="0" data-rol="ffr-shp" title="Descargar shapefile (.shp + .qml QGIS)" aria-label="Descargar shapefile">SHP</a>
+          <div data-rol="ffr-plot" style="width:100%;height:460px"></div>
+        </figure>
         <div class="ct-ffr-valida" data-rol="ffr-valida"></div>
         <p class="ct-nota">El polígono encierra las microcuencas en riesgo. Se valida cruzándolo con los
           <b>desbordamientos/crecidas</b> observados de esa fecha (eventos de río dentro de la zona).</p>
@@ -1557,12 +1549,12 @@
   }
 
   function conectarRiesgoFFR(cont) {
-    const img = cont.querySelector('[data-rol="ffr-img"]');
+    const plot = cont.querySelector('[data-rol="ffr-plot"]');
     const sel = cont.querySelector('[data-rol="ffr-buffer"]');
     const selF = cont.querySelector('[data-rol="ffr-fecha"]');
     const valida = cont.querySelector('[data-rol="ffr-valida"]');
-    const btn = cont.querySelector('[data-rol="ffr-exportar"]');
-    if (!img || !sel) return;
+    const shpBtn = cont.querySelector('[data-rol="ffr-shp"]');
+    if (!plot || !sel) return;
     const rec = () => (selF && selF.value) || "-1";
     const cargarValida = async () => {
       if (!valida) return;
@@ -1577,31 +1569,20 @@
         </div>`;
       } catch (e) { valida.innerHTML = `<span class="suave" style="font-size:12px">Validación no disponible.</span>`; }
     };
-    const pinta = () => {
-      if (window.HIDROMET_VISOR) {
-        // El mapa FFR es un PNG generado por el backend (no se congela); en el visor se muestra
-        // solo la validación (que sí está publicada), con una nota en lugar de la imagen rota.
-        img.style.display = "none";
-        if (img.parentElement && !img.parentElement.querySelector(".ffr-novisor"))
-          img.parentElement.insertAdjacentHTML("beforeend",
-            '<div class="vacio ffr-novisor" style="padding:22px">El mapa de zonas de riesgo FFR no está disponible en el visor en línea; debajo se muestra su validación.</div>');
-        cargarValida();
-        return;
-      }
-      img.style.opacity = .55; img.onload = () => { img.style.opacity = 1; };
-      img.src = api("/cartas/riesgo_ffr.png?" + qs({ buffer: sel.value, record: rec() }));
-      cargarValida();
-    };
+    const pinta = () => { renderFFRZona(plot, { buffer: sel.value, record: rec() }); cargarValida(); };
     sel.onchange = pinta;
     if (selF) selF.onchange = pinta;
-    if (btn) btn.onclick = async () => {
-      btn.disabled = true; const t = btn.textContent; btn.textContent = "Exportando…";
+    // SHP: botón en la ESQUINA del mapa (al lado del de imagen). Guarda el shapefile
+    // (.shp + .qml QGIS) con el MISMO estilo/zona que se ve. Oculto en el visor (necesita backend).
+    if (shpBtn) shpBtn.onclick = async () => {
+      if (shpBtn.dataset.busy) return;
+      shpBtn.dataset.busy = "1"; shpBtn.style.opacity = ".45";
       const fch = (selF && selF.selectedIndex >= 0 && selF.options[selF.selectedIndex]) ? selF.options[selF.selectedIndex].text : "";
       try {
         const r = await App.api("/cartas/riesgo_ffr/descarga?" + qs({ buffer: sel.value, record: rec(), fecha: fch }));
         App.aviso(`Shapefile guardado en Descargas: ${r.archivo}`, "ok", 6000);
       } catch (e) { App.aviso(e.message || "No se pudo exportar", "error", 6000); }
-      finally { btn.disabled = false; btn.textContent = t; }
+      finally { delete shpBtn.dataset.busy; shpBtn.style.opacity = ""; }
     };
     // Poblar el selector con las fechas FFR disponibles y pintar la última.
     (async () => {
@@ -1613,6 +1594,45 @@
       } catch (e) { /* deja "vigente" */ }
       pinta();
     })();
+  }
+
+  // Mapa INTERACTIVO de las zonas de riesgo de crecida (FFR): zona RELLENA translúcida
+  // (formas reales de las microcuencas en riesgo, bufferadas — sin casco convexo que las
+  // infle) sobre el contorno de Ecuador. Reemplaza el PNG estático; funciona en el visor.
+  async function renderFFRZona(div, params) {
+    if (!div) return;
+    await asegurarGeoCartas();
+    let d;
+    try { d = await App.api("/cartas/riesgo_ffr/datos?" + qs(params)); }
+    catch (e) {
+      div.innerHTML = `<div class="vacio" style="padding:22px">${window.HIDROMET_VISOR ? "Zonas FFR no publicadas en el visor" : "Zonas FFR no disponibles"}</div>`;
+      return;
+    }
+    if (!div.isConnected) return;
+    const ext = d.bbox || [-81.3, -75.0, -5.1, 1.6];
+    const col = d.color || "#009AF2";
+    const rgba = (h, a) => { const c = _hexRgb(h); return `rgba(${c[0]},${c[1]},${c[2]},${a})`; };
+    const traces = trazasOutline("x", "y", null, 1.4, 3.0);
+    const anillos = d.anillos || [];
+    if (anillos.length) {
+      const xs = [], ys = [];
+      for (const an of anillos) { for (const [lo, la] of an) { xs.push(lo); ys.push(la); } xs.push(null); ys.push(null); }
+      traces.push({
+        type: "scatter", x: xs, y: ys, fill: "toself", mode: "lines",
+        line: { color: col, width: 1.7 }, fillcolor: rgba(col, .35),
+        name: `Riesgo de crecida (${d.n_cuencas || 0} microcuencas)`, hoverinfo: "skip",
+        showlegend: true, xaxis: "x", yaxis: "y",
+      });
+    }
+    const layout = App.plotlyLayoutBase({
+      showlegend: anillos.length > 0,
+      legend: { orientation: "h", x: 0, y: -0.03, xanchor: "left", font: { size: 10.5 } },
+      margin: { l: 0, r: 0, t: 0, b: anillos.length ? 40 : 6 },
+      xaxis: { range: [ext[0], ext[1]], visible: false, fixedrange: false },
+      yaxis: { range: [ext[2], ext[3]], scaleanchor: "x", scaleratio: 1, visible: false, fixedrange: false },
+      dragmode: "pan",
+    });
+    Plotly.newPlot(div, traces, layout, App.plotlyConfig({ scrollZoom: true, displayModeBar: false, doubleClick: "reset" }));
   }
 
   function tarjetaAdvertencia(adv) {
@@ -1980,26 +2000,63 @@
     }
   });
 
-  // Descarga el mapa Plotly vecino al botón como PNG. VISOR (navegador real): descarga directa
-  // (Plotly.downloadImage). APP (WebView2 NO dispara <a download>): captura el PNG con
-  // Plotly.toImage y lo GUARDA el servidor en Descargas (/cartas/guardar_imagen).
+  // Descarga el mapa Plotly vecino al botón como una CARTA (con su título y leyenda). VISOR
+  // (navegador real): compone el PNG con Plotly y lo baja con <a download>. APP (WebView2 no
+  // dispara <a download>): manda el PNG al servidor, que lo guarda en Descargas.
   async function descargarImagenMapa(b) {
     const cont = b.closest(".ct-lienzo") || b.closest("figure") || b.parentElement;
     const plot = cont && (cont.querySelector(".ct-mapa-plot") || cont.querySelector('[data-rol="cruce-plot"]')
+      || cont.querySelector('[data-rol="ffr-plot"]') || cont.querySelector('[data-rol="crecida-plot"]')
       || cont.querySelector(".js-plotly-plot"));
     if (!plot || !window.Plotly) throw new Error("El mapa aún no está listo");
     const nombre = String(b.dataset.nombre || "carta").replace(/[^\w\-]+/g, "_").slice(0, 60) || "carta";
     const bb = plot.getBoundingClientRect();
     const w = Math.max(1000, Math.round((bb.width || 520) * 2));
     const h = Math.max(680, Math.round((bb.height || 360) * 2));
+    // Carta de pronóstico/alerta (tiene datos guardados) → imagen FORMAL con título + leyenda.
+    // Advertencias/FFR ya llevan su leyenda dentro de la figura → se capturan tal cual.
+    const dataUrl = plot._carta
+      ? await _imagenCartaFormal(plot, w, h)
+      : await window.Plotly.toImage(plot, { format: "png", width: w, height: h, scale: 1 });
     if (window.HIDROMET_VISOR) {
-      await window.Plotly.downloadImage(plot, { format: "png", filename: nombre, width: w, height: h, scale: 1 });
-      App.aviso("Carta descargada (PNG)", "ok", 4000);
+      const a = document.createElement("a"); a.href = dataUrl; a.download = nombre + ".png";
+      document.body.appendChild(a); a.click(); a.remove();
+      App.aviso("Carta descargada (PNG con leyenda)", "ok", 4000);
     } else {
-      const dataUrl = await window.Plotly.toImage(plot, { format: "png", width: w, height: h, scale: 1 });
       const r = await App.api("/cartas/guardar_imagen", { method: "POST", body: { imagen: dataUrl, nombre } });
       App.aviso(`Carta guardada en Descargas: ${r.archivo}`, "ok", 6000);
     }
+  }
+
+  // PNG (dataURL) de una carta CON su título y su leyenda (colorbar), reconstruidos
+  // TEMPORALMENTE sobre el propio plot y revertidos después (el visor no tiene backend que
+  // renderice el PNG formal del servidor, así que la carta se compone en el navegador).
+  async function _imagenCartaFormal(plot, w, h) {
+    const c = plot._carta || {};
+    const data = plot.data || [];
+    const idx = data.findIndex(t => t.type === "heatmap" && (!t.xaxis || t.xaxis === "x"));
+    const relOn = { "margin.t": (c.titulo ? 54 : 12), "margin.r": 96, "margin.b": 14 };
+    if (c.titulo) {
+      relOn["title.text"] = esc(c.titulo) + (c.subtitulo ? `<br><span style="font-size:12px;font-weight:400">${esc(c.subtitulo)}</span>` : "");
+      relOn["title.x"] = 0.5; relOn["title.xanchor"] = "center"; relOn["title.y"] = 0.98; relOn["title.font.size"] = 16;
+    }
+    await window.Plotly.relayout(plot, relOn);
+    const conBarra = idx >= 0 && c.tickvals && c.tick_labels && c.tickvals.length === c.tick_labels.length;
+    if (conBarra) {
+      await window.Plotly.restyle(plot, {
+        showscale: true,
+        colorbar: [{ thickness: 13, len: 0.86, y: 0.5, x: 1.0, xpad: 4, outlinewidth: 0,
+          tickvals: c.tickvals, ticktext: c.tick_labels, tickfont: { size: 9 },
+          title: { text: c.unidad || "", side: "right", font: { size: 10 } } }],
+      }, [idx]);
+    }
+    let url;
+    try { url = await window.Plotly.toImage(plot, { format: "png", width: w, height: h, scale: 1 }); }
+    finally {
+      await window.Plotly.relayout(plot, { "title.text": "", "margin.t": 0, "margin.r": 0, "margin.b": 0 });
+      if (conBarra) await window.Plotly.restyle(plot, { showscale: false }, [idx]);
+    }
+    return url;
   }
 
   /* ============================================================
