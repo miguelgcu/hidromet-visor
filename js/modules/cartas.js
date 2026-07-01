@@ -286,8 +286,8 @@
       { titulo: 1, escala: 1, galapagos: 1, interpolar: 1, grilla: 1, isolineas: 0, estaciones: 0 });
     // Descarga = JPG GUARDADO en Descargas por el servidor (el <a download> del PNG NO descarga en
     // WebView2). Se reusa carta_descargar (renderiza el PNG formal → JPG). nombre = de la carta.
-    const jpgRuta = "/cartas/carta_descargar?" + qs(Object.assign({}, pngParams,
-      { nombre: String(alt || "carta").replace(/[^\w\-]+/g, "_").slice(0, 55) }));
+    const slugNombre = String(alt || "carta").replace(/[^\w\-]+/g, "_").slice(0, 55) || "carta";
+    const jpgRuta = "/cartas/carta_descargar?" + qs(Object.assign({}, pngParams, { nombre: slugNombre }));
     // Botón SHP: SOLO en cartas de alerta por nivel → zip con .shp + .qml de QGIS de la
     // advertencia EXACTA mostrada (misma variable, modelo y instante).
     const esAlertaNivel = /^alerta_(lluvia|tmin|tmax)_/.test(String(params.capa || ""));
@@ -302,8 +302,8 @@
            title="Descargar en formato shapefile" aria-label="Descargar en formato shapefile">SHP</a>` : "";
     return `
       <div class="ct-lienzo" data-datos="${esc(datosUrl)}">
-        <a class="ct-dl ct-dl-jpg" role="button" tabindex="0" data-jpg="${esc(jpgRuta)}"
-           title="Descargar carta (JPG)" aria-label="Descargar carta en JPG">
+        <a class="ct-dl ct-dl-jpg" role="button" tabindex="0" data-jpg="${esc(jpgRuta)}" data-nombre="${esc(slugNombre)}"
+           title="Descargar carta (imagen)" aria-label="Descargar carta">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
@@ -1765,7 +1765,11 @@
         <div class="ct-stat"><div class="ct-veredicto ${ver.clase}">${esc(ver.txt)}</div><div class="k" style="margin-top:8px">Veredicto</div></div>
       </div>
       <div class="ct-det-cuerpo">
-        <figure class="ct-det-mapa">
+        <figure class="ct-det-mapa" style="position:relative">
+          <a class="ct-dl ct-dl-jpg" role="button" tabindex="0" data-dlimg="1" data-nombre="advertencia_${esc(no)}_${esc(String(variable))}_${esc(dia)}"
+             title="Descargar mapa (imagen)" aria-label="Descargar mapa de la advertencia">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+          </a>
           <div data-rol="cruce-plot" style="width:100%;height:460px"></div></figure>
         <div class="ct-lecturas">
           <div class="micro">Cinco lecturas ejecutivas</div>
@@ -1779,7 +1783,12 @@
       ${String(variable).toUpperCase() === "RR" ? `<div class="ct-panel" style="margin-top:14px">
         <div class="ct-panel-cab"><h3>Validación de la zona de crecida (oficial)</h3>
           <span class="suave">Zona <b>Zonas_riesgo_crecidas.shp</b> × desbordes/crecidas observados del periodo</span></div>
-        <figure class="ct-det-mapa"><div data-rol="crecida-plot" style="width:100%;height:380px"></div></figure>
+        <figure class="ct-det-mapa" style="position:relative">
+          <a class="ct-dl ct-dl-jpg" role="button" tabindex="0" data-dlimg="1" data-nombre="advertencia_${esc(no)}_crecida_${esc(dia)}"
+             title="Descargar mapa (imagen)" aria-label="Descargar mapa de la zona de crecida">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+          </a>
+          <div data-rol="crecida-plot" style="width:100%;height:380px"></div></figure>
       </div>` : ""}`;
     panel.querySelectorAll('[data-rol="advdia"] button').forEach(b =>
       b.onclick = () => { E.adv.dia = b.dataset.dia; cargarDetalleAdv(); });
@@ -1947,22 +1956,51 @@
   // Descarga de shapefile (alertas / FFGS) O carta JPG: se GUARDA en la carpeta Descargas desde el
   // servidor (el <a download> de WebView2 no descarga) y se avisa, como el resto de exports.
   document.addEventListener("click", async (ev) => {
-    const b = ev.target && ev.target.closest && ev.target.closest("[data-shp],[data-jpg]");
+    const b = ev.target && ev.target.closest && ev.target.closest("[data-shp],[data-jpg],[data-dlimg]");
     if (!b) return;
     ev.preventDefault();
     if (b.dataset.busy) return;
-    const ruta = b.dataset.shp || b.dataset.jpg;
-    const esShp = !!b.dataset.shp;
     b.dataset.busy = "1"; b.style.opacity = ".45";
     try {
-      const r = await App.api(ruta);
-      App.aviso(`${esShp ? "Shapefile" : "Carta JPG"} guardada en Descargas: ${r.archivo}`, "ok", 6000);
+      // IMAGEN del mapa: advertencias (data-dlimg) siempre, y las cartas (data-jpg) cuando
+      // estamos en el VISOR en línea (sin backend que renderice la carta formal).
+      if (b.dataset.dlimg || (b.dataset.jpg && window.HIDROMET_VISOR)) {
+        await descargarImagenMapa(b);
+      } else if (b.dataset.jpg) {
+        const r = await App.api(b.dataset.jpg);   // app: carta FORMAL renderizada por el servidor
+        App.aviso(`Carta guardada en Descargas: ${r.archivo}`, "ok", 6000);
+      } else if (b.dataset.shp) {
+        const r = await App.api(b.dataset.shp);
+        App.aviso(`Shapefile guardado en Descargas: ${r.archivo}`, "ok", 6000);
+      }
     } catch (e) {
       App.aviso(e.message || "No se pudo descargar", "error", 7000);
     } finally {
       delete b.dataset.busy; b.style.opacity = "";
     }
   });
+
+  // Descarga el mapa Plotly vecino al botón como PNG. VISOR (navegador real): descarga directa
+  // (Plotly.downloadImage). APP (WebView2 NO dispara <a download>): captura el PNG con
+  // Plotly.toImage y lo GUARDA el servidor en Descargas (/cartas/guardar_imagen).
+  async function descargarImagenMapa(b) {
+    const cont = b.closest(".ct-lienzo") || b.closest("figure") || b.parentElement;
+    const plot = cont && (cont.querySelector(".ct-mapa-plot") || cont.querySelector('[data-rol="cruce-plot"]')
+      || cont.querySelector(".js-plotly-plot"));
+    if (!plot || !window.Plotly) throw new Error("El mapa aún no está listo");
+    const nombre = String(b.dataset.nombre || "carta").replace(/[^\w\-]+/g, "_").slice(0, 60) || "carta";
+    const bb = plot.getBoundingClientRect();
+    const w = Math.max(1000, Math.round((bb.width || 520) * 2));
+    const h = Math.max(680, Math.round((bb.height || 360) * 2));
+    if (window.HIDROMET_VISOR) {
+      await window.Plotly.downloadImage(plot, { format: "png", filename: nombre, width: w, height: h, scale: 1 });
+      App.aviso("Carta descargada (PNG)", "ok", 4000);
+    } else {
+      const dataUrl = await window.Plotly.toImage(plot, { format: "png", width: w, height: h, scale: 1 });
+      const r = await App.api("/cartas/guardar_imagen", { method: "POST", body: { imagen: dataUrl, nombre } });
+      App.aviso(`Carta guardada en Descargas: ${r.archivo}`, "ok", 6000);
+    }
+  }
 
   /* ============================================================
      REGISTRO de la vista
