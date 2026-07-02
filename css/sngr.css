@@ -42,6 +42,10 @@
   background: var(--surface); border: 1px solid var(--line-2); border-radius: 8px; padding: 7px 10px; }
 /* select deshabilitado por la cascada: gris y atenuado (igual que el diseño) */
 .sngr-filtros select:disabled { color: var(--muted-2); background: var(--surface-3); cursor: not-allowed; }
+/* v11 compacta: etiqueta AL LADO del control, botones al final (149px → ~56px) */
+.sngr-filtros.compacta label { display: flex; align-items: center; gap: 7px; }
+.sngr-filtros.compacta .tit { margin-bottom: 0; }
+.sngr-filtros.compacta .boton.chico { padding: 7px 12px; font-size: 12px; }
 
 /* ---------- grid mapa (1.5fr) + tabla (1fr) ---------- */
 .sngr-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 14px; align-items: start; }
@@ -85,7 +89,8 @@
 .sngr-zoom .zb:hover { border-color: var(--cyan-bd); }
 
 /* contenedor del mapa (Leaflet) con degradado de mar para no ver letterbox */
-.sngr-mapa { position: relative; height: 410px; border: 1px solid var(--line-2);
+/* v11: altura fluida — a 900px de alto ≈430px de mapa; a 1080 ≈610 */
+.sngr-mapa { position: relative; height: clamp(380px, calc(100vh - 470px), 620px); border: 1px solid var(--line-2);
   border-radius: 10px; overflow: hidden;
   background: linear-gradient(180deg, var(--sea-top), var(--sea-bottom)); }
 .sngr-mapa .leaflet-container { background: transparent; font-family: var(--fuente); }

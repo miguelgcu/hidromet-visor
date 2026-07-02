@@ -348,7 +348,7 @@ const App = (() => {
   // Grupos de la barra lateral (rediseño v9): PRINCIPAL · MÓDULOS · SISTEMA.
   const GRUPO_NAV = { inicio: "PRINCIPAL",
                       pronostico: "MÓDULOS", validacion: "MÓDULOS", hidrologia: "MÓDULOS",
-                      advertencias: "MÓDULOS", glosario: "MÓDULOS",
+                      advertencias: "MÓDULOS", clima: "MÓDULOS", glosario: "MÓDULOS",
                       cartas: "MÓDULOS", sngr: "MÓDULOS", eventos: "MÓDULOS", mlnwp: "MÓDULOS",
                       datos: "SISTEMA", configuracion: "SISTEMA", config: "SISTEMA" };
 
@@ -418,9 +418,18 @@ const App = (() => {
         fecha = u && u.fecha;
       }
     } catch (e) { /* aún sin marca */ }
-    if (!fecha) { el.textContent = window.HIDROMET_VISOR ? "Visor en línea" : "Datos locales"; return; }
+    const chip = document.querySelector("#topbar .sync");
+    if (!fecha) {
+      if (chip) chip.classList.remove("viejo");
+      el.textContent = window.HIDROMET_VISOR ? "Visor en línea" : "Datos locales";
+      return;
+    }
     const m = String(fecha).replace("T", " ").match(/(\d{4})-(\d{2})-(\d{2})\D+(\d{2}):(\d{2})/);
     el.textContent = m ? `Datos al ${m[3]}/${m[2]} · ${m[4]}:${m[5]}` : ("Datos al " + String(fecha).slice(0, 16));
+    // Semántica de FRESCURA: si los datos tienen >36 h, el punto del chip pasa a ámbar
+    // (aviso silencioso al operador de guardia). `fecha` es string ISO → Date.parse.
+    const t = Date.parse(String(fecha).replace(" ", "T"));
+    if (chip) chip.classList.toggle("viejo", isFinite(t) && (Date.now() - t) > 36 * 3.6e6);
   }
 
   /* §B.8: estilos del bloqueo global + barra de cancelar (autocontenidos en
@@ -570,14 +579,19 @@ const App = (() => {
       `<button class="hm-pestana${p.id === activa ? " activa" : ""}" data-pest="${p.id}"` +
       `${p.danger ? ' data-danger="1"' : ""}>${p.etiqueta}</button>`).join("");
     vista.innerHTML =
-      `<div class="hm-vista-cab">
-         <div>${opts.kicker ? `<div class="hm-kicker">${opts.kicker}</div>` : ""}
-           <h1>${opts.titulo || ""}</h1>
-           ${opts.sub ? `<div class="hm-sub">${opts.sub}</div>` : ""}</div>
+      `<div class="hm-modbar">
+         <div class="hm-vista-cab">
+           <div>${opts.kicker ? `<div class="hm-kicker">${opts.kicker}</div>` : ""}
+             <h1>${opts.titulo || ""}</h1>
+             ${opts.sub ? `<div class="hm-sub">${opts.sub}</div>` : ""}</div>
+         </div>
+         <div class="hm-pestanas">${barra}</div>
          <div class="hm-vista-acc">${opts.accionesHTML || ""}</div>
        </div>
-       <div class="hm-pestanas">${barra}</div>
        <div id="hm-cuerpo" class="hm-cuerpo"></div>`;
+    // Acento por módulo en las pestañas (se escribe SIEMPRE, con "" cuando no hay,
+    // para no filtrar acentos entre módulos; fallback var(--blue) en CSS).
+    vista.style.setProperty("--tab-acc", opts.acento || "");
     const cuerpo = vista.querySelector("#hm-cuerpo");
     let saliente = null;
     async function pintar(id) {

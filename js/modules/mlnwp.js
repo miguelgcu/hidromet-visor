@@ -234,13 +234,16 @@
           </div>
         </div>
       </div>
-      <div class="ml-nota">
-        <b>Calificación 1–10</b> = qué tan bueno es el modelo (skill). &nbsp;<b>Confianza</b> = cuántas <b>fechas</b> respaldan esa calificación:
-        <span class="ml-pill alta">Alta ≥30</span>
-        <span class="ml-pill media">Media 15–29</span>
-        <span class="ml-pill baja">Baja 5–14</span>
-        Elige <b>Nacional</b> para el mapa de modelo ganador, o una <b>estación</b> para ver su validación y su serie.
-      </div>`;
+      <details class="hm-mas ml-nota-det">
+        <summary>ℹ Cómo leer calificación y confianza</summary>
+        <div class="ml-nota">
+          <b>Calificación 1–10</b> = qué tan bueno es el modelo (skill). &nbsp;<b>Confianza</b> = cuántas <b>fechas</b> respaldan esa calificación:
+          <span class="ml-pill alta">Alta ≥30</span>
+          <span class="ml-pill media">Media 15–29</span>
+          <span class="ml-pill baja">Baja 5–14</span>
+          Elige <b>Nacional</b> para el mapa de modelo ganador, o una <b>estación</b> para ver su validación y su serie.
+        </div>
+      </details>`;
   }
 
   async function tabValidacion(c) {

@@ -17,8 +17,10 @@
   --ml-purple: #6A47CE; --ml-purple-bg: #F6F2FE; --ml-purple-bd: #E6DDF8;
   --cyan: #0E94A4; --cyan-50: #E4F5F7; --cyan-bd: #C4E7EB; --slate: #46597A;
   /* texto */
-  --ink: #0E1A2B; --ink-2: #38465A; --muted: #58667A; --muted-2: #8794A5; --faint: #97A2B2;
+  --ink: #0E1A2B; --ink-2: #38465A; --muted: #58667A; --muted-2: #8794A5; --faint: #64748B;
   --on-navy: #D4DCE8;
+  /* sidebar (siempre navy, sin variante de tema) */
+  --sb-ink-2: #AEBBD1; --sb-ink-3: #8FA3C2;
   /* bordes */
   --line: #E2E8F0; --line-2: #D7DFEA; --line-3: #EDF1F6; --line-4: #E9EEF4;
   /* estados */
@@ -37,6 +39,16 @@
   --mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
   --sidebar-fondo: linear-gradient(176deg, #0B1B30, #091525 60%, #0C1F39);
   --cp: var(--navy-700); /* alias usado por core.js (#barra-tarea) */
+  /* v11 — radios / espaciado / tipos (escala consolidada) */
+  --r-card: 13px; --r-panel: 11px; --r-ctrl: 8px; --r-pill: 999px;
+  --gap-grid: 12px; --pad-card: 15px; --pad-barra: 8px 14px;
+  --fs-micro: 10px; --fs-xs: 11px; --fs-sm: 12.5px; --fs-md: 13.5px; --fs-lg: 15px; --fs-xl: 17px; --fs-h1: 22px;
+  /* v11 — componentes */
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--blue) 20%, transparent);
+  --btn-suave-bg: #F0F3F8; --btn-suave-bd: #E0E6EF;
+  --consola-bg: #0B1729; --consola-ink: #CFE3F7;
+  --overlay-bg: rgba(255,255,255,.82);
+  --rio-mayor: #2B6FB0; --rio-menor: #A9C7E2;
 }
 html[data-tema="oscuro"] {
   --bg-app: #0B1322; --surface: #141F38; --surface-2: #101A30; --surface-3: #18243F; --track: #1B2840;
@@ -44,8 +56,11 @@ html[data-tema="oscuro"] {
   --blue: #3D7BE8; --blue-press: #2C68DE; --blue-bright: #5C97F5;
   --blue-50: #182645; --blue-100: #25395E; --ml-purple: #8A6BE0; --ml-purple-bg: #1B1733; --ml-purple-bd: #2A2350;
   --cyan: #2AAFBE; --cyan-50: #102B30; --cyan-bd: #1C4A50;
-  --ink: #E8EDF6; --ink-2: #9DAABF; --muted: #9DAABF; --muted-2: #75859D; --faint: #6B7B93;
+  --ink: #E8EDF6; --ink-2: #9DAABF; --muted: #9DAABF; --muted-2: #75859D; --faint: #8496AF;
   --line: #28354F; --line-2: #2C3A55; --line-3: #1E2B45; --line-4: #1E2B45;
+  /* v11 — componentes (variantes oscuras) */
+  --btn-suave-bg: var(--surface-3); --btn-suave-bd: var(--line);
+  --overlay-bg: rgba(20,32,58,.84); --rio-mayor: #5AA9E6; --rio-menor: #37557A;
   --ok: #3FCB8C; --ok-dot: #2FBE83; --warn: #E6AB4D; --danger: #F07266;
   --ok-bg: #12301F; --ok-bd: #1E4B31; --warn-bg: #2E2510; --warn-bd: #4A3A16; --danger-bg: #321613; --danger-bd: #4C211D;
   --sea-top: #16223C; --sea-bottom: #101A30;
@@ -72,10 +87,15 @@ body { font-family: var(--fuente); background: var(--bg-app); color: var(--ink);
 #topbar .estado { display: flex; align-items: center; gap: 18px; }
 #topbar .sync { display: flex; align-items: center; gap: 7px; font: 500 12px var(--mono); color: var(--muted); }
 #topbar .sync .punto { width: 7px; height: 7px; border-radius: 50%; background: var(--ok-dot); }
+/* v11: frescura — datos >36h: punto ámbar + peso (texto sigue en --muted: AA en ambos temas) */
+#topbar .sync.viejo .punto { background: var(--warn); }
+#topbar .sync.viejo { font-weight: 700; }
 #topbar .reloj { font: 600 12px var(--mono); color: var(--ink); padding: 5px 11px;
   background: #F0F3F8; border: 1px solid #E0E6EF; border-radius: 7px; }
 html[data-tema="oscuro"] #topbar .reloj { background: var(--surface-3); border-color: var(--line); }
-#cabecera-vista { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; padding: 22px 26px 8px; }
+/* v11: cabecera vestigial — todos los módulos la ocultan; se congela por CSS (los
+   style.display="" de los módulos ahora restauran a este valor de hoja). */
+#cabecera-vista { display: none; }
 #titulo-vista { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -.01em; color: var(--ink); }
 #acciones-vista { display: flex; gap: 9px; align-items: center; }
 #vista { flex: 1; overflow: auto; padding: 14px 26px 40px; }
@@ -87,11 +107,11 @@ html[data-tema="oscuro"] #topbar .reloj { background: var(--surface-3); border-c
   letter-spacing: .5px; box-shadow: 0 4px 14px rgba(44,104,222,.35), inset 0 1px 0 rgba(255,255,255,.25); }
 .marca-texto { display: flex; flex-direction: column; line-height: 1.15; }
 .marca-nombre { font-size: 16px; font-weight: 700; color: #F3F6FB; letter-spacing: .2px; }
-.marca-sub { font: 600 10px var(--mono); letter-spacing: .22em; color: #5E78A0; text-transform: uppercase; }
+.marca-sub { font: 600 10px var(--mono); letter-spacing: .22em; color: var(--sb-ink-3); text-transform: uppercase; }
 
 /* ---------- navegación ---------- */
 #nav-principal { display: flex; flex-direction: column; gap: 2px; flex: 1; overflow: auto; }
-.nav-grupo { font: 600 10px var(--mono); letter-spacing: .18em; color: #46597A; padding: 15px 10px 7px; }
+.nav-grupo { font: 600 10px var(--mono); letter-spacing: .18em; color: var(--sb-ink-3); padding: 11px 10px 6px; }
 .nav-grupo:first-child { padding-top: 6px; }
 .nav-item { position: relative; display: flex; align-items: center; gap: 11px; padding: 9px 11px;
   border-radius: 9px; color: #D4DCE8; text-decoration: none; font: 600 13.5px var(--fuente);
@@ -270,10 +290,39 @@ table.tabla td.num, table.tabla th.num { text-align: right; font-family: var(--m
   padding: 9px 15px; border-bottom: 2.5px solid transparent; margin-bottom: -1.5px;
   border-radius: 8px 8px 0 0; transition: color .15s, border-color .15s, background .15s; }
 .hm-pestana:hover { color: var(--ink); background: var(--line-3); }
-.hm-pestana.activa { color: var(--blue); border-bottom-color: var(--blue); }
+.hm-pestana.activa { color: var(--tab-acc, var(--blue)); border-bottom-color: var(--tab-acc, var(--blue)); }
 .hm-pestana[data-danger="1"] { }
 .hm-pestana[data-danger="1"].activa { color: var(--danger, #dc2626); border-bottom-color: var(--danger, #dc2626); }
 .hm-cuerpo { min-height: 200px; }
+
+/* ---------- v11: barra de módulo unificada (título + pestañas + acciones en UNA fila) ---------- */
+.hm-modbar { display: flex; align-items: flex-end; gap: 22px;
+  border-bottom: 1.5px solid var(--line); margin-bottom: 14px; }
+.hm-modbar .hm-vista-cab { margin: 0; padding: 6px 0 9px; flex: none; }
+.hm-modbar .hm-kicker { display: none; }              /* redundante con el nav */
+.hm-modbar h1 { font-size: var(--fs-xl, 17px); }
+.hm-modbar .hm-sub { font-size: 12px; margin-top: 1px; max-width: 42ch;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hm-modbar .hm-pestanas { border-bottom: 0; margin: 0; flex: 1; align-self: flex-end; }
+.hm-modbar .hm-vista-acc { padding-bottom: 8px; display: flex; gap: 9px; align-items: center; }
+@media (max-width: 1279px) { .hm-modbar .hm-sub { display: none; } }
+
+/* ---------- v11: barra de controles compacta (componente de sistema) ---------- */
+.hm-controles, .filtros.compacta, .ct-barra.compacta, .sngr-filtros.compacta, .cl-toolbar.compacta {
+  display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-panel, 11px);
+  padding: var(--pad-barra, 8px 14px); margin-bottom: 12px; box-shadow: var(--shadow-card); }
+.hm-controles .campo-inline { display: inline-flex; align-items: center; gap: 7px; flex: none; }
+.hm-controles .sep { width: 1px; height: 26px; background: var(--line-4); flex: none; }
+.hm-controles .empuje, .empuje { margin-left: auto; }
+/* "Más filtros" plegable (popover, no empuja el layout) */
+details.hm-mas { position: relative; flex: none; }
+details.hm-mas > summary { list-style: none; cursor: pointer; font: 600 12px var(--fuente);
+  color: var(--blue); padding: 6px 10px; border: 1px dashed var(--line-2); border-radius: var(--r-ctrl, 8px); }
+details.hm-mas > summary::-webkit-details-marker { display: none; }
+details.hm-mas[open] > .hm-mas-panel { position: absolute; right: 0; top: calc(100% + 6px); z-index: 600;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-panel, 11px);
+  padding: 12px 14px; box-shadow: var(--shadow-hover); display: flex; gap: 12px; }
 
 /* ===== Tabla de Glosario ===== */
 .glo-cab { margin-bottom: 14px; }

@@ -782,7 +782,7 @@
     }).join("");
 
     return `
-      <div class="ct-barra cols">
+      <div class="ct-barra cols compacta">
         <label class="bloque"><span class="et">Variable</span>
           <select data-rol="var">${optsVar}</select></label>
         <label class="bloque"><span class="et">Período</span>
@@ -877,7 +877,7 @@
       </figure>`;
     }).join("");
     return `
-      <div class="ct-barra cols">
+      <div class="ct-barra cols compacta">
         <label class="bloque"><span class="et">Período</span>
           <select data-rol="fper">${optsPer}</select></label>
         <div class="ct-inst-nav">
@@ -964,7 +964,7 @@
       });
     }).join("");
     return `
-      <div class="ct-barra cols">
+      <div class="ct-barra cols compacta">
         <label class="bloque"><span class="et">Período</span>
           <select data-rol="hper">${optsPer}</select></label>
         <div class="ct-inst-nav">
@@ -1059,7 +1059,7 @@
       `<div class="vacio" style="padding:24px"><span class="suave">No hay alertas vigentes en disco; el panel de desempeño usa la validación histórica del programa.</span></div>`;
 
     return `
-      <div class="ct-barra">
+      <div class="ct-barra compacta">
         <label><span class="et">Variable</span><select data-rol="avar">${optsVar}</select></label>
         <span class="ct-div"></span>
         <span class="et" title="Umbrales fijos regionales o por Zonas de Pronóstico Homogéneo">Umbrales</span>

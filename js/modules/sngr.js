@@ -162,8 +162,11 @@
     const s = estado.sel;
     const desde = s.desde || f.fecha_min || "";
     const hasta = s.hasta || f.fecha_max || "";
+    // v11: acciones DENTRO de la fila de filtros (una sola fila compacta). Deben vivir
+    // aquí y ligarse en conectarFiltros(): recargarCascada() regenera este wrapper por
+    // outerHTML en cada cambio de provincia/cantón y borraría botones externos.
     return `
-      <div class="sngr-filtros">
+      <div class="sngr-filtros compacta">
         ${selectHTML("tipo", "Tipo", "Todos", f.tipos, s.tipo, false)}
         ${selectHTML("provincia", "Provincia", "Todas", f.provincias, s.provincia, false)}
         ${selectHTML("canton", "Cantón", "Todos", f.cantones, s.canton, !s.provincia)}
@@ -172,6 +175,9 @@
           <input type="date" data-rol="desde" value="${esc(desde)}"></label>
         <label><div class="tit">Hasta</div>
           <input type="date" data-rol="hasta" value="${esc(hasta)}"></label>
+        <span class="empuje"></span>
+        <button class="boton chico" data-rol="exportar">⤓ Exportar ZIP</button>
+        <button class="boton oscuro chico" data-rol="actualizar">⟳ Actualizar</button>
       </div>`;
   }
 
@@ -511,6 +517,10 @@
     get("parroquia").onchange = e => { estado.sel.parroquia = e.target.value; recargarEventos(); };
     get("desde").onchange = e => { estado.sel.desde = e.target.value; recargarEventos(); };
     get("hasta").onchange = e => { estado.sel.hasta = e.target.value; recargarEventos(); };
+    // v11: los botones viven en la fila de filtros → religarlos en cada regeneración.
+    const bExp = get("exportar"), bAct = get("actualizar");
+    if (bExp) bExp.onclick = e => exportarZip(e.currentTarget);
+    if (bAct) bAct.onclick = actualizar;
   }
 
   /* ---------------- acciones de cabecera ---------------- */
@@ -546,19 +556,14 @@
     estado.sel.desde = f.fecha_min || "";
     estado.sel.hasta = f.fecha_max || "";
 
-    // Sin título propio (ya lo da la pestaña/menú Hidrología): sólo la barra de acciones.
+    // v11: sin fila de acciones aparte — los botones van dentro de la fila de filtros
+    // (filtrosHTML) y se ligan en conectarFiltros(), sobreviviendo la cascada.
     cont.innerHTML = `<div data-screen-label="Eventos de Ríos">
-      <div class="sngr-acciones" style="justify-content:flex-end;margin-bottom:14px">
-        <button class="boton" data-rol="exportar">⤓ Exportar ZIP</button>
-        <button class="boton oscuro" data-rol="actualizar">⟳ Actualizar</button>
-      </div>
       ${conteosHTML()}
       ${filtrosHTML(f)}
       ${mapaTablaHTML()}
     </div>`;
 
-    cont.querySelector('[data-rol="exportar"]').onclick = e => exportarZip(e.currentTarget);
-    cont.querySelector('[data-rol="actualizar"]').onclick = actualizar;
     conectarFiltros();
     conectarConteos();
 
