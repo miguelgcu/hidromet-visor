@@ -33,6 +33,10 @@
   padding:14px 16px;box-shadow:var(--shadow-card)}
 .cl-maptit{font:600 14px var(--fuente);color:var(--ink);margin:0 0 8px}
 .cl-plot{width:100%}
+/* Lienzo de MAPA = papel blanco en ambos temas (--sea-* = #FFFFFF fijo), como .ct-lienzo.
+   Solo el mapa (.cl-plot-mapa): climogramas y récords siguen el tema. */
+.cl-plot-mapa{background:linear-gradient(180deg,var(--sea-top),var(--sea-bottom));
+  border-radius:10px;overflow:hidden}
 .cl-grid2{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(260px,.85fr);gap:14px;align-items:start}
 @media(max-width:920px){.cl-grid2{grid-template-columns:1fr}}
 

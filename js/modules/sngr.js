@@ -49,14 +49,14 @@
     { id: "cuencas4",   etq: "Cuencas · nivel 4", nivel: "cuencas4", tipo: "cuenca" },
   ];
 
-  // Colores del mapa temático (claro/oscuro). El fondo de mar lo da el CSS.
+  // Colores del mapa temático — FIJOS (mapa siempre claro en ambos temas,
+  // decisión del dueño: papel blanco + contornos negros en todo el programa).
   function paletaMapa() {
-    const oscuro = (App.tema && App.tema() === "oscuro");
     return {
-      tierra:      oscuro ? "#16223B" : "#FFFFFF",   // relleno del continente (mapa base); el borde lo da adminBorde
-      adminBorde:  oscuro ? "#AEBBD0" : "#000000",   // negro sobre blanco en claro (coherente con cartas/mlnwp)
-      rioMayor:    oscuro ? "#5AA9E6" : "#2B6FB0",
-      rioMenor:    oscuro ? "#37557A" : "#A9C7E2",
+      tierra:      "#FFFFFF",   // relleno del continente (mapa base); el borde lo da adminBorde
+      adminBorde:  "#000000",   // negro sobre blanco (coherente con cartas/mlnwp)
+      rioMayor:    "#2B6FB0",
+      rioMenor:    "#A9C7E2",
     };
   }
   // Paleta categórica suave para las cuencas (se cicla por índice de polígono).
@@ -253,10 +253,10 @@
     }).join("");
   }
 
-  // Mapa base OSM (CARTO) que CAMBIA con el tema: claro / oscuro.
+  // Mapa base OSM (CARTO) SIEMPRE claro: el mapa es papel blanco en ambos temas
+  // (decisión del dueño). El re-tileo del listener de tema queda inofensivo.
   function urlTiles() {
-    const oscuro = (App.tema && App.tema() === "oscuro");
-    return "https://{s}.basemaps.cartocdn.com/" + (oscuro ? "dark_all" : "light_all") + "/{z}/{x}/{y}{r}.png";
+    return "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
   }
 
   /* ---------------- Leaflet ---------------- */

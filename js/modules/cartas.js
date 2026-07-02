@@ -111,12 +111,12 @@
     }
     if (!xs.length) return [];
     const base = { type: "scatter", mode: "lines", x: xs, y: ys, hoverinfo: "skip", showlegend: false, xaxis: ejeX, yaxis: ejeY };
-    // Outline geográfico = halo + línea. En OSCURO se invierte (halo oscuro + línea clara) para
-    // que el contorno no desaparezca sobre el mar oscuro.
-    const _osc = (App.tema && App.tema() === "oscuro");
+    // Outline geográfico = halo blanco + línea NEGRA, SIEMPRE (pedido del dueño: las
+    // cartas son papel blanco con contornos negros en ambos temas; el lienzo del mapa
+    // no sigue el tema de la app).
     return [
-      Object.assign({}, base, { line: { color: _osc ? "#0B1322" : "#ffffff", width: wWhite || 3.4 } }),
-      Object.assign({}, base, { line: { color: _osc ? "#AEBBD0" : "#000000", width: wBlack || 2 } }),
+      Object.assign({}, base, { line: { color: "#ffffff", width: wWhite || 3.4 } }),
+      Object.assign({}, base, { line: { color: "#000000", width: wBlack || 2 } }),
     ];
   }
 
@@ -138,11 +138,11 @@
       else if (g.type === "MultiPolygon") g.coordinates.forEach(p => p.forEach(empuja));
     }
     if (!xs.length) return null;
-    const dark = !!(App.tema && App.tema() === "oscuro");
     // scattergl: 1682 cuencas = muchos puntos; WebGL las dibuja sin lag. Línea fina
-    // y tenue para que el COLOR del campo siga siendo lo dominante.
+    // y tenue para que el COLOR del campo siga siendo lo dominante. El lienzo de mapa
+    // es papel blanco en ambos temas → trazo oscuro fijo.
     return { type: "scattergl", mode: "lines", x: xs, y: ys, hoverinfo: "skip",
-      line: { color: dark ? "rgba(223,230,247,.30)" : "rgba(35,49,77,.32)", width: 0.6 },
+      line: { color: "rgba(35,49,77,.32)", width: 0.6 },
       showlegend: false };
   }
 
@@ -164,9 +164,8 @@
       xs.push(e.lon); ys.push(e.lat); tx.push(e.nombre || e.codigo || "");
     }
     if (!xs.length) return null;
-    const oscuro = !!(App.tema && App.tema() === "oscuro");
     return { type: "scatter", mode: "markers", x: xs, y: ys, text: tx, xaxis: ejeX, yaxis: ejeY,
-      marker: { size: 5, color: oscuro ? "#E8EDF6" : "#10233F", line: { width: 1, color: oscuro ? "#0B1322" : "#fff" } },
+      marker: { size: 5, color: "#10233F", line: { width: 1, color: "#fff" } },
       hovertemplate: "%{text}<extra></extra>", showlegend: false };
   }
 
@@ -216,9 +215,8 @@
     const traces = [];
     // Sin amenaza pero CON dato → relleno GRIS (contraste con el fondo; antes salían transparentes).
     if (grisX.length) {
-      const oscuro = !!(App.tema && App.tema() === "oscuro");
       traces.push({ type: "scatter", mode: "lines", x: grisX, y: grisY, fill: "toself",
-        fillcolor: oscuro ? "rgba(120,133,157,.42)" : "rgba(176,186,201,.55)",
+        fillcolor: "rgba(176,186,201,.55)",
         line: { width: 0 }, hoverinfo: "skip", showlegend: false });
     }
     for (let k = 0; k < nb; k++) {
@@ -275,6 +273,10 @@
     const b = { archivo: params.archivo, capa: params.capa, record: params.record };
     if (params.corrido) b.corrido = params.corrido;
     if (params.fin !== undefined && params.fin !== null && params.fin !== "") b.fin = params.fin;
+    // Variante ZPH en el VISOR: el exportador congela las capas de alerta de lluvia
+    // también con &modo=zph; con modo fija se pide SIN el parámetro (compatibilidad
+    // con los productos ya congelados sin modo).
+    if (params.modo && params.modo !== "fija") b.modo = params.modo;
     return b;
   }
 
@@ -456,7 +458,7 @@
 
     const ext = P.extension || d.extension || [-81.3, -75.0, -5.1, 1.6];
     const cap = (E && E.capas) || {};
-    const oscuro = !!(App.tema && App.tema() === "oscuro");
+    const oscuro = false;   // lienzo de mapa = papel blanco en ambos temas (pedido del dueño)
     const traces = [];
     // FFGS: RELLENO VECTORIAL POR SUBCUENCA. Cada microcuenca se pinta con su valor
     // exacto (d.cuencas), igual que el MAPSERVER oficial — NÍTIDO, sin el pixelado
@@ -510,7 +512,7 @@
       const mc = trazaMicrocuencas();
       if (mc) traces.push(mc);
     }
-    traces.push(...trazasOutline("x", "y", null, 2, 3.4));
+    traces.push(...trazasOutline("x", "y", null, 1.5, 3.4));   // spec grillas: 1.5/3.4
 
     // TOGGLE Estaciones: puntos de las estaciones dentro del recuadro principal.
     if (cap.estaciones) { await asegurarEstaciones(); const te = trazaEstaciones(ext, "x", "y"); if (te) traces.push(te); }
@@ -1052,6 +1054,9 @@
       }
       const archivo = (inst.archivos && inst.archivos[f.fuente]) || f.archivo;
       const params = { archivo, capa: f.capa, record };
+      // VISOR en modo ZPH: pedir la variante congelada &modo=zph (solo capas de
+      // alerta de lluvia; en la app el POST ya intercambió el .nc y no hace falta).
+      if (window.HIDROMET_VISOR && a.modo === "zph" && a.varId === "alerta_lluvia") params.modo = "zph";
       return `<figure class="ct-carta">
         <div class="ct-carta-cab"><span class="titulo">${esc(rotulo)}</span><span class="meta">${meta}</span></div>
         ${lienzoCarta(params, "Alerta " + rotulo)}
@@ -1066,8 +1071,9 @@
       <div class="ct-barra compacta">
         <label><span class="et">Variable</span><select data-rol="avar">${optsVar}</select></label>
         <span class="ct-div"></span>
-        <span class="et" title="Umbrales fijos regionales o por Zonas de Pronóstico Homogéneo">Umbrales</span>
-        <div class="segmentado" data-rol="umbral" style="--seg-color:var(--blue)">${segFijos}${segZph}</div>
+        ${a.varId === "alerta_lluvia" ? `
+        <span class="et" title="Umbrales fijos regionales o por Zonas de Pronóstico Homogéneo (ZPH: solo precipitación)">Umbrales</span>
+        <div class="segmentado" data-rol="umbral" style="--seg-color:var(--blue)">${segFijos}${segZph}</div>` : ""}
         <button class="boton azulclaro chico" data-rol="editar">✎ Editar umbrales</button>
         <div class="ct-inst-nav">
           <button class="ct-nav" data-rol="aprev" ${a.inst <= 0 ? "disabled" : ""}>◀</button>
@@ -1112,7 +1118,9 @@
         a.modo = b.dataset.modo;
         // Cambiar de modo COPIA la variante pre-calculada sobre alertas_diarias.nc; sin
         // esto el toggle no cambiaba el archivo y fija/zph se veían idénticos. En el visor
-        // (solo lectura) se omite el POST: re() re-lee los productos ya congelados.
+        // (solo lectura) se omite SOLO el POST: re() re-pinta igualmente y las cartas de
+        // alerta de lluvia piden la variante congelada &modo=zph (cuerpoAlertas), así el
+        // toggle deja de ser cosmético en el visor.
         if (!window.HIDROMET_VISOR) {
           try { await App.api("/cartas/umbrales_modo", { method: "POST", body: { modo: a.modo } }); }
           catch (e) { App.aviso(e.message, "error"); }
@@ -1651,7 +1659,7 @@
     const ext = d.bbox || [-81.3, -75.0, -5.1, 1.6];
     const col = d.color || "#009AF2";
     const rgba = (h, a) => { const c = _hexRgb(h); return `rgba(${c[0]},${c[1]},${c[2]},${a})`; };
-    const traces = trazasOutline("x", "y", null, 1.4, 3.0);
+    const traces = trazasOutline("x", "y", null, 2.0, 3.4);   // spec mapa grande: 2.0/3.4
     const anillos = d.anillos || [];
     if (anillos.length) {
       const xs = [], ys = [];
@@ -1665,7 +1673,8 @@
     }
     const layout = App.plotlyLayoutBase({
       showlegend: anillos.length > 0,
-      legend: { orientation: "h", x: 0, y: -0.03, xanchor: "left", font: { size: 10.5 } },
+      // tinta FIJA: la leyenda se dibuja sobre el lienzo blanco (papel de mapa), no sobre el tema
+      legend: { orientation: "h", x: 0, y: -0.03, xanchor: "left", font: { size: 10.5, color: "#283550" } },
       margin: { l: 0, r: 0, t: 0, b: anillos.length ? 40 : 6 },
       xaxis: { range: [ext[0], ext[1]], visible: false, fixedrange: false },
       yaxis: { range: [ext[2], ext[3]], scaleanchor: "x", scaleratio: 1, visible: false, fixedrange: false },
@@ -1719,7 +1728,7 @@
   const CRUCE_NIVEL = ["Sin alerta", "Medio", "Alto", "Muy alto"];
 
   function trazasCruce(datos, mini) {
-    const traces = trazasOutline("x", "y", null, mini ? 0.8 : 1.4, mini ? 1.8 : 3.0);
+    const traces = trazasOutline("x", "y", null, mini ? 0.8 : 2.0, mini ? 1.8 : 3.4);   // grande: 2.0/3.4; mini de tarjeta queda
     const rgba = (h, a) => { const c = _hexRgb(h); return `rgba(${c[0]},${c[1]},${c[2]},${a})`; };
     const nm = datos.niveles_meta || {};
     // Polígonos POR NIVEL (Medio→Alto→Muy alto): cada uno con SU color (relleno tenue +
@@ -1766,7 +1775,8 @@
     const ext = datos.bbox || [-81.2, -75, -5.2, 1.6];
     const layout = App.plotlyLayoutBase({
       showlegend: !mini,
-      legend: { orientation: "h", x: 0, y: -0.03, xanchor: "left", yanchor: "top", font: { size: 10.5 } },
+      // tinta FIJA sobre el lienzo blanco del mapa (ilegible en tema oscuro sin esto)
+      legend: { orientation: "h", x: 0, y: -0.03, xanchor: "left", yanchor: "top", font: { size: 10.5, color: "#283550" } },
       margin: mini ? { l: 0, r: 0, t: 0, b: 0 } : { l: 0, r: 0, t: 0, b: 48 },
       xaxis: { range: [ext[0], ext[1]], visible: false, fixedrange: mini },
       yaxis: { range: [ext[2], ext[3]], scaleanchor: "x", scaleratio: 1, visible: false, fixedrange: mini },
@@ -1871,7 +1881,7 @@
     }
     const rgba = (h, a) => { const c = _hexRgb(h); return `rgba(${c[0]},${c[1]},${c[2]},${a})`; };
     const ext = d.bbox || [-81.2, -75, -5.2, 1.6];
-    const traces = trazasOutline("x", "y", null, 1.4, 3.0);
+    const traces = trazasOutline("x", "y", null, 2.0, 3.4);   // spec mapa grande: 2.0/3.4
     const xs = [], ys = [];
     for (const an of (d.anillos || [])) { for (const [lo, la] of an) { xs.push(lo); ys.push(la); } xs.push(null); ys.push(null); }
     if (xs.length) traces.push({ type: "scatter", mode: "lines", x: xs, y: ys, fill: "toself",
@@ -1888,7 +1898,9 @@
         showlegend: true, xaxis: "x", yaxis: "y" });
     }
     const layout = App.plotlyLayoutBase({
-      showlegend: true, legend: { orientation: "h", x: 0, y: -0.03, xanchor: "left", font: { size: 10.5 } },
+      showlegend: true,
+      // tinta FIJA sobre el lienzo blanco del mapa (ilegible en tema oscuro sin esto)
+      legend: { orientation: "h", x: 0, y: -0.03, xanchor: "left", font: { size: 10.5, color: "#283550" } },
       margin: { l: 0, r: 0, t: 0, b: 46 },
       xaxis: { range: [ext[0], ext[1]], visible: false, fixedrange: false },
       yaxis: { range: [ext[2], ext[3]], scaleanchor: "x", scaleratio: 1, visible: false, fixedrange: false },
@@ -2089,7 +2101,7 @@
     // Advertencias/FFR ya llevan su leyenda dentro de la figura → se capturan tal cual.
     const dataUrl = plot._carta
       ? await _imagenCartaFormal(plot, w, h)
-      : await window.Plotly.toImage(plot, { format: "png", width: w, height: h, scale: 1 });
+      : await _imagenMapaBlanco(plot, w, h);
     if (window.HIDROMET_VISOR) {
       const a = document.createElement("a"); a.href = dataUrl; a.download = nombre + ".png";
       document.body.appendChild(a); a.click(); a.remove();
@@ -2100,6 +2112,29 @@
     }
   }
 
+  // Guarda los colores/fondos TEMÁTICOS actuales del layout para poder revertirlos tras
+  // el toImage (el PNG exportado usa papel blanco y tinta fija, independientes del tema:
+  // el "mar" blanco lo pone el CSS del contenedor, no el layout, así que sin esto el PNG
+  // salía transparente y con fuente del tema — ilegible en oscuro sobre fondo blanco).
+  function _fondoPrevio(plot) {
+    const L = plot.layout || {};
+    return {
+      "paper_bgcolor": L.paper_bgcolor || "rgba(0,0,0,0)",
+      "plot_bgcolor": L.plot_bgcolor || "rgba(0,0,0,0)",
+      "font.color": (L.font && L.font.color) || null,
+    };
+  }
+  const _FONDO_PNG = { "paper_bgcolor": "#ffffff", "plot_bgcolor": "#ffffff", "font.color": "#0F1B2D" };
+
+  // PNG (dataURL) de un mapa de Advertencias/FFR (leyenda ya incluida en la figura):
+  // se captura tal cual pero con papel blanco y tinta fija, revertidos después.
+  async function _imagenMapaBlanco(plot, w, h) {
+    const prev = _fondoPrevio(plot);
+    await window.Plotly.relayout(plot, Object.assign({}, _FONDO_PNG));
+    try { return await window.Plotly.toImage(plot, { format: "png", width: w, height: h, scale: 1 }); }
+    finally { await window.Plotly.relayout(plot, prev); }
+  }
+
   // PNG (dataURL) de una carta CON su título y su leyenda (colorbar), reconstruidos
   // TEMPORALMENTE sobre el propio plot y revertidos después (el visor no tiene backend que
   // renderice el PNG formal del servidor, así que la carta se compone en el navegador).
@@ -2107,10 +2142,12 @@
     const c = plot._carta || {};
     const data = plot.data || [];
     const idx = data.findIndex(t => t.type === "heatmap" && (!t.xaxis || t.xaxis === "x"));
-    const relOn = { "margin.t": (c.titulo ? 54 : 12), "margin.r": 96, "margin.b": 14 };
+    const prev = _fondoPrevio(plot);
+    const relOn = Object.assign({ "margin.t": (c.titulo ? 54 : 12), "margin.r": 96, "margin.b": 14 }, _FONDO_PNG);
     if (c.titulo) {
       relOn["title.text"] = esc(c.titulo) + (c.subtitulo ? `<br><span style="font-size:12px;font-weight:400">${esc(c.subtitulo)}</span>` : "");
       relOn["title.x"] = 0.5; relOn["title.xanchor"] = "center"; relOn["title.y"] = 0.98; relOn["title.font.size"] = 16;
+      relOn["title.font.color"] = "#0F1B2D";
     }
     await window.Plotly.relayout(plot, relOn);
     const conBarra = idx >= 0 && c.tickvals && c.tick_labels && c.tickvals.length === c.tick_labels.length;
@@ -2118,14 +2155,14 @@
       await window.Plotly.restyle(plot, {
         showscale: true,
         colorbar: [{ thickness: 13, len: 0.86, y: 0.5, x: 1.0, xpad: 4, outlinewidth: 0,
-          tickvals: c.tickvals, ticktext: c.tick_labels, tickfont: { size: 9 },
-          title: { text: c.unidad || "", side: "right", font: { size: 10 } } }],
+          tickvals: c.tickvals, ticktext: c.tick_labels, tickfont: { size: 9, color: "#283550" },
+          title: { text: c.unidad || "", side: "right", font: { size: 10, color: "#283550" } } }],
       }, [idx]);
     }
     let url;
     try { url = await window.Plotly.toImage(plot, { format: "png", width: w, height: h, scale: 1 }); }
     finally {
-      await window.Plotly.relayout(plot, { "title.text": "", "margin.t": 0, "margin.r": 0, "margin.b": 0 });
+      await window.Plotly.relayout(plot, Object.assign({ "title.text": "", "margin.t": 0, "margin.r": 0, "margin.b": 0 }, prev));
       if (conBarra) await window.Plotly.restyle(plot, { showscale: false }, [idx]);
     }
     return url;
@@ -2184,9 +2221,12 @@
       plot.innerHTML = `<p style="padding:20px;color:var(--muted)">Cargando serie…</p>`; pie.textContent = "";
       let r;
       try {
+        // C4: /series/grilla espera el ID DEL ÁRBOL de cartas ("lluvia"), no el de
+        // validación ("precip") — con precip devolvía 404 en las 4 frecuencias sub-diarias.
+        const vGrilla = (v === "precip") ? "lluvia" : v;
         r = (f === "24")
           ? await App.api(`/cartas/series/estacion?codigo=${encodeURIComponent(cod)}&variable=${v}&dias=20&tipo=pronostico`)
-          : await App.api(`/cartas/series/grilla?codigo=${encodeURIComponent(cod)}&variable=${v}&periodo=${f}&tipo=pronostico`);
+          : await App.api(`/cartas/series/grilla?codigo=${encodeURIComponent(cod)}&variable=${vGrilla}&periodo=${f}&tipo=pronostico`);
       } catch (e) { plot.innerHTML = `<p style="padding:20px;color:var(--danger)">No se pudo cargar la serie.</p>`; return; }
       if (!r || r.error || !(r.trazas && r.trazas.length)) {
         plot.innerHTML = `<p style="padding:20px;color:var(--muted)">Sin datos para ${esc(v)} a ${esc(f)} h en esta estación (las series sub-diarias requieren cartas cargadas de ese período).</p>`;

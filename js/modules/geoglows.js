@@ -26,9 +26,9 @@
   }
   function vigente(E) { return estado === E && E.epoca >= 0; }
 
+  // Teselas SIEMPRE claras: el mapa es papel blanco en ambos temas (decisión del dueño).
   function urlTiles() {
-    const oscuro = (App.tema && App.tema() === "oscuro");
-    return "https://{s}.basemaps.cartocdn.com/" + (oscuro ? "dark_all" : "light_all") + "/{z}/{x}/{y}{r}.png";
+    return "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
   }
 
   /* ---------------- maquetado (propio) ---------------- */
@@ -131,14 +131,14 @@
     try { gj = await App.api("/datos/capas/hidrografia.geojson"); }
     catch (e) { return; }
     if (!vigente(E) || !estado.mapa || (gj && gj.construyendo)) return;
-    const oscuro = (App.tema && App.tema() === "oscuro");
     // Ríos PROMINENTES para que se vea claro dónde hay red seleccionable.
+    // Paleta clara FIJA (mapa siempre claro en ambos temas).
     estado.capaRios = L.geoJSON(gj, {
       pane: "pRios", renderer: estado.lienzoRios, interactive: false,
       style: (f) => {
         const pri = String((f.properties || {}).prioridad || "").trim();
         const mayor = pri === "1" || pri === "2";
-        return { color: mayor ? (oscuro ? "#5AA9E6" : "#1763B6") : (oscuro ? "#3C5A80" : "#7FA8D4"),
+        return { color: mayor ? "#1763B6" : "#7FA8D4",
                  weight: mayor ? 1.6 : 0.7, opacity: mayor ? 0.95 : 0.75 };
       },
     }).addTo(estado.mapa);
@@ -151,7 +151,7 @@
     for (const it of items) {
       if (typeof it.lat !== "number" || typeof it.lon !== "number") continue;
       const m = L.circleMarker([it.lat, it.lon], {
-        radius: 8, color: (App.tema && App.tema() === "oscuro") ? "#AEBBD0" : "#000000", weight: 1.5, fillColor: colorNivel(it.nivel_alerta), fillOpacity: 0.95 });
+        radius: 8, color: "#000000", weight: 1.5, fillColor: colorNivel(it.nivel_alerta), fillOpacity: 0.95 });
       const na = it.nivel_alerta ? it.nivel_alerta.etiqueta : "sin pronóstico (pulsa Actualizar)";
       m.bindTooltip(`<b>${esc(it.nombre)}</b><br>${esc(na)}`, { direction: "top", sticky: true });
       m.on("click", (e) => { L.DomEvent.stopPropagation(e);
@@ -285,14 +285,16 @@
     iniciarMapa(cont.querySelector('[data-rol="mapa"]'));
 
     if (_onTema) document.removeEventListener("temacambiado", _onTema);
+    // El MAPA ya es fijo (teselas/ríos/marcadores claros siempre): el re-tileo del
+    // listener de tema queda inofensivo (misma URL/estilo); se conserva por si algún
+    // elemento temático vuelve al mapa.
     _onTema = () => {
       if (!estado) return;
-      const oscuro = (App.tema && App.tema() === "oscuro");
       if (estado.tiles) estado.tiles.setUrl(urlTiles());
       if (estado.capaRios) estado.capaRios.setStyle(f => {
         const pri = String((f.properties || {}).prioridad || "").trim();
         const mayor = pri === "1" || pri === "2";
-        return { color: mayor ? (oscuro ? "#5AA9E6" : "#1763B6") : (oscuro ? "#3C5A80" : "#7FA8D4") };
+        return { color: mayor ? "#1763B6" : "#7FA8D4" };
       });
       pintarMarcadores(estado.items || []);
     };

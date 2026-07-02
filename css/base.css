@@ -63,7 +63,8 @@ html[data-tema="oscuro"] {
   --overlay-bg: rgba(20,32,58,.84); --rio-mayor: #5AA9E6; --rio-menor: #37557A;
   --ok: #3FCB8C; --ok-dot: #2FBE83; --warn: #E6AB4D; --danger: #F07266;
   --ok-bg: #12301F; --ok-bd: #1E4B31; --warn-bg: #2E2510; --warn-bd: #4A3A16; --danger-bg: #321613; --danger-bd: #4C211D;
-  --sea-top: #16223C; --sea-bottom: #101A30;
+  /* Los lienzos de MAPA son papel blanco en AMBOS temas (pedido del dueño:
+     contornos negros sobre fondo blanco siempre) — no se re-define --sea-* aquí. */
   --shadow-card: 0 1px 2px rgba(0,0,0,.4); --shadow-hover: 0 12px 28px rgba(0,0,0,.45); --shadow-pop: 0 24px 60px rgba(0,0,0,.6);
   --slate: #7E8DA6;
 }

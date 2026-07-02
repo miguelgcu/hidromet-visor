@@ -43,14 +43,13 @@
         for (const [x, y] of ring) { xs.push(x); ys.push(y); } xs.push(null); ys.push(null);
       }
     }
-    // Contorno país = halo blanco + línea NEGRA en claro; en OSCURO se invierte
-    // (halo oscuro + línea clara) para no desaparecer sobre el fondo (patrón de cartas.js).
-    const osc = (App.tema && App.tema() === "oscuro");
+    // Lienzo de mapa = papel blanco en ambos temas → halo blanco + línea negra SIEMPRE
+    // (pedido del dueño: contornos de Ecuador negros sobre fondo blanco, no gris).
     return [
       { type: "scatter", mode: "lines", x: xs, y: ys, hoverinfo: "skip", showlegend: false,
-        line: { color: osc ? "#0B1322" : "#ffffff", width: 2.8 } },
+        line: { color: "#ffffff", width: 2.8 } },
       { type: "scatter", mode: "lines", x: xs, y: ys, hoverinfo: "skip", showlegend: false,
-        line: { color: osc ? "#AEBBD0" : "#000000", width: 1.2 } },
+        line: { color: "#000000", width: 1.2 } },
     ];
   }
 
@@ -60,7 +59,6 @@
   function trazaEstaciones(ce, d) {
     const pts = ((ce && ce.estaciones) || []).filter(e => e.valor != null && e.lat != null && e.lon != null);
     if (!pts.length) return [];
-    const osc = (App.tema && App.tema() === "oscuro");
     const dec = ce.dec != null ? ce.dec : 1;
     return [{
       type: "scatter", mode: "markers", meta: "estaciones", showlegend: false,
@@ -68,7 +66,7 @@
       customdata: pts.map(e => [e.nombre || e.codigo, e.codigo, num(e.valor, dec)]),
       marker: { size: 8, color: pts.map(e => e.valor), colorscale: d.colorscale,
         cmin: d.vmin, cmax: d.vmax, showscale: false,
-        line: { color: osc ? "#0B1322" : "#ffffff", width: 1.3 } },
+        line: { color: "#ffffff", width: 1.3 } },
       hovertemplate: `<b>%{customdata[0]}</b> (%{customdata[1]})<br>` +
         `<b>%{customdata[2]} ${esc(ce.unidad || "")}</b> · clic → ficha de la estación<extra></extra>`,
     }];
@@ -82,8 +80,9 @@
     const heat = {
       type: "heatmap", x: d.lon, y: d.lat, z: d.campo, colorscale: d.colorscale,
       zmin: d.vmin, zmax: d.vmax, zsmooth: "best", hoverongaps: false,
-      colorbar: { title: { text: d.unidad || "", side: "right", font: { size: 11 } }, thickness: 13,
-        len: 0.9, outlinewidth: 0, tickfont: { size: 10 }, x: 1.01 },
+      // Tinta FIJA (#283550): el colorbar vive sobre el papel blanco del mapa en ambos temas.
+      colorbar: { title: { text: d.unidad || "", side: "right", font: { size: 11, color: "#283550" } }, thickness: 13,
+        len: 0.9, outlinewidth: 0, tickfont: { size: 10, color: "#283550" }, x: 1.01 },
       hovertemplate: `lat %{y:.2f}, lon %{x:.2f}<br><b>%{z:.${dec}f} ${esc(d.unidad || "")}</b><extra></extra>`,
     };
     // Encuadre ECUADOR CONTINENTAL: la grilla es continental, pero el contorno
@@ -233,7 +232,7 @@
         <div class="cl-grupo"><span>Capa</span>
           <label class="cl-chk"><input type="checkbox" data-rol="chk-est" ${E.mapEst ? "checked" : ""}> estaciones (valor)</label></div>
       </div>
-      <div class="cl-card"><h3 class="cl-maptit" data-rol="tit">Cargando…</h3><div class="cl-plot" data-rol="plot"></div>
+      <div class="cl-card"><h3 class="cl-maptit" data-rol="tit">Cargando…</h3><div class="cl-plot cl-plot-mapa" data-rol="plot"></div>
         <p class="cl-nota">Normales 1991–2020 (~5 km) construidas con CHIRPS satelital corregido con estaciones. Pasa el cursor para leer lat/lon y valor; los puntos son estaciones (clic para abrir su ficha).</p></div>
     </div>`;
     const plot = c.querySelector('[data-rol="plot"]'), tit = c.querySelector('[data-rol="tit"]');

@@ -114,9 +114,9 @@
 .ml-mapa.alto-520 { height: 470px; }
 .ml-mapa.alto-560 { height: 500px; }
 .ml-mapa-grafico { position: absolute; inset: 0; }
+/* Rótulo sobre mapa: variante clara FIJA (el mapa es papel blanco en ambos temas). */
 .ml-mapa-tag { position: absolute; left: 14px; top: 12px; font: 600 10px var(--mono); letter-spacing: .06em;
-  color: var(--muted); background: rgba(255,255,255,.8); padding: 3px 8px; border-radius: 6px; pointer-events: none; z-index: 2; }
-html[data-tema="oscuro"] .ml-mapa-tag { background: rgba(20,32,58,.82); }
+  color: #283550; background: rgba(255,255,255,.8); padding: 3px 8px; border-radius: 6px; pointer-events: none; z-index: 2; }
 
 /* panel lateral de leyenda */
 .ml-side { background: var(--surface-2); border: 1px solid var(--line-3); border-radius: 10px; padding: 12px; overflow: auto; }

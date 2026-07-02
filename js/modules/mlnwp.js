@@ -542,7 +542,9 @@
   const ECU = { W: -81.3, E: -75.0, S: -5.1, N: 1.6 };
 
   // Contorno de Ecuador con ENCASILLADO (blanca ancha debajo + negra más fina encima).
-  function outlineTrace() {
+  // wNegro parametrizado (spec de anchos): mini-mapas/grillas 1.5 (defecto) ·
+  // MAPA GRANDE (ganador) 2.0 — el llamador del mapa grande pasa opts.outlineW = 2.
+  function outlineTrace(wNegro = 1.5) {
     if (!S.geojson || !S.geojson.features) return [];
     const xs = [], ys = [];
     const empuja = ring => {
@@ -556,18 +558,16 @@
     }
     if (!xs.length) return [];
     const base = { type: "scatter", mode: "lines", x: xs, y: ys, hoverinfo: "skip", showlegend: false };
-    // Outline geográfico: en OSCURO se invierte (halo oscuro + línea clara) para no desaparecer.
-    const _osc = (App.tema && App.tema() === "oscuro");
+    // Lienzo de mapa = papel blanco en ambos temas → halo blanco + línea negra SIEMPRE.
     return [
-      Object.assign({}, base, { line: { color: _osc ? "#0B1322" : "#ffffff", width: 3.4 } }),
-      Object.assign({}, base, { line: { color: _osc ? "#AEBBD0" : "#0b0d12", width: 1.5 } }),
+      Object.assign({}, base, { line: { color: "#ffffff", width: 3.4 } }),
+      Object.assign({}, base, { line: { color: "#000000", width: wNegro } }),
     ];
   }
 
   // Relieve continental RELLENO (mapa base): que el mapa no sean puntos pelados.
   function landTrace() {
     if (!S.geojson || !S.geojson.features) return null;
-    const oscuro = (App.tema && App.tema() === "oscuro");
     const xs = [], ys = [];
     const empuja = ring => { for (const [lo, la] of ring) { xs.push(lo); ys.push(la); } xs.push(null); ys.push(null); };
     for (const f of S.geojson.features) {
@@ -576,8 +576,9 @@
       else if (g.type === "MultiPolygon") g.coordinates.forEach(p => p.forEach(empuja));
     }
     if (!xs.length) return null;
+    // Lienzo de mapa = papel blanco en ambos temas → continente blanco casi opaco.
     return { type: "scatter", mode: "lines", x: xs, y: ys, fill: "toself", hoverinfo: "skip",
-      fillcolor: oscuro ? "rgba(26,38,62,.88)" : "rgba(236,241,234,.92)",
+      fillcolor: "rgba(255,255,255,.95)",
       line: { color: "rgba(0,0,0,0)", width: 0 }, showlegend: false };
   }
 
@@ -606,7 +607,9 @@
     const traces = [];
     const land = landTrace();        // relieve relleno de base
     if (land) traces.push(land);
-    traces.push(...outlineTrace());  // contorno de Ecuador con encasillado (negro + halo blanco)
+    // Contorno de Ecuador con encasillado (negro + halo blanco). Ancho por tipo de
+    // mapa: mini-mapas por modelo 1.5 (defecto) · MAPA GRANDE ganador 2.0 (opts.outlineW).
+    traces.push(...outlineTrace(opts.outlineW || 1.5));
 
     if (!puntos.length) {
       Plotly.purge(el);
@@ -916,8 +919,12 @@
 
       try {
         S.ctx = await App.api("/mlnwp/contexto");
-        const sel = S.ctx.deps_seleccionadas;
+        // En el VISOR el contexto está congelado con el estado de la máquina que
+        // exportó (deps_seleccionadas podía venir con una sola red y el usuario veía
+        // "no responde"): el visor SIEMPRE arranca con las 3 redes activas.
+        const sel = window.HIDROMET_VISOR ? null : S.ctx.deps_seleccionadas;
         if (Array.isArray(sel) && sel.length) S.deps = sel;
+        else if (window.HIDROMET_VISOR) S.deps = ["INAMHI", "CELEC", "Hidronación"];
         const cabDeps = vista.querySelector(".ml-deps");
         if (cabDeps) { cabDeps.innerHTML = chipsDepsHTML(); cabDeps.querySelectorAll(".chip").forEach(reBindDep); }
       } catch (e) {

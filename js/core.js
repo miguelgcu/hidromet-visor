@@ -638,7 +638,7 @@ if (window.HIDROMET_VISOR) {
     st.textContent = ".visor-oculto{display:none !important}";
     (document.head || document.documentElement).appendChild(st);
     const SEL = ['[data-rol="actualizar"]', '[data-rol="exportar"]', '[data-rol="editar"]',
-      '[data-rol="guardar"]', '[data-rol="descargar"]', '[data-rol="ffr-exportar"]',
+      '[data-rol="guardar"]', '[data-rol="descargar"]',
       '[data-rol="probar"]', '[data-rol="ingreso"]', '[data-rol="sincronizar"]',
       '[data-rol="probar_api"]', '[data-rol="regenerar_html"]',
       // .ct-dl-shp NO se oculta: en el visor el SHP de las advertencias del PROGRAMA se baja
