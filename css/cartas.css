@@ -65,7 +65,7 @@
   gap: 10px; padding: 11px 14px 9px; }
 .ct-carta-cab .titulo { font-size: 15px; font-weight: 650; color: var(--ink); }
 .ct-carta-cab .meta { font: 500 11.5px var(--mono); color: var(--muted-2); }
-.ct-lienzo { position: relative; aspect-ratio: 4 / 4.4;
+.ct-lienzo { position: relative; aspect-ratio: 4 / 3.8;
   background: linear-gradient(180deg, var(--sea-top), var(--sea-bottom)); overflow: hidden; }
 .ct-lienzo img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .ct-mapa-plot { position: absolute; inset: 0; }
@@ -116,7 +116,7 @@
 .ct-ffr-ctrl .et { color: var(--muted-2); font-weight: 600; }
 .ct-ffr-ctrl select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); }
 .ct-ffr-mapa { margin-top: 12px; text-align: center; min-height: 120px; }
-.ct-ffr-mapa img { max-width: 100%; max-height: 560px; border-radius: 10px; transition: opacity .2s; }
+.ct-ffr-mapa img { max-width: 100%; max-height: 440px; border-radius: 10px; transition: opacity .2s; }
 .ct-panel-cab { display: flex; align-items: baseline; justify-content: space-between;
   flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
 .ct-panel-cab h3 { margin: 0; font-size: 15px; font-weight: 650; }
@@ -216,7 +216,7 @@
 .ct-det-cuerpo { display: grid; grid-template-columns: 1.3fr 1fr; gap: 14px; align-items: start; }
 .ct-det-mapa { margin: 0; border: 1px solid var(--line-2); border-radius: 10px; overflow: hidden;
   background: linear-gradient(180deg, var(--sea-top), var(--sea-bottom)); }
-.ct-det-mapa img { width: 100%; height: auto; display: block; }
+.ct-det-mapa img { width: 100%; height: auto; max-height: 500px; object-fit: contain; display: block; }
 
 .ct-lecturas { display: flex; flex-direction: column; gap: 9px; }
 .ct-lectura { display: flex; gap: 10px; padding: 9px 11px; background: var(--surface-2);

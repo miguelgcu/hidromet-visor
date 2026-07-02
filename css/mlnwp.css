@@ -86,8 +86,8 @@
 .ml-grid-mapa { display: grid; grid-template-columns: 1fr 200px; gap: 14px; align-items: start; }
 .ml-mapa { position: relative; border: 1px solid var(--line-2); border-radius: 10px; overflow: hidden;
   background: linear-gradient(180deg, var(--sea-top), var(--sea-bottom)); }
-.ml-mapa.alto-520 { height: 520px; }
-.ml-mapa.alto-560 { height: 560px; }
+.ml-mapa.alto-520 { height: 470px; }
+.ml-mapa.alto-560 { height: 500px; }
 .ml-mapa-grafico { position: absolute; inset: 0; }
 .ml-mapa-tag { position: absolute; left: 14px; top: 12px; font: 600 10px var(--mono); letter-spacing: .06em;
   color: var(--muted); background: rgba(255,255,255,.8); padding: 3px 8px; border-radius: 6px; pointer-events: none; z-index: 2; }
@@ -95,7 +95,7 @@ html[data-tema="oscuro"] .ml-mapa-tag { background: rgba(20,32,58,.82); }
 
 /* panel lateral de leyenda */
 .ml-side { background: var(--surface-2); border: 1px solid var(--line-3); border-radius: 10px; padding: 12px; overflow: auto; }
-.ml-side.alto-520 { height: 520px; }
+.ml-side.alto-520 { height: 470px; }
 .ml-side-lab { font: 600 10px var(--mono); letter-spacing: .08em; color: var(--faint); text-transform: uppercase; }
 .ml-leyenda { display: flex; flex-direction: column; gap: 8px; margin-top: 9px; }
 .ml-leyenda-fila { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-2); }
@@ -147,7 +147,7 @@ html[data-tema="oscuro"] .ml-tabla-modelos tbody tr { border-bottom-color: var(-
 .ml-serie-plot { width: 100%; height: 380px; }
 .ml-serie-leyenda { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; margin-top: 10px; font-size: 11.5px; color: var(--muted); }
 .ml-serie-leyenda span.it { display: inline-flex; align-items: center; gap: 6px; }
-.ml-serie-leyenda .sw-linea { width: 14px; height: 0; border-top: 2px dashed #1E1E1E; }
+.ml-serie-leyenda .sw-linea { width: 14px; height: 0; border-top: 2px dashed var(--ink); }
 .ml-serie-leyenda .sw-caja { width: 12px; height: 10px; }
 .ml-serie-leyenda .sw-banda { width: 14px; height: 10px;
   background: linear-gradient(rgba(27,58,107,.10), rgba(27,58,107,.10)) padding-box,
@@ -164,11 +164,11 @@ html[data-tema="oscuro"] .ml-tabla-modelos tbody tr { border-bottom-color: var(-
 .ml-stat { background: var(--surface-2); border: 1px solid var(--line-3); border-radius: 9px; padding: 11px; }
 .ml-stat .v { font: 700 22px var(--mono); color: var(--ink); }
 .ml-stat .v small { font-size: 11px; color: var(--muted-2); }
-.ml-stat .v.azul { color: #08519C; }
+.ml-stat .v.azul { color: var(--blue); }
 .ml-stat .et { font: 600 10px var(--mono); letter-spacing: .05em; color: var(--faint); text-transform: uppercase; margin-top: 2px; }
 .ml-colorbar { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
   display: flex; flex-direction: column; align-items: center; gap: 3px; pointer-events: none; z-index: 2; }
-.ml-colorbar .barra { width: 300px; height: 12px; border: 1px solid #1E1E1E; }
+.ml-colorbar .barra { width: 300px; height: 12px; border: 1px solid var(--ink-2); }
 .ml-colorbar .ticks { width: 300px; display: flex; justify-content: space-between; font: 600 8.5px var(--mono); color: var(--ink-2); }
 .ml-top10 { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
 .ml-top10 td { padding: 5px 4px; border-bottom: 1px solid #F0F3F7; color: var(--ink-2); }

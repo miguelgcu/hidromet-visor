@@ -85,7 +85,7 @@
 .sngr-zoom .zb:hover { border-color: var(--cyan-bd); }
 
 /* contenedor del mapa (Leaflet) con degradado de mar para no ver letterbox */
-.sngr-mapa { position: relative; height: 460px; border: 1px solid var(--line-2);
+.sngr-mapa { position: relative; height: 410px; border: 1px solid var(--line-2);
   border-radius: 10px; overflow: hidden;
   background: linear-gradient(180deg, var(--sea-top), var(--sea-bottom)); }
 .sngr-mapa .leaflet-container { background: transparent; font-family: var(--fuente); }
