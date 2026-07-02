@@ -310,7 +310,11 @@
   function bindComboEst(combo) {
     const input = combo.querySelector("#ml-est-input");
     const lista = combo.querySelector("#ml-est-lista");
-    const refrescar = q => { lista.innerHTML = opcionesComboHTML(q); };
+    // Tras CADA re-render hay que resetear el scroll: la lista conserva el scrollTop
+    // del estado anterior (p.ej. el salto a la estación activa al abrir) y las
+    // opciones filtradas quedaban FUERA de la ventana visible — el usuario escribía
+    // y veía la lista "vacía" sin nada que clicar.
+    const refrescar = q => { lista.innerHTML = opcionesComboHTML(q); lista.scrollTop = 0; };
     const abrir = () => {
       if (input.disabled) return;
       lista.hidden = false;
