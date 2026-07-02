@@ -1,5 +1,6 @@
 /* ============================================================
-   ML-NWP — Validación ML-NWP (5 pestañas).
+   ML-NWP — Validación ML-NWP (v12: vista única por estación).
+   Sin pestañas: Mapas/Resumen retirados; el Glosario vive en su módulo.
    Acento: púrpura (--ml-purple). data-screen-label="ML-NWP".
    Arquitectura: App.registrar / App.api / App.tarea. Mapas con Plotly.
    Campos JSON confirmados leyendo app/rutas/mlnwp.py y los módulos
@@ -34,9 +35,6 @@
     ["Todos", "Todo"], ["Convencionales", "Convencionales"], ["No convencionales", "No conv."],
     ["ML", "ML"], ["Postprocesamiento", "Post. estadístico"],
   ];
-  // Centinela de "ámbito Nacional" para el selector de estación.
-  const NACIONAL = "";
-
   // Tamaño del punto del MAPA por confianza (px de marcador Plotly). Borde blanco
   // UNIFORME (nunca color por confianza). Alta grande / Media medio / Baja pequeño.
   const TAM_CONF = { Alta: 15, Media: 11, Baja: 8, "Sin calificar": 6 };
@@ -69,12 +67,10 @@
     deps: ["INAMHI"],
     tab: "validacion",
     variable: "precip",          // precip | tmax | tmin
-    ventana: "30",               // chip del diseño
+    ventana: "30",               // desplegable Ventana (nº de fechas)
     familia: "Todos",            // filtro de familia de modelo
-    estacion: "",                // "" = Nacional; o código de estación
-    valData: null,               // última respuesta de /validacion (vista Nacional + selector)
-    mapaVar: "precip", mapaDia: 0, mapaCache: null, mapaVistaIdx: 0, mapaColorIdx: 0,
-    resumenDia: 0,
+    estacion: "",                // código de estación (v12: siempre por estación)
+    valData: null,               // última respuesta de /validacion (alimenta el selector)
     geojson: null,
   };
 
@@ -106,14 +102,8 @@
     }).join("");
   }
 
-  function tabsHTML() {
-    const tabs = [
-      ["validacion", "Validación"], ["mapas", "Mapas"], ["resumen", "Resumen"],
-    ];  // El Glosario salió a su propio menú (módulo "glosario").
-    return tabs.map(([id, t]) =>
-      `<button class="ml-tab ${S.tab === id ? "activa" : ""}" data-tab="${id}">${t}</button>`).join("");
-  }
-
+  // v12: sin pestañas — Mapas y Resumen se retiraron (pedido del dueño); queda la
+  // vista única de Validación por estación.
   function pintarRaiz(vista) {
     vista.innerHTML = `
       <div class="ml-raiz" data-screen-label="ML-NWP">
@@ -125,7 +115,6 @@
           </div>
           <div class="ml-deps">${chipsDepsHTML()}</div>
         </div>
-        <div class="ml-tabs">${tabsHTML()}</div>
         <div id="ml-cuerpo"></div>
       </div>`;
 
@@ -133,16 +122,10 @@
       const id = b.dataset.dep;
       const next = S.deps.includes(id) ? S.deps.filter(d => d !== id) : [...S.deps, id];
       if (!next.length) return App.aviso("Selecciona al menos una dependencia.", "error");
-      S.deps = next; S.mapaCache = null;
+      S.deps = next;
       vista.querySelector(".ml-deps").innerHTML = chipsDepsHTML();
       vista.querySelectorAll(".ml-deps .chip").forEach(reBindDep);
       guardarDeps();
-      pintarTab();
-    });
-
-    vista.querySelectorAll(".ml-tab").forEach(b => b.onclick = () => {
-      S.tab = b.dataset.tab;
-      vista.querySelectorAll(".ml-tab").forEach(x => x.classList.toggle("activa", x.dataset.tab === S.tab));
       pintarTab();
     });
   }
@@ -152,7 +135,7 @@
       const id = b.dataset.dep;
       const next = S.deps.includes(id) ? S.deps.filter(d => d !== id) : [...S.deps, id];
       if (!next.length) return App.aviso("Selecciona al menos una dependencia.", "error");
-      S.deps = next; S.mapaCache = null;
+      S.deps = next;
       const cab = document.querySelector(".ml-deps");
       cab.innerHTML = chipsDepsHTML();
       cab.querySelectorAll(".chip").forEach(reBindDep);
@@ -169,7 +152,7 @@
   // 'resize' por gráfico (responsive:true) que SÓLO se libera con Plotly.purge,
   // nunca al quitar el div del DOM. Purgamos al salir del módulo y antes de cada
   // re-render de pestaña para no acumular instancias ni handlers en sesiones largas.
-  const PLOTS = ["ml-plot-ganador", "ml-plot-serie", "ml-plot-mapas"];
+  const PLOTS = ["ml-plot-serie"];   // v12: ganador/mapas retirados con la vista Nacional
   function purgarPlots() {
     if (!window.Plotly) return;
     for (const id of PLOTS) {
@@ -183,19 +166,22 @@
     const c = cuerpo();
     if (!c) return;
     c.innerHTML = cargando();
-    ({ validacion: tabValidacion, mapas: tabMapas, resumen: tabResumen }[S.tab] || tabValidacion)(c);
+    tabValidacion(c);   // v12: vista única (Mapas/Resumen retirados)
   }
 
   /* ============================================================
      PESTAÑA 1 — VALIDACIÓN
      ============================================================ */
+  // v12: TODOS los selectores en UNA fila — variable (chips), ventana (desplegable),
+  // estación y familia (desplegables). Sin telemetría de cobertura (retirada) y sin
+  // ámbito Nacional (retirado): la vista es siempre por estación.
   function deckHTML() {
     const vars = [["precip", "Precipitación"], ["tmax", "T. máxima"], ["tmin", "T. mínima"]];
     const vents = ["15", "30", "45", "60"];
     const chipsVar = vars.map(([id, t]) =>
       `<button class="chip ml-var ${S.variable === id ? "activo" : ""}" data-var="${id}">${t}</button>`).join("");
-    const chipsVent = vents.map(v =>
-      `<button class="chip ml-vent ${S.ventana === v ? "activo" : ""}" data-vent="${v}">${v}</button>`).join("");
+    const optsVent = vents.map(v =>
+      `<option value="${v}" ${S.ventana === v ? "selected" : ""}>${v} fechas</option>`).join("");
     const optsFam = FAMILIAS_UI.map(([val, et]) =>
       `<option value="${esc(val)}" ${S.familia === val ? "selected" : ""}>${esc(et)}</option>`).join("");
     const chev = `<span class="ml-loc-chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#95A1B2" stroke-width="2.5"><path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>`;
@@ -209,8 +195,11 @@
           </div>
           <div class="ml-deck-div"></div>
           <div class="ml-grupo">
-            <span class="ml-grupo-lab" title="Número de fechas con par modelo-observación">Ventana · fechas</span>
-            <div class="fila" style="gap:7px">${chipsVent}</div>
+            <span class="ml-grupo-lab" title="Número de fechas con par modelo-observación">Ventana</span>
+            <div class="ml-loc">
+              <select id="ml-sel-vent">${optsVent}</select>
+              ${chev}
+            </div>
           </div>
           <div class="ml-deck-div"></div>
           <div class="ml-grupo ml-loc-grp">
@@ -228,10 +217,6 @@
               ${chev}
             </div>
           </div>
-          <div class="ml-telemetria">
-            <span class="ml-grupo-lab">Cobertura muestral</span>
-            <div class="ml-cobertura" id="ml-cobertura"><span class="punto-ok"></span>ventana ${esc(S.ventana)} · — fechas · — est.</div>
-          </div>
         </div>
       </div>
       <details class="hm-mas ml-nota-det">
@@ -241,7 +226,7 @@
           <span class="ml-pill alta">Alta ≥30</span>
           <span class="ml-pill media">Media 15–29</span>
           <span class="ml-pill baja">Baja 5–14</span>
-          Elige <b>Nacional</b> para el mapa de modelo ganador, o una <b>estación</b> para ver su validación y su serie.
+          Elige una <b>estación</b> para ver su validación y su serie temporal.
         </div>
       </details>`;
   }
@@ -258,11 +243,8 @@
       c.querySelectorAll(".ml-var").forEach(x => x.classList.toggle("activo", x.dataset.var === S.variable));
       cargarValidacion();
     });
-    c.querySelectorAll(".ml-vent").forEach(b => b.onclick = () => {
-      S.ventana = b.dataset.vent;
-      c.querySelectorAll(".ml-vent").forEach(x => x.classList.toggle("activo", x.dataset.vent === S.ventana));
-      cargarValidacion();
-    });
+    const selVent = c.querySelector("#ml-sel-vent");
+    if (selVent) selVent.onchange = () => { S.ventana = selVent.value; cargarValidacion(); };
     const selFam = c.querySelector("#ml-sel-fam");
     if (selFam) selFam.onchange = () => { S.familia = selFam.value; cargarValidacion(); };
     const sel = c.querySelector("#ml-sel-est");
@@ -292,111 +274,37 @@
     if (mi !== gen) return;   // llegó una selección más nueva
     S.valData = d;
 
-    const ganadores = d.ganadores || [];
-    const met = d.metricas || {};
-    const fechasMax = ganadores.reduce((m, g) => Math.max(m, g.n || 0), 0);
-    const cob = document.getElementById("ml-cobertura");
-    if (cob) cob.innerHTML = `<span class="punto-ok"></span>ventana ${esc(S.ventana)} · ${fechasMax || "—"} fechas · ${met.estaciones || 0} est.`;
-
-    // Selector: "Nacional" + estaciones con datos. Si la estación previa ya no
-    // tiene datos (cambió variable/ventana/familia/deps), vuelve a Nacional.
+    // v12: sin ámbito Nacional — el selector lista SOLO estaciones con datos y la
+    // vista es siempre por estación. Si la previa ya no tiene datos (cambió
+    // variable/ventana/familia/deps), cae a la primera disponible.
     const sel = document.getElementById("ml-sel-est");
     const ests = d.estaciones || [];
-    if (S.estacion !== NACIONAL && !ests.some(e => String(e.codigo) === String(S.estacion)))
-      S.estacion = NACIONAL;
+    if (!ests.length) {
+      const cont2 = document.getElementById("ml-vista-est");
+      if (cont2) cont2.innerHTML = vacio("Sin estaciones con datos para esta combinación.");
+      return;
+    }
+    if (!ests.some(e => String(e.codigo) === String(S.estacion)))
+      S.estacion = String(ests[0].codigo);
     if (sel) {
-      const opNac = `<option value="">Nacional · todas las estaciones</option>`;
-      sel.innerHTML = opNac + ests.map(e =>
+      sel.innerHTML = ests.map(e =>
         `<option value="${esc(e.codigo)}">${esc(e.codigo)} · ${esc(e.nombre)} (${esc(e.region)})</option>`).join("");
       sel.value = S.estacion;
     }
     pintarVistaAmbito();
   }
 
-  // Pinta la vista según el ámbito: Nacional (mapa ganador + ranking) o estación
-  // (validación detallada + serie temporal).
+  // v12: la vista es siempre por estación (validación detallada + serie temporal).
   function pintarVistaAmbito() {
     purgarPlots();
     const cont = document.getElementById("ml-vista-est");
     if (!cont) return;
-    if (S.estacion === NACIONAL) pintarNacional(cont, S.valData || {});
-    else cargarEstacion(cont);
-  }
-
-  function pintarNacional(cont, d) {
-    const ganadores = (d.ganadores || []).filter(g => g.lat != null && g.lon != null);
-    const met = d.metricas || {};
-    const cuenta = {};
-    for (const g of ganadores) {
-      if (!cuenta[g.modelo]) cuenta[g.modelo] = { n: 0, color: g.color };
-      cuenta[g.modelo].n++;
-    }
-    const filasLeyenda = Object.entries(cuenta).sort((a, b) => b[1].n - a[1].n).slice(0, 8)
-      .map(([m, o]) => `<div class="ml-leyenda-fila"><span class="punto" style="background:${esc(o.color)}"></span>${esc(m)}<span class="conteo">${o.n}</span></div>`).join("");
-
-    const ranking = (d.ranking || []).slice(0, 15);
-    const filasRank = ranking.map((m, i) => {
-      const [bg, fg] = calColor(m.rating);
-      return `<tr>
-        <td class="idx">${i + 1}</td>
-        <td><span class="ml-mod-punto" style="background:${esc(m.color)}"></span>${esc(m.modelo)}<span class="ml-mod-tipo"> · ${esc(famTipo(m.familia))}</span></td>
-        <td><span class="ml-calif-badge" style="background:${bg};color:${fg}">${num(m.rating, 1)}</span></td>
-        <td>${pillConf(m.confianza)}</td>
-        <td class="num">${m.estaciones ?? "—"}</td>
-      </tr>`;
-    }).join("");
-
-    const famNota = S.familia !== "Todos" ? ` · familia: <b class="acento">${esc(S.familia)}</b>` : "";
-    cont.innerHTML = `
-      <div class="ml-card" id="ml-mapa-card" style="margin-bottom:14px">
-        <div class="ml-card-cab">
-          <strong>Mapa general — modelo ganador por estación</strong>
-          <span class="ml-meta">${met.estaciones || 0} estaciones · más ganador: <b class="acento">${esc(met.mas_ganador || "—")}</b> · calif. media <b class="ink">${num(met.calif_media, 1)}</b>${famNota}</span>
-        </div>
-        <div class="ml-grid-mapa">
-          <div class="ml-mapa alto-520">
-            <div class="ml-mapa-tag">CONTINENTAL · WGS84</div>
-            <div class="ml-mapa-grafico" id="ml-plot-ganador"></div>
-          </div>
-          <div class="ml-side alto-520">
-            <div class="ml-side-lab">Modelos ganadores</div>
-            <div class="ml-leyenda">${filasLeyenda || `<span class="suave" style="font-size:12px">Sin datos</span>`}</div>
-            <div class="ml-side-lab" style="margin-top:16px">Tamaño = confianza</div>
-            <div class="ml-tamano">
-              <div class="ml-tamano-fila"><span class="marco"><span class="bola" style="width:17px;height:17px"></span></span>Alta · ≥30 fechas</div>
-              <div class="ml-tamano-fila"><span class="marco"><span class="bola" style="width:13px;height:13px"></span></span>Media · 15–29</div>
-              <div class="ml-tamano-fila"><span class="marco"><span class="bola" style="width:10px;height:10px"></span></span>Baja · 5–14</div>
-            </div>
-            <p class="ml-side-nota">Cada punto = una estación, coloreado por el modelo que mejor califica ahí. <b>Clic en un punto</b> para ver su validación y su serie.</p>
-          </div>
-        </div>
-      </div>
-      <div class="ml-card">
-        <h3 class="ml-titulo">Ranking nacional de modelos <span class="ml-sutil">(ordenados por calificación media)</span></h3>
-        <table class="ml-tabla-modelos">
-          <thead><tr><th>#</th><th>Modelo</th><th>Calif.</th><th>Confianza</th><th class="der">Estaciones</th></tr></thead>
-          <tbody>${filasRank || `<tr><td colspan="5" class="suave" style="padding:14px">Sin modelos para esta selección.</td></tr>`}</tbody>
-        </table>
-      </div>`;
-
-    plotMapaPuntos("ml-plot-ganador", ganadores, {
-      colorPorModelo: true,
-      hover: g => `${g.nombre}<br>${g.modelo} · calif. ${num(g.rating, 1)}<br>${g.confianza} · ${g.n} fechas`,
-      tamano: g => TAM_CONF[g.confianza] || 7,
-      onClick: g => {
-        S.estacion = String(g.codigo);
-        const sel = document.getElementById("ml-sel-est");
-        if (sel) sel.value = S.estacion;
-        pintarVistaAmbito();
-        const cont2 = document.getElementById("ml-vista-est");
-        if (cont2) cont2.scrollIntoView({ behavior: "smooth", block: "start" });
-      },
-    });
+    cargarEstacion(cont);
   }
 
   // Vista de una estación: validación detallada (arriba) + serie temporal (abajo).
   async function cargarEstacion(cont) {
-    if (!S.estacion) { S.estacion = NACIONAL; return pintarVistaAmbito(); }
+    if (!S.estacion) { cont.innerHTML = vacio("Selecciona una estación."); return; }
     const mi = ++gen;
     cont.innerHTML = cargando("Cargando validación y serie de la estación…");
     const bloque = VAR_A_BLOQUE[S.variable];
@@ -410,8 +318,8 @@
         App.api(`/mlnwp/series?${depsQS()}&codigo=${encodeURIComponent(S.estacion)}&variable=${VAR_SERIE[S.variable]}&lookback=${lookback}${famQS}`),
       ]);
     } catch (e) { if (mi === gen) cont.innerHTML = vacio("No se pudo cargar la estación: " + e.message); return; }
-    // descarta si llegó una selección más nueva o se volvió a Nacional durante la carga
-    if (mi !== gen || S.estacion === NACIONAL) return;
+    // descarta si llegó una selección más nueva durante la carga
+    if (mi !== gen || !S.estacion) return;
     purgarPlots();   // libera cualquier serie previa antes de reescribir el contenedor
     // Serie temporal ARRIBA, tabla de clasificación DEBAJO.
     cont.innerHTML = `<div class="ml-card" id="ml-serie-card"></div>
@@ -728,18 +636,20 @@
       xaxis: { type: "date", tickformat: "%d/%m", tickmode: "linear", dtick: 86400000,
                tickangle: -45, tickfont: { size: 9 }, automargin: true },
     });
-    // Distinción HISTORIA vs PRONÓSTICO: franja de fondo desde "hoy" hasta el final +
-    // línea divisoria marcada. El eje X es de fecha → se alinea exacto con los datos.
-    if (d.hoy) {
+    // Distinción HISTORIA vs PRONÓSTICO: franja de fondo desde HOY hasta el final +
+    // línea divisoria. F5: "hoy" se calcula en el CLIENTE (TZ Ecuador) — el visor
+    // congela los JSON y el 'hoy' del backend envejece; d.hoy queda de fallback.
+    const _hoy = (App.hoyEC ? App.hoyEC() : d.hoy);
+    if (_hoy) {
       const finX = (d.banda && d.banda.fechas && d.banda.fechas.length ? d.banda.fechas[d.banda.fechas.length - 1] : null)
-        || ((d.modelos || []).flatMap(m => m.fechas || []).sort().slice(-1)[0]) || d.hoy;
+        || ((d.modelos || []).flatMap(m => m.fechas || []).sort().slice(-1)[0]) || _hoy;
       layout.shapes = [
-        { type: "rect", x0: d.hoy, x1: finX, yref: "paper", y0: 0, y1: 1, layer: "below",
+        { type: "rect", x0: _hoy, x1: finX, yref: "paper", y0: 0, y1: 1, layer: "below",
           fillcolor: "rgba(107,140,180,.07)", line: { width: 0 } },
-        { type: "line", x0: d.hoy, x1: d.hoy, yref: "paper", y0: 0, y1: 1,
+        { type: "line", x0: _hoy, x1: _hoy, yref: "paper", y0: 0, y1: 1,
           line: { color: "#6B8CB4", width: 1.8, dash: "dot" } },
       ];
-      layout.annotations = [{ x: d.hoy, yref: "paper", y: 1, yanchor: "bottom", xanchor: "left",
+      layout.annotations = [{ x: _hoy, yref: "paper", y: 1, yanchor: "bottom", xanchor: "left",
         text: "inicio pronóstico →", showarrow: false,
         font: { family: "IBM Plex Mono", size: 10, color: C.anot } }];
     }
@@ -759,7 +669,7 @@
         // SOLO fechas de pronóstico (>= hoy), TODAS (sin tope de 14). Tabla TRANSPUESTA: una
         // COLUMNA por fecha y una FILA por umbral → se extiende a TODO el ancho de la serie,
         // fecha por fecha, alineada con el eje temporal del gráfico.
-        let idx = pu.fechas.map((_, i) => i).filter(i => !d.hoy || pu.fechas[i] >= d.hoy);
+        let idx = pu.fechas.map((_, i) => i).filter(i => !_hoy || pu.fechas[i] >= _hoy);   // F5: sin días pasados
         if (!idx.length) idx = pu.fechas.map((_, i) => i).slice(-10);
         const alfa = p => p < 20 ? 0.08 : p < 50 ? 0.20 : p < 75 ? 0.38 : 0.58;
         const celStyle = p => p == null
@@ -784,207 +694,6 @@
       }
     }
   }
-
-  /* ============================================================
-     PESTAÑA 3 — MAPAS (campo por variable/día)
-     ============================================================ */
-  async function tabMapas(c) {
-    const vars = [["precip", "Precipitación 7-7"], ["tmax", "T. máxima"], ["tmin", "T. mínima"]];
-    const optVar = vars.map(([id, t]) => `<option value="${id}" ${S.mapaVar === id ? "selected" : ""}>${t}</option>`).join("");
-    c.innerHTML = `
-      <div class="filtros">
-        <label class="campo"><span>Variable</span><select id="ml-ma-var">${optVar}</select></label>
-        <div class="campo"><span>Vista</span><div class="segmentado" style="--seg-color:var(--ml-purple)" id="ml-ma-vista"><button class="${S.mapaVistaIdx?'':'activo'}">Día</button><button class="${S.mapaVistaIdx?'activo':''}">Cuadrícula</button></div></div>
-        <div class="campo"><span>Color</span><div class="segmentado" style="--seg-color:var(--ml-purple)" id="ml-ma-color"><button class="${S.mapaColorIdx?'':'activo'}">Por valor</button><button class="${S.mapaColorIdx?'activo':''}">Por riesgo</button></div></div>
-      </div>
-      <div id="ml-mapas-cuerpo">${cargando("Cargando campo del día…")}</div>`;
-    c.querySelector("#ml-ma-var").onchange = e => { S.mapaVar = e.target.value; S.mapaCache = null; S.mapaDia = 0; cargarMapas(); };
-    // Vista/Color son ajustes visuales del marcador; mantienen el mismo endpoint.
-    c.querySelectorAll("#ml-ma-vista button, #ml-ma-color button").forEach(b => b.onclick = () => {
-      const grp = b.parentElement; const btns = [...grp.querySelectorAll("button")];
-      btns.forEach(x => x.classList.remove("activo")); b.classList.add("activo");
-      const idx = btns.indexOf(b);
-      if (grp.id === "ml-ma-vista") S.mapaVistaIdx = idx; else S.mapaColorIdx = idx;
-      cargarMapas();
-    });
-    await cargarMapas();
-  }
-
-  async function cargarMapas() {
-    const cont = document.getElementById("ml-mapas-cuerpo");
-    if (!cont) return;
-    if (!S.mapaCache) {
-      cont.innerHTML = cargando("Cargando campo del día…");
-      try { S.mapaCache = await App.api(`/mlnwp/mapa?${depsQS()}&variable=${VAR_SERIE[S.mapaVar]}`); }
-      catch (e) { cont.innerHTML = vacio("No se pudo cargar el mapa: " + e.message); return; }
-    }
-    pintarMapas(cont, S.mapaCache);
-  }
-
-  function pintarMapas(cont, d) {
-    purgarPlots();   // libera ml-plot-mapas previo (día/toggle recrean el div sin purgar)
-    const dias = d.dias || [];
-    if (!dias.length) { cont.innerHTML = vacio("No hay pronóstico vigente para esta selección."); return; }
-    S.mapaDia = Math.max(0, Math.min(S.mapaDia, dias.length - 1));
-    const dia = dias[S.mapaDia];
-    const unidad = d.unidad || "mm";
-    const esRiesgo = (() => { const b = document.querySelector("#ml-ma-color button.activo"); return b && b.textContent.includes("riesgo"); })();
-    const fecha = fmtFechaCorta(dia.fecha);
-    const st = dia.stats || {};
-    const top = dia.top10 || [];
-
-    // Colorbar (niveles fijos del diseño) — usa la rampa precip oficial del backend.
-    const ticks = [0, 5, 10, 20, 30, 50, 100];
-    const rampa = (d.colorscale || []).map(([t, c]) => `${c} ${(t * 100).toFixed(1)}%`).join(",");
-
-    cont.innerHTML = `
-      <div class="ml-grid-mapas">
-        <div class="ml-card">
-          <div class="ml-mapas-nav">${esc(fecha)} · día ${S.mapaDia + 1} de ${dias.length}</div>
-          <div class="ml-mapa alto-560">
-            <div class="ml-mapa-tag">${esc((d.variable === "precip" ? "PRECIPITACIÓN · mm/24h" : "TEMPERATURA · °C"))}</div>
-            <div class="ml-mapa-grafico" id="ml-plot-mapas"></div>
-            <div class="ml-colorbar">
-              <div class="barra" style="background:linear-gradient(90deg, ${rampa || "#F7FBFF,#08306B"})"></div>
-              <div class="ticks">${ticks.map(t => `<span>${t}</span>`).join("")}</div>
-            </div>
-          </div>
-        </div>
-        <div class="ml-side-col">
-          <div class="ml-card">
-            <div class="ml-nav-botones">
-              <button class="boton" id="ml-dia-prev">‹ Anterior</button>
-              <button class="boton" id="ml-dia-next">Siguiente ›</button>
-            </div>
-            <div class="ml-stats-grid">
-              <div class="ml-stat"><div class="v azul">${num(st.max, 0)} <small>${unidad}</small></div><div class="et">Máximo</div></div>
-              <div class="ml-stat"><div class="v">${num(st.prom, 0)} <small>${unidad}</small></div><div class="et">Promedio</div></div>
-              <div class="ml-stat"><div class="v">${num(st.min, 0)} <small>${unidad}</small></div><div class="et">Mínimo</div></div>
-              <div class="ml-stat"><div class="v">${st.n || 0}</div><div class="et">Estaciones</div></div>
-            </div>
-          </div>
-          <div class="ml-card">
-            <div class="ml-side-lab">Top 10 estaciones del día</div>
-            <table class="ml-top10"><tbody>
-              ${top.map(t => `<tr><td>${esc(t.nombre)}</td><td class="v" style="color:${colorPorValor(t.valor, d)}">${num(t.valor, 0)}</td></tr>`).join("") || `<tr><td class="suave">Sin datos</td></tr>`}
-            </tbody></table>
-          </div>
-        </div>
-      </div>`;
-
-    const prev = document.getElementById("ml-dia-prev"), next = document.getElementById("ml-dia-next");
-    if (prev) prev.onclick = () => { if (S.mapaDia > 0) { S.mapaDia--; pintarMapas(cont, d); } };
-    if (next) next.onclick = () => { if (S.mapaDia < dias.length - 1) { S.mapaDia++; pintarMapas(cont, d); } };
-
-    const ests = (dia.estaciones || []).filter(e => e.lat != null && e.lon != null);
-    const niveles = d.niveles || [];
-    const cmin = niveles.length ? niveles[0] : 0;
-    const cmax = niveles.length ? niveles[niveles.length - 1] : 100;
-    plotMapaPuntos("ml-plot-mapas", ests, {
-      colorscale: d.colorscale, cmin, cmax, etiquetas: true, size: 11,
-      // En modo "por riesgo" se recolorea el marcador por nivel de riesgo del dato.
-      colorRiesgo: esRiesgo,
-      hover: e => `${e.nombre}<br>${num(e.valor, 1)} ${unidad}${e.riesgo && e.riesgo !== "No aplica" ? `<br>Riesgo: ${e.riesgo}` : ""}`,
-    });
-  }
-
-  function colorPorValor(v, d) {
-    // color discreto aproximado de la rampa para el Top10 (azules de precip).
-    if (v == null) return "var(--ink-2)";
-    if (v >= 50) return "#08306B";
-    if (v >= 30) return "#08519C";
-    if (v >= 20) return "#2171B5";
-    if (v >= 10) return "#4292C6";
-    if (v >= 5) return "#6BAED6";
-    return "#9ECAE1";
-  }
-
-  /* ============================================================
-     PESTAÑA 4 — RESUMEN (regiones plegables)
-     ============================================================ */
-  async function tabResumen(c) {
-    c.innerHTML = `<div id="ml-resumen-top">${cargando("Cargando resumen del día…")}</div>`;
-    await cargarResumen();
-  }
-
-  async function cargarResumen() {
-    const cont = document.getElementById("ml-resumen-top");
-    if (!cont) return;
-    cont.innerHTML = cargando("Cargando resumen del día…");
-    let d;
-    try { d = await App.api(`/mlnwp/resumen?${depsQS()}&dia=${S.resumenDia}`); }
-    catch (e) { cont.innerHTML = vacio("No se pudo cargar el resumen: " + e.message); return; }
-    pintarResumen(cont, d);
-  }
-
-  // Color de fondo de la cabecera de región (tono claro por presencia de riesgo).
-  function fondoRegion(altoCnt) {
-    return altoCnt > 0 ? "var(--danger-bg)" : "var(--surface-2)";
-  }
-
-  function pintarResumen(cont, d) {
-    const fechas = d.fechas || [];
-    if (!fechas.length) { cont.innerHTML = vacio("No hay pronóstico vigente."); return; }
-    S.resumenDia = Math.max(0, Math.min(d.dia ?? S.resumenDia, fechas.length - 1));
-    const fecha = fmtFechaCorta(fechas[S.resumenDia]);
-
-    // Agrupar filas por región.
-    const filas = d.filas || [];
-    // El backend entrega tmax/tmin + sus riesgos sólo si el perfil tiene temperatura
-    // (p.ej. dependencias con INAMHI). Si vienen, se muestran sus columnas para que
-    // la tabla sea coherente con el badge "riesgo alto", que ya las contabiliza.
-    const T = Boolean(d.tiene_temp);
-    const porReg = {};
-    for (const f of filas) { (porReg[f.region] = porReg[f.region] || []).push(f); }
-    const esAlto = r => r === "Alto" || r === "Muy Alto";
-    const cel = (val, riesgo, dec) =>
-      `<td class="precip" style="color:${riesgoColor(riesgo)};font-weight:${esAlto(riesgo) ? 700 : 400}">${num(val, dec)}</td>`;
-
-    const regionesHTML = Object.entries(porReg).map(([region, fs], i) => {
-      const nAlto = fs.filter(f => esAlto(f.riesgo_precip) || esAlto(f.riesgo_tmax) || esAlto(f.riesgo_tmin)).length;
-      const badgeAlto = nAlto > 0
-        ? `<span class="ml-pill baja" style="color:var(--danger);background:var(--danger-bg);border-color:var(--danger-bd)">${nAlto} riesgo alto</span>`
-        : `<span class="ml-pill alta">sin riesgo alto</span>`;
-      const orden = { "Muy Alto": 0, "Alto": 1, "Medio": 2, "No aplica": 3 };
-      const fsOrd = [...fs].sort((a, b) => (orden[a.riesgo_precip] ?? 9) - (orden[b.riesgo_precip] ?? 9) || (b.precip ?? -1) - (a.precip ?? -1));
-      const filasTabla = fsOrd.slice(0, 60).map(f => {
-        const tCels = T ? cel(f.tmax, f.riesgo_tmax, 1) + cel(f.tmin, f.riesgo_tmin, 1) : "";
-        return `<tr><td>${esc(f.estacion)}</td>${cel(f.precip, f.riesgo_precip, 0)}${tCels}</tr>`;
-      }).join("");
-      return `
-        <details class="ml-region" ${i === 0 ? "open" : ""} style="--reg-bg:${fondoRegion(nAlto)}">
-          <summary style="background:${fondoRegion(nAlto)}">${esc(region)}
-            <span class="ml-region-badges">
-              <span class="ml-pill media">${fs.length} estaciones</span>
-              ${badgeAlto}
-            </span></summary>
-          <table class="ml-region-tabla">
-            <thead><tr><th>Estación</th><th class="cen">Precip</th>${T ? '<th class="cen">Tmáx</th><th class="cen">Tmín</th>' : ""}</tr></thead>
-            <tbody>${filasTabla}</tbody>
-          </table>
-        </details>`;
-    }).join("");
-
-    cont.innerHTML = `
-      <div class="ml-resumen-barra">
-        <div class="ml-resumen-nav">
-          <button class="boton" id="ml-res-prev">« Anterior</button>
-          <strong>${esc(fecha)} · día ${S.resumenDia + 1} de ${fechas.length}</strong>
-          <button class="boton" id="ml-res-next">Siguiente »</button>
-        </div>
-        <span class="ml-resumen-leyenda">Color del texto = nivel de riesgo ·
-          <span style="color:#D62A23">Muy Alto</span> · <span style="color:#F08A24">Alto</span> ·
-          <span style="color:#E0A91E">Medio</span> · <span style="color:#3DA4DD">No aplica</span></span>
-      </div>
-      <div class="ml-card"><div class="ml-regiones">${regionesHTML || vacio("Sin estaciones")}</div></div>`;
-
-    const prev = document.getElementById("ml-res-prev"), next = document.getElementById("ml-res-next");
-    if (prev) prev.onclick = () => { if (S.resumenDia > 0) { S.resumenDia--; cargarResumen(); } };
-    if (next) next.onclick = () => { if (S.resumenDia < fechas.length - 1) { S.resumenDia++; cargarResumen(); } };
-  }
-
-  // Informe operativo en PDF ELIMINADO de HidroMet: ya no se generan informes en esta instancia
-  // (se quitaron cargarInformes/pintarInformes/infoFila y las rutas /mlnwp/informes + /abrir_informe).
 
   /* ============================================================
      PESTAÑA 5 — GLOSARIO (3 tarjetas: modelos · métricas · calif+conf)
@@ -1108,7 +817,6 @@
   // resumen/validación ya re-fetchean al pintar) y, si la vista está montada,
   // re-pinta la pestaña activa con datos frescos.
   document.addEventListener("datos-actualizados", () => {
-    S.mapaCache = null;
     if (typeof cuerpo === "function" && cuerpo()) { try { pintarTab(); } catch (e) {} }
   });
 })();

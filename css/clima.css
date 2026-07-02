@@ -1,0 +1,95 @@
+/* ============================================================
+   HidroMet — Climatología (ui/js/modules/clima.js).
+   Estilos del módulo, antes inyectados por inyectarCSS() en el JS.
+   Solo tokens de base.css (sin fallbacks solo-claro) → el modo
+   oscuro hereda su paleta automáticamente.
+   ============================================================ */
+
+.cl-wrap{display:flex;flex-direction:column;gap:14px}
+
+/* Toolbar en UNA fila compacta: grupos en fila (etiqueta a la izquierda);
+   si no cabe, desplaza horizontal en vez de partirse en varias filas. */
+.cl-toolbar{display:flex;flex-wrap:nowrap;gap:12px;align-items:center;overflow-x:auto;
+  background:var(--surface);border:1px solid var(--line);border-radius:13px;
+  padding:10px 14px;box-shadow:var(--shadow-card)}
+.cl-grupo{display:flex;flex-direction:row;align-items:center;gap:8px;flex:0 0 auto}
+.cl-grupo>span{font:600 10px var(--mono);letter-spacing:.07em;text-transform:uppercase;
+  color:var(--faint);white-space:nowrap}
+.cl-pills{display:flex;flex-wrap:nowrap;gap:5px}
+.cl-pill{border:1px solid var(--line);background:var(--surface-2);color:var(--muted);
+  border-radius:999px;padding:5px 10px;font:600 11.5px var(--fuente);cursor:pointer;
+  white-space:nowrap;transition:all .14s}
+.cl-pill:hover{border-color:var(--blue)}
+.cl-pill.on{background:var(--blue);border-color:var(--blue);color:#fff;
+  box-shadow:0 2px 8px rgba(47,127,193,.25)}
+.cl-meses{display:flex;flex-wrap:nowrap;gap:3px}
+.cl-mes{min-width:24px;text-align:center;border:1px solid var(--line);background:var(--surface-2);
+  color:var(--muted);border-radius:8px;padding:4px 5px;font:600 10.5px var(--mono);
+  cursor:pointer;white-space:nowrap}
+/* .on con --navy-700 (NO --ink: en oscuro --ink es casi blanco y el texto #fff se perdía) */
+.cl-mes.on{background:var(--navy-700);border-color:var(--navy-700);color:#fff}
+
+.cl-card{background:var(--surface);border:1px solid var(--line);border-radius:13px;
+  padding:14px 16px;box-shadow:var(--shadow-card)}
+.cl-maptit{font:600 14px var(--fuente);color:var(--ink);margin:0 0 8px}
+.cl-plot{width:100%}
+.cl-grid2{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(260px,.85fr);gap:14px;align-items:start}
+@media(max-width:920px){.cl-grid2{grid-template-columns:1fr}}
+
+.cl-kpis{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px}
+.cl-kpi{background:var(--surface-2);border:1px solid var(--line-3);border-radius:10px;padding:10px 12px}
+.cl-kpi .v{font:700 19px var(--mono);color:var(--ink)}
+.cl-kpi .v small{font-size:11px;color:var(--muted-2);font-weight:600}
+.cl-kpi .e{font:600 10px var(--mono);letter-spacing:.05em;text-transform:uppercase;
+  color:var(--faint);margin-top:3px}
+
+.cl-conf{display:inline-flex;align-items:center;gap:7px;font-size:12px;border-radius:999px;
+  padding:4px 11px;margin-top:2px}
+.cl-conf.ok{background:var(--ok-bg);color:var(--ok)}
+.cl-conf.med{background:var(--warn-bg);color:var(--warn)}
+.cl-conf.baja{background:var(--danger-bg);color:var(--danger)}
+
+.cl-tabla{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums;margin-top:6px}
+.cl-tabla th{font:600 10px var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--faint);
+  text-align:right;padding:5px 7px;border-bottom:1px solid var(--line)}
+.cl-tabla th:first-child{text-align:left}
+.cl-tabla td{padding:4px 7px;text-align:right;border-bottom:1px solid var(--line-3);color:var(--ink-2)}
+.cl-tabla td:first-child{text-align:left;font-weight:600;color:var(--muted)}
+
+.cl-coords{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+.cl-campo{display:flex;flex-direction:column;gap:5px}
+.cl-campo>span{font:600 10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.cl-campo input{width:130px;border:1px solid var(--line);border-radius:9px;padding:8px 11px;
+  font:600 13px var(--mono);background:var(--surface);color:var(--ink)}
+.cl-btn{background:var(--blue);color:#fff;border:none;border-radius:9px;padding:9px 18px;
+  font:600 13px var(--fuente);cursor:pointer;transition:filter .15s}
+.cl-btn:hover{filter:brightness(1.07)}
+.cl-hint{font-size:11.5px;color:var(--faint);margin-top:7px}
+.cl-nota{font-size:11.5px;color:var(--muted-2);line-height:1.5;margin:10px 0 0}
+
+.cl-glo{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:13px}
+.cl-glo-card{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:15px 17px;
+  box-shadow:var(--shadow-card)}
+.cl-glo-card h4{margin:0 0 7px;font:650 13.5px var(--fuente);color:var(--ink);
+  display:flex;align-items:center;gap:8px}
+.cl-glo-card h4::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--blue);flex:0 0 auto}
+.cl-glo-card p{margin:0;font-size:12.8px;line-height:1.6;color:var(--ink-2)}
+.cl-glo-intro{background:linear-gradient(135deg,rgba(47,127,193,.10),rgba(47,127,193,.02));
+  border:1px solid rgba(47,127,193,.22);border-radius:14px;padding:16px 19px;margin-bottom:14px}
+.cl-glo-intro h3{margin:0 0 7px;font:700 16px var(--fuente);color:var(--ink)}
+.cl-glo-intro p{margin:0;font-size:13.2px;line-height:1.65;color:var(--ink-2)}
+
+.cl-vacio{text-align:center;color:var(--faint);padding:34px 12px;font-size:13px}
+
+.cl-adv{padding:0;overflow:hidden}
+.cl-adv-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;
+  border-bottom:1px solid var(--line-3);font-size:14px;color:var(--ink)}
+.cl-adv-em{font-size:11.5px;color:var(--faint)}
+.cl-adv-dia{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:9px 16px;
+  border-bottom:1px solid var(--line-3)}
+.cl-adv-dia:last-child{border-bottom:none}
+.cl-adv-d{font:600 12px var(--mono);color:var(--muted);min-width:130px}
+.cl-adv-v{font-size:12px;color:var(--ink-2);flex:1;min-width:200px}
+.cl-adv-badge{margin-left:auto;font:600 11px var(--mono);border-radius:999px;padding:3px 11px;white-space:nowrap}
+.cl-adv-badge.conf{background:var(--ok-bg);color:var(--ok)}
+.cl-adv-badge.no{background:var(--surface-3);color:var(--muted)}

@@ -616,9 +616,15 @@ const App = (() => {
     return { pintar, activa: () => activa, acciones: () => vista.querySelector(".hm-vista-acc") };
   }
 
+  // F5: HOY en Ecuador (UTC-5 fijo, sin DST) calculado en el CLIENTE — el visor congela
+  // los JSON y cualquier "hoy" del backend envejece. largo=10 → fecha; 16 → fecha+hora.
+  function hoyEC(largo = 10) {
+    return new Date(Date.now() - 5 * 3600e3).toISOString().slice(0, largo);
+  }
+
   return { api, aviso, tarea, seguirTarea, modalTarea, tema, registrar, navegar, iniciar, el, fmtFecha, plotlyLayoutBase,
            plotlyLayoutSerie, plotlyConfig, hayTareaActiva, cancelarTarea, cancelarTodas, panel, vistaPestanas, restaurador,
-           rutaAProducto };
+           rutaAProducto, hoyEC };
 })();
 
 /* ---------------- MODO VISOR: SOLO EXPLORACIÓN ----------------

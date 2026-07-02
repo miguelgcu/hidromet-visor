@@ -23,83 +23,9 @@
   const MESES = ["Anual", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
   const COL = { precip: "#2f7fc1", pet: "#d08a2e", tmax: "#e0562d", tmin: "#2e8bc0", obs: "#10243f" };
 
-  // Estilos del módulo (inyectados una vez) ----------------------------------
-  function inyectarCSS() {
-    if (document.getElementById("clima-css")) return;
-    const s = document.createElement("style");
-    s.id = "clima-css";
-    s.textContent = `
-      .cl-wrap{display:flex;flex-direction:column;gap:14px}
-      .cl-toolbar{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;
-        background:var(--surface,#fff);border:1px solid var(--line,#e2e7ee);border-radius:13px;
-        padding:12px 14px;box-shadow:var(--shadow-card,0 1px 2px rgba(20,30,50,.05))}
-      .cl-grupo{display:flex;flex-direction:column;gap:6px}
-      .cl-grupo>span{font:600 10px var(--mono,monospace);letter-spacing:.07em;text-transform:uppercase;color:var(--faint,#8a93a3)}
-      .cl-pills{display:flex;flex-wrap:wrap;gap:6px}
-      .cl-pill{border:1px solid var(--line,#d7dde6);background:var(--surface-2,#f6f8fb);color:var(--muted,#5b6678);
-        border-radius:999px;padding:6px 13px;font:600 12.5px var(--fuente,sans-serif);cursor:pointer;transition:all .14s}
-      .cl-pill:hover{border-color:var(--blue,#2f7fc1)}
-      .cl-pill.on{background:var(--blue,#2f7fc1);border-color:var(--blue,#2f7fc1);color:#fff;box-shadow:0 2px 8px rgba(47,127,193,.25)}
-      .cl-meses{display:flex;flex-wrap:wrap;gap:4px}
-      .cl-mes{min-width:30px;text-align:center;border:1px solid var(--line,#d7dde6);background:var(--surface-2,#f6f8fb);
-        color:var(--muted,#5b6678);border-radius:8px;padding:5px 8px;font:600 11.5px var(--mono,monospace);cursor:pointer}
-      .cl-mes.on{background:var(--ink,#1f2a3a);border-color:var(--ink,#1f2a3a);color:#fff}
-      .cl-card{background:var(--surface,#fff);border:1px solid var(--line,#e2e7ee);border-radius:13px;
-        padding:14px 16px;box-shadow:var(--shadow-card,0 1px 2px rgba(20,30,50,.05))}
-      .cl-maptit{font:600 14px var(--fuente,sans-serif);color:var(--ink,#1f2a3a);margin:0 0 8px}
-      .cl-plot{width:100%}
-      .cl-grid2{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(260px,.85fr);gap:14px;align-items:start}
-      @media(max-width:920px){.cl-grid2{grid-template-columns:1fr}}
-      .cl-kpis{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px}
-      .cl-kpi{background:var(--surface-2,#f6f8fb);border:1px solid var(--line-3,#eaeef4);border-radius:10px;padding:10px 12px}
-      .cl-kpi .v{font:700 19px var(--mono,monospace);color:var(--ink,#1f2a3a)}
-      .cl-kpi .v small{font-size:11px;color:var(--muted-2,#8a93a3);font-weight:600}
-      .cl-kpi .e{font:600 10px var(--mono,monospace);letter-spacing:.05em;text-transform:uppercase;color:var(--faint,#8a93a3);margin-top:3px}
-      .cl-conf{display:inline-flex;align-items:center;gap:7px;font-size:12px;border-radius:999px;padding:4px 11px;margin-top:2px}
-      .cl-conf.ok{background:var(--ok-bg);color:var(--ok)}
-      .cl-conf.med{background:var(--warn-bg);color:var(--warn)}
-      .cl-conf.baja{background:var(--danger-bg);color:var(--danger)}
-      .cl-tabla{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums;margin-top:6px}
-      .cl-tabla th{font:600 10px var(--mono,monospace);letter-spacing:.04em;text-transform:uppercase;color:var(--faint,#8a93a3);
-        text-align:right;padding:5px 7px;border-bottom:1px solid var(--line,#e2e7ee)}
-      .cl-tabla th:first-child{text-align:left}
-      .cl-tabla td{padding:4px 7px;text-align:right;border-bottom:1px solid var(--line-3,#f0f3f7);color:var(--ink-2,#3a4656)}
-      .cl-tabla td:first-child{text-align:left;font-weight:600;color:var(--muted,#5b6678)}
-      .cl-coords{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
-      .cl-campo{display:flex;flex-direction:column;gap:5px}
-      .cl-campo>span{font:600 10px var(--mono,monospace);letter-spacing:.06em;text-transform:uppercase;color:var(--faint,#8a93a3)}
-      .cl-campo input{width:130px;border:1px solid var(--line,#d7dde6);border-radius:9px;padding:8px 11px;
-        font:600 13px var(--mono,monospace);background:var(--surface,#fff);color:var(--ink,#1f2a3a)}
-      .cl-btn{background:var(--blue,#2f7fc1);color:#fff;border:none;border-radius:9px;padding:9px 18px;
-        font:600 13px var(--fuente,sans-serif);cursor:pointer;transition:filter .15s}
-      .cl-btn:hover{filter:brightness(1.07)}
-      .cl-hint{font-size:11.5px;color:var(--faint,#8a93a3);margin-top:7px}
-      .cl-nota{font-size:11.5px;color:var(--muted-2,#8a93a3);line-height:1.5;margin:10px 0 0}
-      .cl-glo{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:13px}
-      .cl-glo-card{background:var(--surface,#fff);border:1px solid var(--line,#e2e7ee);border-radius:13px;padding:15px 17px;
-        box-shadow:var(--shadow-card,0 1px 2px rgba(20,30,50,.05))}
-      .cl-glo-card h4{margin:0 0 7px;font:650 13.5px var(--fuente,sans-serif);color:var(--ink,#1f2a3a);
-        display:flex;align-items:center;gap:8px}
-      .cl-glo-card h4::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--blue,#2f7fc1);flex:0 0 auto}
-      .cl-glo-card p{margin:0;font-size:12.8px;line-height:1.6;color:var(--ink-2,#3a4656)}
-      .cl-glo-intro{background:linear-gradient(135deg,rgba(47,127,193,.10),rgba(47,127,193,.02));
-        border:1px solid rgba(47,127,193,.22);border-radius:14px;padding:16px 19px;margin-bottom:14px}
-      .cl-glo-intro h3{margin:0 0 7px;font:700 16px var(--fuente,sans-serif);color:var(--ink,#1f2a3a)}
-      .cl-glo-intro p{margin:0;font-size:13.2px;line-height:1.65;color:var(--ink-2,#3a4656)}
-      .cl-vacio{text-align:center;color:var(--faint,#8a93a3);padding:34px 12px;font-size:13px}
-      .cl-adv{padding:0;overflow:hidden}
-      .cl-adv-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;
-        border-bottom:1px solid var(--line-3,#eef2f7);font-size:14px;color:var(--ink,#1f2a3a)}
-      .cl-adv-em{font-size:11.5px;color:var(--faint,#8a93a3)}
-      .cl-adv-dia{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:9px 16px;border-bottom:1px solid var(--line-3,#f2f5f9)}
-      .cl-adv-dia:last-child{border-bottom:none}
-      .cl-adv-d{font:600 12px var(--mono,monospace);color:var(--muted,#5b6678);min-width:130px}
-      .cl-adv-v{font-size:12px;color:var(--ink-2,#3a4656);flex:1;min-width:200px}
-      .cl-adv-badge{margin-left:auto;font:600 11px var(--mono,monospace);border-radius:999px;padding:3px 11px;white-space:nowrap}
-      .cl-adv-badge.conf{background:var(--ok-bg);color:var(--ok)}
-      .cl-adv-badge.no{background:var(--surface-3);color:var(--muted)}`;
-    document.head.appendChild(s);
-  }
+  // Estilos del módulo: viven en ui/css/clima.css (cargado desde index.html).
+  // Se conserva la función como no-op para no tocar los call-sites de cada pestaña.
+  function inyectarCSS() {}
 
   // Contorno provincial (geojson) reutilizable -------------------------------
   let geo = null;
@@ -137,10 +63,14 @@
         len: 0.9, outlinewidth: 0, tickfont: { size: 10 }, x: 1.01 },
       hovertemplate: `lat %{y:.2f}, lon %{x:.2f}<br><b>%{z:.${dec}f} ${esc(d.unidad || "")}</b><extra></extra>`,
     };
+    // Encuadre ECUADOR CONTINENTAL: la grilla es continental, pero el contorno
+    // provincial incluye Galápagos y el autorange alejaba el mapa hacia el oeste.
+    // Rango fijo del render (bbox continental); los datos NO se filtran.
     const layout = App.plotlyLayoutBase({
       height: 540, margin: { l: 6, r: 6, t: 6, b: 6 },
-      xaxis: { visible: false, scaleanchor: "y", constrain: "domain", fixedrange: false },
-      yaxis: { visible: false, fixedrange: false },
+      xaxis: { visible: false, scaleanchor: "y", constrain: "domain", fixedrange: false,
+        range: [-81.2, -75.1] },
+      yaxis: { visible: false, fixedrange: false, range: [-5.1, 1.6] },
     });
     Plotly.react(host, [heat, ...contorno()], layout, App.plotlyConfig());
   }
@@ -238,7 +168,7 @@
         <div class="cl-grupo"><span>Variable</span><div class="cl-pills" data-rol="vars">
           ${VARS.map(v => `<button class="cl-pill ${v.id === E.mapVar ? "on" : ""}" data-v="${v.id}">${esc(v.et)}</button>`).join("")}
         </div></div>
-        <div class="cl-grupo"><span>Escala (mes / anual)</span><div class="cl-meses" data-rol="meses">
+        <div class="cl-grupo"><span>Escala</span><div class="cl-meses" data-rol="meses">
           ${MESES.map((m, i) => `<button class="cl-mes ${(i === 0 ? "anual" : i) == E.mapEsc ? "on" : ""}" data-e="${i === 0 ? "anual" : i}">${esc(m)}</button>`).join("")}
         </div></div>
       </div>
@@ -451,16 +381,15 @@
     // (exportar_web.py) → capar el input para no ofrecer años sin producto ("no publicado").
     const minAnio = window.HIDROMET_VISOR ? (anioActual - 2) : 1990;
     const inp = "border:1px solid var(--line,#d7dde6);border-radius:9px;padding:8px 11px;background:var(--surface,#fff);color:var(--ink,#1f2a3a)";
-    const opt = ests.map(e => `<option value="${esc(e.codigo)}">${esc(e.nombre || e.codigo)} (${esc(e.codigo)})${e.region ? " · " + esc(e.region) : ""}</option>`).join("");
     c.innerHTML = `<div class="cl-wrap">
       <div class="cl-toolbar">
         <div class="cl-grupo" style="flex:1;min-width:240px"><span>Estación</span>
-          <select data-rol="est" style="${inp};font:500 13px var(--fuente,sans-serif)">${opt}</select></div>
+          <select data-rol="est" style="${inp};font:500 13px var(--fuente,sans-serif)"></select></div>
         <div class="cl-grupo"><span>Variable</span><div class="cl-pills" data-rol="vars"></div></div>
         <div class="cl-grupo"><span>Año</span>
           <input data-rol="anio" type="number" value="${anioActual}" min="${minAnio}" max="${anioActual}" style="${inp};width:92px;font:600 13px var(--mono,monospace)"></div>
         <div class="cl-grupo"><span>Bandas</span>
-          <label style="display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted,#5b6678);cursor:pointer;padding-bottom:6px">
+          <label style="display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted,#5b6678);cursor:pointer">
             <input type="checkbox" data-rol="pct" checked> percentiles P10–P90 · P25–P75</label></div>
       </div>
       <div data-rol="kpis"></div>
@@ -476,12 +405,22 @@
     const plot = c.querySelector('[data-rol="plot"]'), pie = c.querySelector('[data-rol="pie"]');
     const tabla = c.querySelector('[data-rol="tabla"]'), ley = c.querySelector('[data-rol="leyenda"]');
     let estVar = "precip";
+    const mide = (e, v) => (e.variables || []).includes(v);
     function pintarVars() {
-      const e = ests.find(x => String(x.codigo) === String(sel.value)) || {};
-      const disp = e.variables && e.variables.length ? e.variables : ["precip"];
-      if (!disp.includes(estVar)) estVar = disp[0];
-      varsBox.innerHTML = ["precip", "Tmax", "Tmin"].filter(v => disp.includes(v))
+      // Pills = variables con al menos UNA estación en la base (no dependen de la estación).
+      const disp = ["precip", "Tmax", "Tmin"].filter(v => ests.some(e => mide(e, v)));
+      if (disp.length && !disp.includes(estVar)) estVar = disp[0];
+      varsBox.innerHTML = disp
         .map(v => `<button class="cl-pill ${v === estVar ? "on" : ""}" data-v="${v}">${VARREC[v].et}</button>`).join("");
+    }
+    function pintarEstaciones() {
+      // El selector SOLO ofrece estaciones que midan la variable activa; conserva la
+      // selección si sigue siendo válida y, si no, cae a la primera válida.
+      const previa = sel.value;
+      const validas = ests.filter(e => mide(e, estVar));
+      sel.innerHTML = validas.map(e =>
+        `<option value="${esc(e.codigo)}">${esc(e.nombre || e.codigo)} (${esc(e.codigo)})${e.region ? " · " + esc(e.region) : ""}</option>`).join("");
+      if (validas.some(e => String(e.codigo) === String(previa))) sel.value = previa;
     }
     async function cargar() {
       const cod = sel.value, anio = parseInt(anioIn.value) || anioActual;
@@ -498,11 +437,14 @@
       tabla.innerHTML = tablaRecords(d);
       pie.textContent = `Envolvente sobre ${d.n_anios_rango} años con datos; se exige ≥${d.umbral_n} años por día para declarar récord. Precip mayormente producto PISCO (ventana ${d.agregacion}); temperatura observada.`;
     }
-    sel.onchange = () => { pintarVars(); cargar(); };
-    varsBox.onclick = e => { const b = e.target.closest("[data-v]"); if (!b) return; estVar = b.dataset.v; pintarVars(); cargar(); };
+    sel.onchange = cargar;
+    varsBox.onclick = e => {
+      const b = e.target.closest("[data-v]"); if (!b) return;
+      estVar = b.dataset.v; pintarVars(); pintarEstaciones(); cargar();
+    };
     anioIn.onchange = cargar;
     pct.onchange = cargar;
-    pintarVars(); cargar();
+    pintarVars(); pintarEstaciones(); cargar();
   }
 
   App.registrar("clima", {

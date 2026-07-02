@@ -18,6 +18,12 @@
 
 /* ---------- conteos: pills compactas, clicables y dinámicas por filtro ---------- */
 .sngr-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+/* v12: las pastillas viven en la tarjeta de la tabla — versión compacta */
+.sngr-tabla-tarjeta .sngr-pills { gap: 5px; margin: 8px 0 10px; }
+.sngr-tabla-tarjeta .sngr-pill { padding: 3px 9px; }
+.sngr-tabla-tarjeta .sngr-pill .et { font-size: 11px; }
+.sngr-tabla-tarjeta .sngr-pill .num { font-size: 11.5px; }
+.sngr-tabla-tarjeta .sngr-pill .punto { width: 7px; height: 7px; flex: 0 0 7px; }
 .sngr-pill { display: inline-flex; align-items: center; gap: 7px; padding: 6px 13px;
   border-radius: 999px; border: 1px solid var(--line); background: var(--surface);
   cursor: pointer; box-shadow: var(--shadow-card); transition: border-color .12s, background .12s; }

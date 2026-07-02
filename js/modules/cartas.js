@@ -48,7 +48,7 @@
   const ALERTA_FUENTES = ["CONSENSO", "GFS", "ICON", "IFS", "BIAS", "RF", "GB", "CAT", "LSTM"];
   const ALERTA_FUENTE_ROTULO = { CONSENSO: "Consenso", GFS: "GFS", ICON: "ICON", IFS: "IFS HRES",
     BIAS: "Calibrado · BIAS", RF: "Calibrado · RF", GB: "Calibrado · GB", CAT: "Calibrado · CAT", LSTM: "Calibrado · LSTM" };
-  const ALERTA_FUENTE_OCULTA = new Set(["Confianza", "Modelo de referencia"]);
+  const ALERTA_FUENTE_OCULTA = new Set(["Confianza", "Modelo de referencia", "Cobertura (n.º modelos)"]);
 
   // Toggles de capa: id (param de carta.png) + etiqueta + valor inicial (1=on).
   const TOGGLES = [
@@ -731,9 +731,13 @@
         yaxis: { title: { text: r.unidad || "", font: { size: 11 } }, rangemode: esPrecip ? "tozero" : "normal" },
         xaxis: { type: "date", tickformat: "%d/%m", tickangle: 0, nticks: 12 },
       });
-      if (r.hoy) {
-        layout.shapes = [{ type: "line", x0: r.hoy, x1: r.hoy, yref: "paper", y0: 0, y1: 1, line: { color: (App.tema && App.tema() === "oscuro") ? "#75859D" : "#95A1B2", width: 1.2, dash: "dot" } }];
-        layout.annotations = [{ x: r.hoy, yref: "paper", y: 1, yanchor: "bottom", text: "presente", showarrow: false, font: { family: "IBM Plex Mono", size: 10, color: (App.tema && App.tema() === "oscuro") ? "#9DAABF" : "#5A6678" } }];
+      // F5: el divisor "presente" es HOY (TZ Ecuador) calculado en CLIENTE — el visor
+      // congela los JSON y el 'hoy' del backend envejece. r.hoy da la pista de formato
+      // (fecha vs fecha+hora en ejes sub-diarios) y sirve de fallback.
+      const _hoy = App.hoyEC ? App.hoyEC((r.hoy && String(r.hoy).length > 10) ? 16 : 10) : r.hoy;
+      if (_hoy) {
+        layout.shapes = [{ type: "line", x0: _hoy, x1: _hoy, yref: "paper", y0: 0, y1: 1, line: { color: (App.tema && App.tema() === "oscuro") ? "#75859D" : "#95A1B2", width: 1.2, dash: "dot" } }];
+        layout.annotations = [{ x: _hoy, yref: "paper", y: 1, yanchor: "bottom", text: "presente", showarrow: false, font: { family: "IBM Plex Mono", size: 10, color: (App.tema && App.tema() === "oscuro") ? "#9DAABF" : "#5A6678" } }];
       }
       window.Plotly.newPlot(plot, r.trazas, layout, App.plotlyConfig());
       nota.textContent = `Comparativa multimodelo — ${etiqV} a ${g.horas} h.` +
@@ -1521,6 +1525,7 @@
           <div data-rol="ffr-plot" style="width:100%;height:460px"></div>
         </figure>
         <div class="ct-ffr-valida" data-rol="ffr-valida"></div>
+        <div class="ct-ffr-serie" data-rol="ffr-serie"></div>
         <p class="ct-nota">El polígono encierra las microcuencas en riesgo. Se valida cruzándolo con los
           <b>desbordamientos/crecidas</b> observados de esa fecha (eventos de río dentro de la zona).</p>
       </div>`;
@@ -1553,9 +1558,47 @@
     const sel = cont.querySelector('[data-rol="ffr-buffer"]');
     const selF = cont.querySelector('[data-rol="ffr-fecha"]');
     const valida = cont.querySelector('[data-rol="ffr-valida"]');
+    const serieHost = cont.querySelector('[data-rol="ffr-serie"]');
     const shpBtn = cont.querySelector('[data-rol="ffr-shp"]');
     if (!plot || !sel) return;
     const rec = () => (selF && selF.value) || "-1";
+    // ── MÉTRICAS del historial FFR ↔ eventos SNGR (una fila por fecha del histórico F1;
+    //    POD agregado micro-promedio). Estados: las fechas que el feed SNGR aún no cubre
+    //    se ATENÚAN — "0 eventos" real ≠ "feed desactualizado". Depende solo del buffer.
+    const ESTADO_FFR = { ok: "OK", sin_zona: "Sin zona", sin_datos_eventos: "Sin datos SNGR", pendiente: "Pendiente" };
+    const cargarSerie = async () => {
+      if (!serieHost) return;
+      serieHost.innerHTML = `<span class="suave" style="font-size:12px">Calculando métricas del historial…</span>`;
+      try {
+        const s = await App.api("/cartas/riesgo_ffr/validacion_serie?" + qs({ buffer: sel.value }));
+        const ag = s.agregado || {}, feed = s.feed_eventos || {}, serie = s.serie || [];
+        if (!serie.length) { serieHost.innerHTML = ""; return; }
+        const ultimaFFR = serie[serie.length - 1].fecha || "";
+        const banner = (feed.max_fecha && ultimaFFR && feed.max_fecha < ultimaFFR)
+          ? `<div style="margin:8px 0 10px;padding:9px 12px;border-radius:9px;font-size:12px;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-bd)">
+               Eventos SNGR disponibles hasta <b>${esc(feed.max_fecha)}</b> — las fechas FFR posteriores figuran como «Sin datos SNGR» hasta que el feed se actualice${feed.actualizado ? ` (feed leído el ${esc(feed.actualizado)})` : ""}.</div>`
+          : "";
+        const filas = serie.slice().reverse().map(f => {
+          const aten = (f.estado === "sin_datos_eventos" || f.estado === "pendiente") ? ' style="opacity:.45"' : "";
+          return `<tr${aten}><td>${esc(f.fecha)}</td>
+            <td class="mono">${f.eventos == null ? "—" : fmtNum(f.eventos)}</td>
+            <td class="mono">${f.cubiertos == null ? "—" : fmtNum(f.cubiertos)}</td>
+            <td class="mono">${f.pod_pct == null ? "—" : fmtPct(f.pod_pct) + " %"}</td>
+            <td class="mono">${esc(ESTADO_FFR[f.estado] || f.estado || "—")}</td></tr>`;
+        }).join("");
+        serieHost.innerHTML = `
+          <h3 class="ct-subtitulo" style="margin:16px 0 8px">Métricas por fecha del historial <span class="suave">(FFR histórico F1 · WRF 3 km ↔ eventos SNGR)</span></h3>
+          ${banner}
+          <div class="ct-stats" style="margin:0 0 10px">
+            <div class="ct-stat"><div class="v ok">${ag.pod_pct != null ? fmtPct(ag.pod_pct) + "<small> %</small>" : "—"}</div><div class="k">POD global (Σcubiertos/Σeventos)</div></div>
+            <div class="ct-stat"><div class="v">${fmtNum(ag.cubiertos || 0)}/${fmtNum(ag.eventos || 0)}</div><div class="k">Eventos cubiertos / observados</div></div>
+            <div class="ct-stat"><div class="v">${fmtNum(ag.fechas_con_eventos || 0)}<small> de ${fmtNum(ag.fechas || 0)}</small></div><div class="k">Fechas con eventos</div></div>
+            <div class="ct-stat"><div class="v">${ag.area_km2_mediana != null ? fmtNum(Math.round(ag.area_km2_mediana)) : "—"}</div><div class="k">Área mediana de la zona (km²)</div></div>
+          </div>
+          <table class="rm-tabla"><thead><tr><th>Fecha</th><th>Eventos</th><th>Cubiertos</th><th>POD</th><th>Estado</th></tr></thead><tbody>${filas}</tbody></table>
+          <div class="rm-pie mono">POD por fecha = desbordes/crecidas SNGR dentro de la zona FFR de ese día. «Sin zona» = el FFR no marcó riesgo (si hubo eventos, cuentan como no cubiertos) · «Sin datos SNGR» = el feed aún no cubre esa fecha · las fechas atenuadas no entran al POD global.</div>`;
+      } catch (e) { serieHost.innerHTML = `<span class="suave" style="font-size:12px">Métricas del historial no disponibles${window.HIDROMET_VISOR ? " en el visor" : ""}.</span>`; }
+    };
     const cargarValida = async () => {
       if (!valida) return;
       valida.innerHTML = `<span class="suave" style="font-size:12px">Validando vs eventos de río…</span>`;
@@ -1577,7 +1620,7 @@
       if (shpBtn) shpBtn.dataset.shp = "/cartas/riesgo_ffr/descarga?" + qs({ buffer: sel.value, record: rec() });
       cargarValida();
     };
-    sel.onchange = pinta;
+    sel.onchange = () => { pinta(); cargarSerie(); };   // la serie depende del buffer, no de la fecha
     if (selF) selF.onchange = pinta;
     // Poblar el selector con las fechas FFR disponibles y pintar la última.
     (async () => {
@@ -1588,6 +1631,7 @@
           `<option value="${f.record}" ${i === fs.length - 1 ? "selected" : ""}>${esc(f.fecha)}</option>`).join("");
       } catch (e) { /* deja "vigente" */ }
       pinta();
+      cargarSerie();
     })();
   }
 
@@ -2142,9 +2186,13 @@
         yaxis: { title: { text: r.unidad || (esPrecip ? "mm" : "°C"), font: { size: 11 } }, rangemode: esPrecip ? "tozero" : "normal" },
         xaxis: { type: "date", tickformat: "%d/%m", tickangle: 0, nticks: 12 },
       });
-      if (r.hoy) {
-        layout.shapes = [{ type: "line", x0: r.hoy, x1: r.hoy, yref: "paper", y0: 0, y1: 1, line: { color: (App.tema && App.tema() === "oscuro") ? "#75859D" : "#95A1B2", width: 1.2, dash: "dot" } }];
-        layout.annotations = [{ x: r.hoy, yref: "paper", y: 1, yanchor: "bottom", text: "presente", showarrow: false, font: { family: "IBM Plex Mono", size: 10, color: (App.tema && App.tema() === "oscuro") ? "#9DAABF" : "#5A6678" } }];
+      // F5: el divisor "presente" es HOY (TZ Ecuador) calculado en CLIENTE — el visor
+      // congela los JSON y el 'hoy' del backend envejece. r.hoy da la pista de formato
+      // (fecha vs fecha+hora en ejes sub-diarios) y sirve de fallback.
+      const _hoy = App.hoyEC ? App.hoyEC((r.hoy && String(r.hoy).length > 10) ? 16 : 10) : r.hoy;
+      if (_hoy) {
+        layout.shapes = [{ type: "line", x0: _hoy, x1: _hoy, yref: "paper", y0: 0, y1: 1, line: { color: (App.tema && App.tema() === "oscuro") ? "#75859D" : "#95A1B2", width: 1.2, dash: "dot" } }];
+        layout.annotations = [{ x: _hoy, yref: "paper", y: 1, yanchor: "bottom", text: "presente", showarrow: false, font: { family: "IBM Plex Mono", size: 10, color: (App.tema && App.tema() === "oscuro") ? "#9DAABF" : "#5A6678" } }];
       }
       window.Plotly.newPlot(plot, r.trazas, layout, App.plotlyConfig());
       pie.innerHTML = `Comparativa multimodelo — ${f === "24" ? "diario (24 h)" : f + " h"}.` +

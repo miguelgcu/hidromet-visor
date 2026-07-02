@@ -212,6 +212,7 @@
         </div>
         <div class="sngr-tabla-tarjeta">
           <div class="tit">Eventos recientes</div>
+          ${conteosHTML()}
           <div class="sngr-tabla-scroll">
             <table class="sngr-tabla">
               <thead><tr><th>Fecha</th><th>Tipo</th><th>Lugar</th></tr></thead>
@@ -281,7 +282,9 @@
     cargarTierra();                                   // solo fija el límite de paneo
   }
 
-  // Carga provincias SOLO para fijar el límite de paneo al país (sobre las teselas OSM).
+  // Carga provincias para fijar límites. v12: ENFOQUE CONTINENTAL — el encuadre
+  // (fit inicial y botón reset) usa solo Ecuador continental (lon > -84°); Galápagos
+  // queda accesible por paneo/zoom (maxBounds sigue siendo el país completo).
   async function cargarTierra() {
     const E = estado;
     let gj;
@@ -289,8 +292,16 @@
     catch (e) { return; }
     if (!vigente(E) || !estado.mapa) return;
     try {
-      const b = L.geoJSON(gj).getBounds();
-      if (b.isValid()) { estado.boundsEC = b; estado.mapa.setMaxBounds(b.pad(0.3)); }
+      const bTodo = L.geoJSON(gj).getBounds();
+      const feats = (gj.features || []).filter(f => {
+        try { return L.geoJSON(f).getBounds().getEast() > -84; } catch (e) { return true; }
+      });
+      const bCont = feats.length ? L.geoJSON({ type: "FeatureCollection", features: feats }).getBounds() : bTodo;
+      if (bTodo.isValid()) estado.mapa.setMaxBounds(bTodo.pad(0.3));
+      if (bCont.isValid()) {
+        estado.boundsEC = bCont;                       // reset ⤢ = continental
+        estado.mapa.fitBounds(bCont.pad(0.03));        // encuadre inicial continental
+      }
     } catch (e) { /* sin límites válidos */ }
   }
 
@@ -558,8 +569,9 @@
 
     // v11: sin fila de acciones aparte — los botones van dentro de la fila de filtros
     // (filtrosHTML) y se ligan en conectarFiltros(), sobreviviendo la cascada.
+    // v12: las pastillas de conteo viven en la tarjeta de la tabla (mapaTablaHTML),
+    // no dominando la cabecera de la vista.
     cont.innerHTML = `<div data-screen-label="Eventos de Ríos">
-      ${conteosHTML()}
       ${filtrosHTML(f)}
       ${mapaTablaHTML()}
     </div>`;
