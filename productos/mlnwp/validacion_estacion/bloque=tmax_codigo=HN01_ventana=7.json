@@ -1,1 +1,1 @@
-{"bloque":"tmax","codigo":"HN01","met_cols":["mae","rmse","bias","corr"],"modelos":[],"modo":"continuous","nombre":"Dique 1","region":"Litoral","resumen":null,"ventana":"7"}
+{"aviso":null,"bloque":"tmax","codigo":"HN01","met_cols":["mae","rmse","bias","corr"],"modelos":[],"modo":"continuous","nombre":"Dique 1","region":"Litoral","resumen":null,"ventana":"7"}

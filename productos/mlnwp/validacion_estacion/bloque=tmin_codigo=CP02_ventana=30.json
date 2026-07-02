@@ -1,1 +1,1 @@
-{"bloque":"tmin","codigo":"CP02","met_cols":["mae","rmse","bias","corr"],"modelos":[],"modo":"continuous","nombre":"Celec Cuenca","region":"Interandina","resumen":null,"ventana":"30"}
+{"aviso":null,"bloque":"tmin","codigo":"CP02","met_cols":["mae","rmse","bias","corr"],"modelos":[],"modo":"continuous","nombre":"Celec Cuenca","region":"Interandina","resumen":null,"ventana":"30"}

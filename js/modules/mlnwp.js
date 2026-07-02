@@ -178,8 +178,13 @@
   function deckHTML() {
     const vars = [["precip", "Precipitación"], ["tmax", "T. máxima"], ["tmin", "T. mínima"]];
     const vents = ["15", "30", "45", "60"];
-    const chipsVar = vars.map(([id, t]) =>
-      `<button class="chip ml-var ${S.variable === id ? "activo" : ""}" data-var="${id}">${t}</button>`).join("");
+    // Las temperaturas solo existen en la red INAMHI: sin ella se deshabilitan
+    // (con el motivo en el title) en vez de caer a otro bloque en silencio.
+    const sinTemp = !S.deps.includes("INAMHI");
+    const optsVar = vars.map(([id, t]) => {
+      const des = sinTemp && (id === "tmax" || id === "tmin");
+      return `<option value="${id}" ${S.variable === id ? "selected" : ""}${des ? ` disabled title="Requiere la red INAMHI"` : ""}>${t}</option>`;
+    }).join("");
     const optsVent = vents.map(v =>
       `<option value="${v}" ${S.ventana === v ? "selected" : ""}>${v} fechas</option>`).join("");
     const optsFam = FAMILIAS_UI.map(([val, et]) =>
@@ -191,7 +196,10 @@
         <div class="ml-deck-cuerpo">
           <div class="ml-grupo">
             <span class="ml-grupo-lab">Variable</span>
-            <div class="fila" style="gap:7px">${chipsVar}</div>
+            <div class="ml-loc"${sinTemp ? ` title="T. máxima y T. mínima requieren la red INAMHI"` : ""}>
+              <select id="ml-sel-var">${optsVar}</select>
+              ${chev}
+            </div>
           </div>
           <div class="ml-deck-div"></div>
           <div class="ml-grupo">
@@ -204,10 +212,11 @@
           <div class="ml-deck-div"></div>
           <div class="ml-grupo ml-loc-grp">
             <span class="ml-grupo-lab">Estación</span>
-            <div class="ml-loc">
+            <div class="ml-loc ml-combo" id="ml-combo-est">
               <span class="ml-loc-mira"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6A47CE" stroke-width="2"><circle cx="12" cy="12" r="6"></circle><path d="M12 1v4M12 19v4M1 12h4M19 12h4" stroke-linecap="round"></path></svg></span>
-              <select id="ml-sel-est"><option>Cargando…</option></select>
+              <input id="ml-est-input" type="text" placeholder="Cargando…" autocomplete="off" spellcheck="false">
               ${chev}
+              <div class="ml-combo-lista" id="ml-est-lista" tabindex="-1" hidden></div>
             </div>
           </div>
           <div class="ml-grupo ml-loc-grp">
@@ -232,23 +241,122 @@
   }
 
   async function tabValidacion(c) {
+    // Sin INAMHI no existe el bloque de temperaturas: se fuerza precipitación
+    // ANTES de pintar el deck (que además deshabilita tmax/tmin con el motivo),
+    // en vez de dejar que el backend caiga a otro bloque en silencio.
+    if (!S.deps.includes("INAMHI") && (S.variable === "tmax" || S.variable === "tmin")) {
+      S.variable = "precip";
+      App.aviso("Las temperaturas solo existen en la red INAMHI: se muestra precipitación.", "info");
+    }
     c.innerHTML = deckHTML() + `<div id="ml-vista-est"></div>`;
     bindDeck(c);
     await cargarValidacion();
   }
 
   function bindDeck(c) {
-    c.querySelectorAll(".ml-var").forEach(b => b.onclick = () => {
-      S.variable = b.dataset.var;
-      c.querySelectorAll(".ml-var").forEach(x => x.classList.toggle("activo", x.dataset.var === S.variable));
-      cargarValidacion();
-    });
+    const selVar = c.querySelector("#ml-sel-var");
+    if (selVar) selVar.onchange = () => { S.variable = selVar.value; cargarValidacion(); };
     const selVent = c.querySelector("#ml-sel-vent");
     if (selVent) selVent.onchange = () => { S.ventana = selVent.value; cargarValidacion(); };
     const selFam = c.querySelector("#ml-sel-fam");
     if (selFam) selFam.onchange = () => { S.familia = selFam.value; cargarValidacion(); };
-    const sel = c.querySelector("#ml-sel-est");
-    if (sel) sel.onchange = () => { S.estacion = sel.value; pintarVistaAmbito(); };
+    const combo = c.querySelector("#ml-combo-est");
+    if (combo) bindComboEst(combo);
+  }
+
+  /* ---------------- combobox de estación (búsqueda escrita) ---------------- */
+  // Opciones vivas del combobox: estaciones con datos de /validacion, ya
+  // filtradas por red y ordenadas por región → dependencia → nombre.
+  let comboEsts = [];
+  const normTxt = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+  function etiquetaEst() {
+    const e = comboEsts.find(x => String(x.codigo) === String(S.estacion));
+    return e ? `${e.codigo} · ${e.nombre} (${e.region})` : "";
+  }
+
+  // Lista agrupada por REGIÓN (encabezados) con la dependencia visible por fila:
+  // el catálogo queda identificado por región y red de cada estación.
+  function opcionesComboHTML(q) {
+    const nq = normTxt(q);
+    const visibles = comboEsts.filter(e => !nq ||
+      normTxt(`${e.codigo} ${e.nombre} ${e.region} ${e.dependencia || ""}`).includes(nq));
+    if (!visibles.length) return `<div class="ml-combo-vacia">Sin coincidencias.</div>`;
+    let html = "", region = null;
+    for (const e of visibles) {
+      if (e.region !== region) {
+        region = e.region;
+        html += `<div class="ml-combo-grupo">${esc(region)}</div>`;
+      }
+      html += `<button type="button" class="ml-combo-op ${String(e.codigo) === String(S.estacion) ? "activa" : ""}" data-cod="${esc(e.codigo)}">
+        <span class="cod">${esc(e.codigo)}</span><span class="nom">${esc(e.nombre)}</span>
+        <span class="dep">${esc(e.dependencia || "")}</span></button>`;
+    }
+    return html;
+  }
+
+  // Rellena el combobox tras cada /validacion (el deck NO se re-pinta entre cargas).
+  function poblarComboEst(ests) {
+    comboEsts = ests;
+    const input = document.getElementById("ml-est-input");
+    const lista = document.getElementById("ml-est-lista");
+    if (!input || !lista) return;
+    input.disabled = !ests.length;
+    input.placeholder = ests.length ? "Buscar por código, nombre, región o red…" : "Sin estaciones";
+    if (document.activeElement !== input) input.value = etiquetaEst();
+    if (!lista.hidden) lista.innerHTML = opcionesComboHTML(input.value);
+  }
+
+  function bindComboEst(combo) {
+    const input = combo.querySelector("#ml-est-input");
+    const lista = combo.querySelector("#ml-est-lista");
+    const refrescar = q => { lista.innerHTML = opcionesComboHTML(q); };
+    const abrir = () => {
+      if (input.disabled) return;
+      lista.hidden = false;
+      refrescar("");
+      input.select();
+      const act = lista.querySelector(".ml-combo-op.activa");
+      if (act) act.scrollIntoView({ block: "nearest" });
+    };
+    const cerrar = () => { lista.hidden = true; input.value = etiquetaEst(); };
+    const elegir = cod => {
+      S.estacion = String(cod);
+      input.blur();   // blur → cerrar() repone la etiqueta de la selección nueva
+      pintarVistaAmbito();
+    };
+    input.onfocus = abrir;
+    // Si el foco cayó en la lista (arrastre del scrollbar en Firefox), se
+    // devuelve al input en vez de cerrar; si salió del combo, se cierra.
+    input.onblur = () => setTimeout(() => {
+      if (combo.contains(document.activeElement)) { input.focus(); return; }
+      cerrar();
+    }, 0);
+    input.oninput = () => { lista.hidden = false; refrescar(input.value); };
+    input.onkeydown = ev => {
+      if (ev.key === "Escape") { input.blur(); return; }
+      if (lista.hidden && (ev.key === "ArrowDown" || ev.key === "Enter")) { ev.preventDefault(); abrir(); return; }
+      const ops = [...lista.querySelectorAll(".ml-combo-op")];
+      if (!ops.length) return;
+      let i = ops.findIndex(o => o.classList.contains("sel"));
+      if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+        ev.preventDefault();
+        i = ev.key === "ArrowDown" ? Math.min(ops.length - 1, i + 1) : Math.max(0, Math.max(i, 0) - 1);
+        ops.forEach((o, j) => o.classList.toggle("sel", j === i));
+        ops[i].scrollIntoView({ block: "nearest" });
+      } else if (ev.key === "Enter") {
+        ev.preventDefault();
+        const obj = i >= 0 ? ops[i] : ops[0];
+        if (obj) elegir(obj.dataset.cod);
+      }
+    };
+    // mousedown en una OPCIÓN no roba el foco (el click llega antes del blur);
+    // en el resto de la lista (scrollbar) se deja pasar y el blur lo repone arriba.
+    lista.onmousedown = ev => { if (ev.target.closest(".ml-combo-op")) ev.preventDefault(); };
+    lista.onclick = ev => {
+      const b = ev.target.closest(".ml-combo-op");
+      if (b) elegir(b.dataset.cod);
+    };
   }
 
   // Tipo legible de la familia de modelo (para la columna de la tabla).
@@ -277,20 +385,32 @@
     // v12: sin ámbito Nacional — el selector lista SOLO estaciones con datos y la
     // vista es siempre por estación. Si la previa ya no tiene datos (cambió
     // variable/ventana/familia/deps), cae a la primera disponible.
-    const sel = document.getElementById("ml-sel-est");
-    const ests = d.estaciones || [];
+    if (d.aviso) App.aviso(d.aviso, "info");
+
+    // Filtro de dependencia CLIENT-SIDE: en el visor /validacion está congelado
+    // con las 3 redes juntas (los chips no cambiaban nada); con backend vivo la
+    // intersección es inocua. La red de cada estación sale del contexto
+    // (depMap codigo→dependencia), que ya la trae.
+    const depMap = {};
+    for (const e of (S.ctx && S.ctx.estaciones) || []) depMap[String(e.codigo)] = e.dependencia || "";
+    const todas = d.estaciones || [];
+    const ests = todas
+      .map(e => ({ ...e, dependencia: depMap[String(e.codigo)] || "" }))
+      .filter(e => !e.dependencia || S.deps.includes(e.dependencia));
+    ests.sort((a, b) => String(a.region).localeCompare(String(b.region))
+      || String(a.dependencia).localeCompare(String(b.dependencia))
+      || String(a.nombre).localeCompare(String(b.nombre)));
     if (!ests.length) {
+      poblarComboEst([]);
       const cont2 = document.getElementById("ml-vista-est");
-      if (cont2) cont2.innerHTML = vacio("Sin estaciones con datos para esta combinación.");
+      if (cont2) cont2.innerHTML = vacio(todas.length
+        ? `Ninguna estación de la red seleccionada (${S.deps.join(" + ")}) tiene datos para esta combinación.`
+        : "Sin estaciones con datos para esta combinación.");
       return;
     }
     if (!ests.some(e => String(e.codigo) === String(S.estacion)))
       S.estacion = String(ests[0].codigo);
-    if (sel) {
-      sel.innerHTML = ests.map(e =>
-        `<option value="${esc(e.codigo)}">${esc(e.codigo)} · ${esc(e.nombre)} (${esc(e.region)})</option>`).join("");
-      sel.value = S.estacion;
-    }
+    poblarComboEst(ests);
     pintarVistaAmbito();
   }
 

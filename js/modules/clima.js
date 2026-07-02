@@ -43,16 +43,39 @@
         for (const [x, y] of ring) { xs.push(x); ys.push(y); } xs.push(null); ys.push(null);
       }
     }
+    // Contorno país = halo blanco + línea NEGRA en claro; en OSCURO se invierte
+    // (halo oscuro + línea clara) para no desaparecer sobre el fondo (patrón de cartas.js).
+    const osc = (App.tema && App.tema() === "oscuro");
     return [
       { type: "scatter", mode: "lines", x: xs, y: ys, hoverinfo: "skip", showlegend: false,
-        line: { color: "rgba(255,255,255,.85)", width: 2.4 } },
+        line: { color: osc ? "#0B1322" : "#ffffff", width: 2.8 } },
       { type: "scatter", mode: "lines", x: xs, y: ys, hoverinfo: "skip", showlegend: false,
-        line: { color: "rgba(40,55,80,.55)", width: 0.8 } },
+        line: { color: osc ? "#AEBBD0" : "#000000", width: 1.2 } },
     ];
   }
 
+  // Capa de estaciones sobre el mapa: valor de la normal activa muestreado en cada
+  // estación (endpoint /clima/estaciones?mes=&variable=), coloreado con la MISMA
+  // escala del heatmap para leerse como parte del campo.
+  function trazaEstaciones(ce, d) {
+    const pts = ((ce && ce.estaciones) || []).filter(e => e.valor != null && e.lat != null && e.lon != null);
+    if (!pts.length) return [];
+    const osc = (App.tema && App.tema() === "oscuro");
+    const dec = ce.dec != null ? ce.dec : 1;
+    return [{
+      type: "scatter", mode: "markers", meta: "estaciones", showlegend: false,
+      x: pts.map(e => e.lon), y: pts.map(e => e.lat),
+      customdata: pts.map(e => [e.nombre || e.codigo, e.codigo, num(e.valor, dec)]),
+      marker: { size: 8, color: pts.map(e => e.valor), colorscale: d.colorscale,
+        cmin: d.vmin, cmax: d.vmax, showscale: false,
+        line: { color: osc ? "#0B1322" : "#ffffff", width: 1.3 } },
+      hovertemplate: `<b>%{customdata[0]}</b> (%{customdata[1]})<br>` +
+        `<b>%{customdata[2]} ${esc(ce.unidad || "")}</b> · clic → ficha de la estación<extra></extra>`,
+    }];
+  }
+
   // Mapa de una normal --------------------------------------------------------
-  function pintarMapa(host, d) {
+  function pintarMapa(host, d, ce) {
     if (!window.Plotly || !host) return;
     if (!d || d.error) { host.innerHTML = `<div class="cl-vacio">${esc(d && d.error || "Sin datos")}</div>`; return; }
     const dec = (d.variable === "tmax" || d.variable === "tmin") ? 1 : (d.variable === "aridez" ? 2 : 0);
@@ -72,7 +95,7 @@
         range: [-81.2, -75.1] },
       yaxis: { visible: false, fixedrange: false, range: [-5.1, 1.6] },
     });
-    Plotly.react(host, [heat, ...contorno()], layout, App.plotlyConfig());
+    Plotly.react(host, [heat, ...contorno(), ...trazaEstaciones(ce, d)], layout, App.plotlyConfig());
   }
 
   // Climograma (barras precip + líneas temp + PET + obs) ----------------------
@@ -115,16 +138,44 @@
 
   function tablaMensual(p) {
     const meses = p.meses || MESES.slice(1);
-    const fila = (et, arr, u) => `<tr><td>${esc(et)}</td>${meses.map((_, i) =>
+    const fila = (et, arr, cls) => `<tr${cls ? ` class="${cls}"` : ""}><td>${esc(et)}</td>${meses.map((_, i) =>
       `<td>${arr && arr[i] != null ? esc(arr[i]) : "—"}</td>`).join("")}</tr>`;
     const V = p.vars || {};
+    // Percentiles mensuales OBSERVADOS (resumen_obs, solo estaciones): rango P10–P90.
+    const R = p.resumen_obs || {};
+    const banda = (o, d) => (o && o.p10 && o.p90)
+      ? meses.map((_, i) => (o.p10[i] != null && o.p90[i] != null
+        ? `${num(o.p10[i], d)}–${num(o.p90[i], d)}` : null))
+      : null;
+    const bp = banda(R.precip, 0), bx = banda(R.tmax, 1), bn = banda(R.tmin, 1);
     return `<table class="cl-tabla"><thead><tr><th>Variable</th>${meses.map(m => `<th>${esc(m)}</th>`).join("")}</tr></thead>
       <tbody>
         ${V.precip ? fila("Precip (mm)", V.precip.valores) : ""}
+        ${bp ? fila("Precip P10–P90 obs.", bp, "cl-pct") : ""}
         ${V.tmax ? fila("Tmáx (°C)", V.tmax.valores) : ""}
+        ${bx ? fila("Tmáx P10–P90 obs.", bx, "cl-pct") : ""}
         ${V.tmin ? fila("Tmín (°C)", V.tmin.valores) : ""}
+        ${bn ? fila("Tmín P10–P90 obs.", bn, "cl-pct") : ""}
         ${V.pet ? fila("PET (mm)", V.pet.valores) : ""}
       </tbody></table>`;
+  }
+
+  // Resumen de la serie observada de la estación: años, completitud, récords con fecha.
+  function resumenObs(r) {
+    if (!r) return "";
+    const filas = [["precip", "Precipitación", "mm"], ["tmax", "T. máxima", "°C"], ["tmin", "T. mínima", "°C"]]
+      .filter(([k]) => r[k]).map(([k, et, u]) => {
+        const o = r[k];
+        const rec = x => x ? `${num(x.valor, 1)} <small>${esc(u)}</small> <span class="cl-fecha">${esc(x.fecha)}</span>` : "—";
+        return `<tr><td>${esc(et)}</td><td>${o.n_anios != null ? num(o.n_anios) : "—"} <small>${o.desde}–${o.hasta}</small></td>
+          <td>${num(o.completitud, 0)}%</td><td>${rec(o.record_max)}</td><td>${k === "precip" ? "—" : rec(o.record_min)}</td></tr>`;
+      }).join("");
+    if (!filas) return "";
+    return `<div style="overflow-x:auto;margin-top:10px"><table class="cl-tabla cl-tabla-obs">
+      <thead><tr><th>Serie observada</th><th>Años</th><th title="Días con dato sobre el periodo">Compl.</th>
+      <th>Récord máx (día)</th><th>Récord mín (día)</th></tr></thead><tbody>${filas}</tbody></table>
+      <p class="cl-nota" style="margin-top:6px">Serie diaria observada/PISCO de la estación: récords absolutos con su fecha
+      y percentiles mensuales P10–P90 en la tabla. El detalle día a día está en la pestaña «Récords».</p></div>`;
   }
 
   function chipConfianza(c) {
@@ -141,7 +192,8 @@
     const fuera = p.fuera_dominio || !(p.vars && p.vars.precip && p.vars.precip.anual != null);
     if (fuera) return `<div class="cl-card"><p class="cl-maptit">${esc(titulo || "")}</p>
       <div class="cl-vacio">Esta ubicación está fuera del dominio continental de la Climatología
-      (Ecuador continental, 0.05°). Galápagos y el océano no tienen climatología grillada.</div></div>`;
+      (Ecuador continental, 0.05°). Galápagos y el océano no tienen climatología grillada.</div>
+      ${resumenObs(p.resumen_obs)}</div>`;
     const V = p.vars;
     const kpi = (e, v, u, d) => `<div class="cl-kpi"><div class="v">${num(v, d)} <small>${esc(u)}</small></div><div class="e">${esc(e)}</div></div>`;
     return `<div class="cl-card">
@@ -154,15 +206,22 @@
       </div>
       ${chipConfianza(p.confianza)}
       <div style="overflow-x:auto">${tablaMensual(p)}</div>
+      ${resumenObs(p.resumen_obs)}
       ${p.observado ? `<p class="cl-nota">Marcadores = normales <b>observadas</b> de la estación. Como el producto está
         corregido con observaciones, sobre la estación coinciden casi exactamente con la Climatología.</p>` : ""}
     </div>`;
   }
 
   // PESTAÑA 1 — MAPAS ---------------------------------------------------------
-  const E = { mapVar: "precip", mapEsc: "anual", mapaCache: {} };
+  const E = { mapVar: "precip", mapEsc: "anual", mapEst: true, mapaCache: {}, estCache: {},
+    tabs: null, estSel: null };
+  // Los colores de los gráficos se eligen AL PINTAR (App.tema()): al cambiar de tema
+  // hay que redibujar el panel visible (patrón sngr.js). Cada pestaña registra su redibujo.
+  let _alTema = null;
+  document.addEventListener("temacambiado", () => { try { if (_alTema) _alTema(); } catch (e) {} });
+
   async function tabMapas(c) {
-    inyectarCSS(); await cargarGeo();
+    inyectarCSS(); _alTema = null; await cargarGeo();
     c.innerHTML = `<div class="cl-wrap">
       <div class="cl-toolbar">
         <div class="cl-grupo"><span>Variable</span><div class="cl-pills" data-rol="vars">
@@ -171,12 +230,14 @@
         <div class="cl-grupo"><span>Escala</span><div class="cl-meses" data-rol="meses">
           ${MESES.map((m, i) => `<button class="cl-mes ${(i === 0 ? "anual" : i) == E.mapEsc ? "on" : ""}" data-e="${i === 0 ? "anual" : i}">${esc(m)}</button>`).join("")}
         </div></div>
+        <div class="cl-grupo"><span>Capa</span>
+          <label class="cl-chk"><input type="checkbox" data-rol="chk-est" ${E.mapEst ? "checked" : ""}> estaciones (valor)</label></div>
       </div>
       <div class="cl-card"><h3 class="cl-maptit" data-rol="tit">Cargando…</h3><div class="cl-plot" data-rol="plot"></div>
-        <p class="cl-nota">Normales 1991–2020 (~5 km) construidas con CHIRPS satelital corregido con estaciones. Pasa el cursor para leer lat/lon y valor.</p></div>
+        <p class="cl-nota">Normales 1991–2020 (~5 km) construidas con CHIRPS satelital corregido con estaciones. Pasa el cursor para leer lat/lon y valor; los puntos son estaciones (clic para abrir su ficha).</p></div>
     </div>`;
     const plot = c.querySelector('[data-rol="plot"]'), tit = c.querySelector('[data-rol="tit"]');
-    const meses = c.querySelector('[data-rol="meses"]');
+    const meses = c.querySelector('[data-rol="meses"]'), chkEst = c.querySelector('[data-rol="chk-est"]');
     async function dibujar() {
       const v = VARS.find(x => x.id === E.mapVar);
       if (v && v.soloAnual) E.mapEsc = "anual";
@@ -194,8 +255,26 @@
         try { d = await App.api(`/clima/mapa?variable=${E.mapVar}&escala=${E.mapEsc}`); E.mapaCache[key] = d; }
         catch (e) { tit.textContent = "Error"; plot.innerHTML = `<div class="cl-vacio">${esc(e.message)}</div>`; return; }
       }
+      let ce = null;
+      if (E.mapEst) {
+        ce = E.estCache[key];
+        if (!ce) {
+          try { ce = await App.api(`/clima/estaciones?mes=${E.mapEsc}&variable=${E.mapVar}`); E.estCache[key] = ce; }
+          catch (e) { ce = null; }
+        }
+      }
       tit.textContent = d.titulo || "";
-      pintarMapa(plot, d);
+      pintarMapa(plot, d, ce);
+      // Clic en una estación → su ficha en la pestaña "Por estación".
+      if (typeof plot.on === "function" && !plot._clickEst) {
+        plot._clickEst = true;
+        plot.on("plotly_click", ev => {
+          const pt = ev.points && ev.points[0];
+          if (!pt || !pt.data || pt.data.meta !== "estaciones" || !pt.customdata) return;
+          E.estSel = String(pt.customdata[1]);
+          if (E.tabs) E.tabs.pintar("estacion");
+        });
+      }
     }
     c.querySelector('[data-rol="vars"]').onclick = e => {
       const b = e.target.closest("[data-v]"); if (!b) return;
@@ -208,21 +287,36 @@
       E.mapEsc = b.dataset.e === "anual" ? "anual" : Number(b.dataset.e);
       dibujar();
     };
+    chkEst.onchange = () => { E.mapEst = chkEst.checked; dibujar(); };
+    _alTema = () => { if (c.isConnected) dibujar(); };
     dibujar();
   }
 
   // PESTAÑA 2 — POR ESTACIÓN --------------------------------------------------
   async function tabEstacion(c) {
-    inyectarCSS();
+    inyectarCSS(); _alTema = null;
     c.innerHTML = `<div class="cl-vacio">Cargando estaciones…</div>`;
     let ests = [];
     try { ests = (await App.api("/clima/estaciones")).estaciones || []; } catch (e) {}
     if (!ests.length) { c.innerHTML = `<div class="cl-vacio">No hay estaciones disponibles.</div>`; return; }
-    const opt = ests.map(e => `<option value="${esc(e.codigo)}">${esc(e.nombre || e.codigo)} (${esc(e.codigo)})${e.region ? " · " + esc(e.region) : ""}</option>`).join("");
+    // Opciones agrupadas por región; las insulares van etiquetadas (hay récords
+    // observados pero no climatología grillada).
+    const opciones = lista => {
+      const grupos = new Map();
+      for (const e of lista) {
+        const rg = e.region || "Sin región";
+        if (!grupos.has(rg)) grupos.set(rg, []);
+        grupos.get(rg).push(e);
+      }
+      return [...grupos.keys()].sort((a, b) => a.localeCompare(b, "es")).map(rg =>
+        `<optgroup label="${esc(rg)}">${grupos.get(rg).map(e =>
+          `<option value="${esc(e.codigo)}">${esc(e.nombre || e.codigo)} (${esc(e.codigo)})${e.fuera_dominio ? " · sin climatología grillada" : ""}</option>`).join("")}</optgroup>`).join("");
+    };
     c.innerHTML = `<div class="cl-wrap">
       <div class="cl-toolbar">
-        <div class="cl-grupo" style="flex:1;min-width:260px"><span>Estación</span>
-          <select data-rol="est" style="border:1px solid var(--line,#d7dde6);border-radius:9px;padding:8px 11px;font:500 13px var(--fuente,sans-serif);background:var(--surface,#fff);color:var(--ink,#1f2a3a)">${opt}</select></div>
+        <div class="cl-grupo" style="flex:1;min-width:340px"><span>Estación</span>
+          <input class="cl-buscar" data-rol="buscar" type="search" placeholder="Filtrar por nombre, código o región…" autocomplete="off">
+          <select data-rol="est" style="flex:1;border:1px solid var(--line,#d7dde6);border-radius:9px;padding:8px 11px;font:500 13px var(--fuente,sans-serif);background:var(--surface,#fff);color:var(--ink,#1f2a3a)">${opciones(ests)}</select></div>
       </div>
       <div class="cl-grid2">
         <div class="cl-card"><h3 class="cl-maptit" data-rol="tit">Climograma</h3><div class="cl-plot" data-rol="climo"></div>
@@ -232,25 +326,45 @@
     </div>`;
     const sel = c.querySelector('[data-rol="est"]'), climo = c.querySelector('[data-rol="climo"]');
     const ficha = c.querySelector('[data-rol="ficha"]'), tit = c.querySelector('[data-rol="tit"]');
+    const buscar = c.querySelector('[data-rol="buscar"]');
+    // Estación pre-seleccionada desde el mapa (clic en un marcador).
+    if (E.estSel) {
+      if (ests.some(e => String(e.codigo) === String(E.estSel))) sel.value = String(E.estSel);
+      E.estSel = null;
+    }
+    let ultimo = null;   // último payload con climograma pintado (redibujo al cambiar tema)
     async function cargar() {
       const cod = sel.value;
+      if (!cod) return;
       const nom = (ests.find(e => String(e.codigo) === String(cod)) || {}).nombre || cod;
       tit.textContent = `Climograma — ${nom}`;
-      climo.innerHTML = `<div class="cl-vacio">Cargando…</div>`; ficha.innerHTML = "";
+      climo.innerHTML = `<div class="cl-vacio">Cargando…</div>`; ficha.innerHTML = ""; ultimo = null;
       let p;
       try { p = await App.api(`/clima/estacion?codigo=${encodeURIComponent(cod)}`); }
       catch (e) { climo.innerHTML = `<div class="cl-vacio">${esc(e.message)}</div>`; return; }
       ficha.innerHTML = tarjetaPunto(p, `${nom} (${cod})`);
       if (p.error || p.fuera_dominio || !(p.vars && p.vars.precip && p.vars.precip.anual != null)) {
         climo.innerHTML = `<div class="cl-vacio">Sin climatología grillada en esta estación (fuera del dominio continental).</div>`;
-      } else { climo.innerHTML = ""; pintarClimograma(climo, p); }
+      } else { climo.innerHTML = ""; pintarClimograma(climo, p); ultimo = p; }
     }
-    sel.onchange = cargar; cargar();
+    // Buscador en vivo: filtra las opciones sin perder la selección (patrón datos.js).
+    buscar.oninput = () => {
+      const q = buscar.value.trim().toLowerCase();
+      const lista = !q ? ests : ests.filter(e =>
+        `${e.codigo} ${e.nombre || ""} ${e.region || ""}`.toLowerCase().includes(q));
+      const previa = sel.value;
+      sel.innerHTML = opciones(lista);
+      if (lista.some(e => String(e.codigo) === String(previa))) sel.value = previa;
+      else if (lista.length) cargar();
+    };
+    sel.onchange = cargar;
+    _alTema = () => { if (c.isConnected && ultimo) pintarClimograma(climo, ultimo); };
+    cargar();
   }
 
   // PESTAÑA 3 — POR COORDENADA ------------------------------------------------
   async function tabPunto(c) {
-    inyectarCSS();
+    inyectarCSS(); _alTema = null;
     c.innerHTML = `<div class="cl-wrap">
       <div class="cl-toolbar">
         <div class="cl-coords">
@@ -268,27 +382,29 @@
     const lat = c.querySelector('[data-rol="lat"]'), lon = c.querySelector('[data-rol="lon"]');
     const climo = c.querySelector('[data-rol="climo"]'), ficha = c.querySelector('[data-rol="ficha"]');
     const tit = c.querySelector('[data-rol="tit"]');
+    let ultimo = null;
     async function consultar() {
       const la = parseFloat(lat.value), lo = parseFloat(lon.value);
       if (isNaN(la) || isNaN(lo)) { App.aviso("Ingresa latitud y longitud válidas.", "error"); return; }
       tit.textContent = `Climograma — ${la.toFixed(2)}, ${lo.toFixed(2)}`;
-      climo.innerHTML = `<div class="cl-vacio">Cargando…</div>`; ficha.innerHTML = "";
+      climo.innerHTML = `<div class="cl-vacio">Cargando…</div>`; ficha.innerHTML = ""; ultimo = null;
       let p;
       try { p = await App.api(`/clima/punto?lat=${la}&lon=${lo}`); }
       catch (e) { climo.innerHTML = `<div class="cl-vacio">${esc(e.message)}</div>`; return; }
       ficha.innerHTML = tarjetaPunto(p, `Punto ${la.toFixed(3)}, ${lo.toFixed(3)}`);
       if (p.error || p.fuera_dominio || !(p.vars && p.vars.precip && p.vars.precip.anual != null)) {
         climo.innerHTML = `<div class="cl-vacio">Fuera del dominio continental.</div>`;
-      } else { climo.innerHTML = ""; pintarClimograma(climo, p); }
+      } else { climo.innerHTML = ""; pintarClimograma(climo, p); ultimo = p; }
     }
     c.querySelector('[data-rol="ir"]').onclick = consultar;
+    _alTema = () => { if (c.isConnected && ultimo) pintarClimograma(climo, ultimo); };
     [lat, lon].forEach(i => i.onkeydown = e => { if (e.key === "Enter") consultar(); });
     consultar();
   }
 
   // PESTAÑA 4 — METODOLOGÍA ---------------------------------------------------
   async function tabGlosario(c) {
-    inyectarCSS();
+    inyectarCSS(); _alTema = null;
     c.innerHTML = `<div class="cl-vacio">Cargando…</div>`;
     let g;
     try { g = await App.api("/clima/glosario"); } catch (e) { c.innerHTML = `<div class="cl-vacio">${esc(e.message)}</div>`; return; }
@@ -371,15 +487,16 @@
   }
 
   async function tabRecords(c) {
-    inyectarCSS();
+    inyectarCSS(); _alTema = null;
     c.innerHTML = `<div class="cl-vacio">Cargando estaciones…</div>`;
     let ests = [];
     try { ests = (await App.api("/clima/records_estaciones")).estaciones || []; } catch (e) {}
     if (!ests.length) { c.innerHTML = `<div class="cl-vacio">No hay base de observaciones unificada disponible.</div>`; return; }
     const anioActual = new Date().getFullYear();
-    // En el visor solo hay récords congelados de los últimos VISOR_RECORDS_ANIOS=3 años
-    // (exportar_web.py) → capar el input para no ofrecer años sin producto ("no publicado").
-    const minAnio = window.HIDROMET_VISOR ? (anioActual - 2) : 1990;
+    // En el visor solo hay récords congelados de los últimos VISOR_RECORDS_ANIOS=10 años
+    // (exportar_web.py; mantener ambos números iguales) → capar el input para no ofrecer
+    // años sin producto ("no publicado").
+    const minAnio = window.HIDROMET_VISOR ? (anioActual - 9) : 1990;
     const inp = "border:1px solid var(--line,#d7dde6);border-radius:9px;padding:8px 11px;background:var(--surface,#fff);color:var(--ink,#1f2a3a)";
     c.innerHTML = `<div class="cl-wrap">
       <div class="cl-toolbar">
@@ -422,10 +539,11 @@
         `<option value="${esc(e.codigo)}">${esc(e.nombre || e.codigo)} (${esc(e.codigo)})${e.region ? " · " + esc(e.region) : ""}</option>`).join("");
       if (validas.some(e => String(e.codigo) === String(previa))) sel.value = previa;
     }
+    let ultimo = null;   // último payload pintado (redibujo al cambiar tema)
     async function cargar() {
       const cod = sel.value, anio = parseInt(anioIn.value) || anioActual;
       tit.textContent = "Cargando…"; plot.innerHTML = `<div class="cl-vacio">Cargando…</div>`;
-      kpis.innerHTML = ""; tabla.innerHTML = ""; ley.innerHTML = ""; pie.textContent = "";
+      kpis.innerHTML = ""; tabla.innerHTML = ""; ley.innerHTML = ""; pie.textContent = ""; ultimo = null;
       let d;
       try { d = await App.api(`/clima/records?codigo=${encodeURIComponent(cod)}&variable=${estVar}&anio=${anio}`); }
       catch (e) { tit.textContent = "Error"; plot.innerHTML = `<div class="cl-vacio">${esc(e.message)}</div>`; return; }
@@ -436,8 +554,14 @@
       kpis.innerHTML = kpisRecords(d);
       tabla.innerHTML = tablaRecords(d);
       pie.textContent = `Envolvente sobre ${d.n_anios_rango} años con datos; se exige ≥${d.umbral_n} años por día para declarar récord. Precip mayormente producto PISCO (ventana ${d.agregacion}); temperatura observada.`;
+      ultimo = d;
     }
     sel.onchange = cargar;
+    _alTema = () => {
+      if (!c.isConnected || !ultimo) return;
+      ley.innerHTML = leyendaRecords(ultimo);
+      pintarRecords(plot, ultimo, pct.checked);
+    };
     varsBox.onclick = e => {
       const b = e.target.closest("[data-v]"); if (!b) return;
       estVar = b.dataset.v; pintarVars(); pintarEstaciones(); cargar();
@@ -451,7 +575,7 @@
     titulo: "Climatología", orden: 2.5,
     async render(vista) {
       vista.dataset.screenLabel = "Climatología";
-      App.vistaPestanas(vista, {
+      E.tabs = App.vistaPestanas(vista, {
         kicker: "Normales 1991–2020 · grilla 0.05° de Ecuador",
         titulo: "Climatología",
         sub: "Climatologías grilladas de Ecuador (~5 km) corregidas con observaciones",

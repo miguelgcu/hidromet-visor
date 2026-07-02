@@ -1,1 +1,1 @@
-{"bloque":"tmin","codigo":"HN06","met_cols":["mae","rmse","bias","corr"],"modelos":[],"modo":"continuous","nombre":"Met. Chaune","region":"Litoral","resumen":null,"ventana":"7"}
+{"aviso":null,"bloque":"tmin","codigo":"HN06","met_cols":["mae","rmse","bias","corr"],"modelos":[],"modo":"continuous","nombre":"Met. Chaune","region":"Litoral","resumen":null,"ventana":"7"}

@@ -151,7 +151,7 @@
     for (const it of items) {
       if (typeof it.lat !== "number" || typeof it.lon !== "number") continue;
       const m = L.circleMarker([it.lat, it.lon], {
-        radius: 8, color: (App.tema && App.tema() === "oscuro") ? "#AEBBD0" : "#0b0d12", weight: 1.4, fillColor: colorNivel(it.nivel_alerta), fillOpacity: 0.95 });
+        radius: 8, color: (App.tema && App.tema() === "oscuro") ? "#AEBBD0" : "#000000", weight: 1.5, fillColor: colorNivel(it.nivel_alerta), fillOpacity: 0.95 });
       const na = it.nivel_alerta ? it.nivel_alerta.etiqueta : "sin pronóstico (pulsa Actualizar)";
       m.bindTooltip(`<b>${esc(it.nombre)}</b><br>${esc(na)}`, { direction: "top", sticky: true });
       m.on("click", (e) => { L.DomEvent.stopPropagation(e);
@@ -285,7 +285,17 @@
     iniciarMapa(cont.querySelector('[data-rol="mapa"]'));
 
     if (_onTema) document.removeEventListener("temacambiado", _onTema);
-    _onTema = () => { if (estado && estado.tiles) estado.tiles.setUrl(urlTiles()); };
+    _onTema = () => {
+      if (!estado) return;
+      const oscuro = (App.tema && App.tema() === "oscuro");
+      if (estado.tiles) estado.tiles.setUrl(urlTiles());
+      if (estado.capaRios) estado.capaRios.setStyle(f => {
+        const pri = String((f.properties || {}).prioridad || "").trim();
+        const mayor = pri === "1" || pri === "2";
+        return { color: mayor ? (oscuro ? "#5AA9E6" : "#1763B6") : (oscuro ? "#3C5A80" : "#7FA8D4") };
+      });
+      pintarMarcadores(estado.items || []);
+    };
     document.addEventListener("temacambiado", _onTema);
 
     let w;

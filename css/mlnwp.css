@@ -37,8 +37,6 @@
 .ml-grupo-lab { font: 600 10px var(--mono); letter-spacing: .1em; color: var(--faint); text-transform: uppercase; }
 .ml-deck-div { width: 1px; align-self: center; height: 26px; background: var(--line-4); margin: 0 12px; }
 
-/* chips de variable (activo = púrpura) */
-.ml-deck .ml-var.activo { --chip-activo: var(--ml-purple); }
 /* chips de ventana (activo = navy, mono) */
 .ml-deck .ml-vent { font-family: var(--mono); }
 .ml-deck .ml-vent.activo { --chip-activo: var(--navy-700); }
@@ -54,7 +52,29 @@
 .ml-loc select { width: 100%; -webkit-appearance: none; appearance: none; padding: 7px 30px 7px 32px;
   border: 1px solid var(--line-2); border-radius: 9px; background: var(--surface); font: 500 13px var(--fuente);
   color: var(--ink); cursor: pointer; }
+.ml-loc select option:disabled { color: var(--faint); }
 .ml-loc .ml-loc-chev { position: absolute; right: 11px; pointer-events: none; display: flex; }
+.ml-grupo.ml-loc-grp .ml-loc { flex: 1; min-width: 0; }
+
+/* combobox de estación (input con búsqueda escrita + lista agrupada por región) */
+.ml-loc input { width: 100%; padding: 7px 30px 7px 32px; border: 1px solid var(--line-2); border-radius: 9px;
+  background: var(--surface); font: 500 13px var(--fuente); color: var(--ink); min-width: 0; }
+.ml-loc input:disabled { color: var(--muted); cursor: not-allowed; }
+.ml-combo-lista { position: absolute; top: calc(100% + 5px); left: 0; right: 0; z-index: 40; max-height: 340px;
+  overflow: auto; background: var(--surface); border: 1px solid var(--line-2); border-radius: 10px;
+  box-shadow: var(--shadow-card); padding: 4px; }
+.ml-combo-grupo { font: 600 10px var(--mono); letter-spacing: .08em; text-transform: uppercase;
+  color: var(--faint); padding: 8px 9px 3px; }
+.ml-combo-op { display: flex; align-items: baseline; gap: 7px; width: 100%; text-align: left; border: none;
+  background: transparent; cursor: pointer; border-radius: 7px; padding: 6px 9px;
+  font: 500 12.5px var(--fuente); color: var(--ink-2); }
+.ml-combo-op:hover, .ml-combo-op.sel { background: var(--surface-3); }
+.ml-combo-op.activa { color: var(--ml-purple); font-weight: 600; }
+.ml-combo-op .cod { font: 600 11px var(--mono); color: var(--muted); flex: none; }
+.ml-combo-op .nom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ml-combo-op .dep { margin-left: auto; flex: none; font: 600 9.5px var(--mono); letter-spacing: .05em;
+  text-transform: uppercase; color: var(--faint); }
+.ml-combo-vacia { padding: 10px 12px; font-size: 12px; color: var(--muted); }
 
 /* telemetría cobertura muestral */
 .ml-telemetria { display: flex; flex-direction: row; align-items: center; gap: 9px; padding-left: 16px; margin-left: auto; }

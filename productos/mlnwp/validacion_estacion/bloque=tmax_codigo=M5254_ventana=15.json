@@ -1,1 +1,1 @@
-{"bloque":"tmax","codigo":"M5254","met_cols":["mae","rmse","bias","corr"],"modelos":[],"modo":"continuous","nombre":"Salve Faccha","region":"Amazonia","resumen":null,"ventana":"15"}
+{"aviso":null,"bloque":"tmax","codigo":"M5254","met_cols":["mae","rmse","bias","corr"],"modelos":[],"modo":"continuous","nombre":"Salve Faccha","region":"Amazonia","resumen":null,"ventana":"15"}

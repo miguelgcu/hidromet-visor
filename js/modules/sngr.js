@@ -53,9 +53,8 @@
   function paletaMapa() {
     const oscuro = (App.tema && App.tema() === "oscuro");
     return {
-      tierra:      oscuro ? "#16223B" : "#EAF0EA",   // relleno del continente (mapa base)
-      tierraBorde: oscuro ? "#2C3A57" : "#C2CEBE",
-      adminBorde:  oscuro ? "#5E7390" : "#5A6E86",
+      tierra:      oscuro ? "#16223B" : "#FFFFFF",   // relleno del continente (mapa base); el borde lo da adminBorde
+      adminBorde:  oscuro ? "#AEBBD0" : "#000000",   // negro sobre blanco en claro (coherente con cartas/mlnwp)
       rioMayor:    oscuro ? "#5AA9E6" : "#2B6FB0",
       rioMenor:    oscuro ? "#37557A" : "#A9C7E2",
     };
@@ -342,7 +341,7 @@
       ? (f) => ({ color: "#FFFFFF", weight: 0.7, opacity: 0.65,
           fillColor: hashColor((f.properties || {}).codigo || (f.properties || {}).nombre),
           fillOpacity: 0.5 })
-      : () => ({ color: (App.tema && App.tema() === "oscuro") ? "#AEBBD0" : "#0b0d12", weight: 1.3, opacity: 0.95, fillOpacity: 0, fill: false });
+      : () => ({ color: P.adminBorde, weight: 1.5, opacity: 0.95, fillOpacity: 0, fill: false });
     if (!esCuenca) {
       estado.capaBaseCasing = L.geoJSON(gj, { pane: "pTematica", interactive: false,
         style: () => ({ color: "#ffffff", weight: 3.4, opacity: 0.9, fillOpacity: 0, fill: false }) }).addTo(estado.mapa);

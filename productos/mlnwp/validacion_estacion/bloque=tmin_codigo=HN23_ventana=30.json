@@ -1,1 +1,1 @@
-{"bloque":"tmin","codigo":"HN23","met_cols":["mae","rmse","bias","corr"],"modelos":[],"modo":"continuous","nombre":"Pto. Lim\u00f3n","region":"Litoral","resumen":null,"ventana":"30"}
+{"aviso":null,"bloque":"tmin","codigo":"HN23","met_cols":["mae","rmse","bias","corr"],"modelos":[],"modo":"continuous","nombre":"Pto. Lim\u00f3n","region":"Litoral","resumen":null,"ventana":"30"}

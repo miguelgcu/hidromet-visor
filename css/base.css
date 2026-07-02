@@ -30,7 +30,7 @@
   /* riesgo */
   --risk-0: #3AA0DB; --risk-1: #EFC23F; --risk-2: #E98621; --risk-3: #D32A22;
   /* mar */
-  --sea-top: #EEF3F9; --sea-bottom: #E1E9F2;
+  --sea-top: #FFFFFF; --sea-bottom: #FFFFFF;
   /* sombras */
   --shadow-card: 0 1px 2px rgba(15,27,45,.06); --shadow-hover: 0 10px 24px rgba(15,27,45,.11);
   --shadow-pop: 0 24px 60px rgba(8,16,30,.34);

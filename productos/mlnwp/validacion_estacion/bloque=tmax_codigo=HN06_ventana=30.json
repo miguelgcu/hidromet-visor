@@ -1,1 +1,1 @@
-{"bloque":"tmax","codigo":"HN06","met_cols":["mae","rmse","bias","corr"],"modelos":[],"modo":"continuous","nombre":"Met. Chaune","region":"Litoral","resumen":null,"ventana":"30"}
+{"aviso":null,"bloque":"tmax","codigo":"HN06","met_cols":["mae","rmse","bias","corr"],"modelos":[],"modo":"continuous","nombre":"Met. Chaune","region":"Litoral","resumen":null,"ventana":"30"}

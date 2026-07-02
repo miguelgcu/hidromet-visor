@@ -1,1 +1,1 @@
-{"bloque":"precip_cua","codigo":"IUVJIP","met_cols":["mae","rmse","bias","corr"],"modelos":[],"modo":"quantification","nombre":"Jipijapa rad.","region":"Interandina","resumen":null,"ventana":"30"}
+{"aviso":null,"bloque":"precip_cua","codigo":"IUVJIP","met_cols":["mae","rmse","bias","corr"],"modelos":[],"modo":"quantification","nombre":"Jipijapa rad.","region":"Interandina","resumen":null,"ventana":"30"}

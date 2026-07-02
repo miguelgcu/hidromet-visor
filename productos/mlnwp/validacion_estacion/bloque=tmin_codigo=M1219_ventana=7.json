@@ -1,1 +1,1 @@
-{"bloque":"tmin","codigo":"M1219","met_cols":["mae","rmse","bias","corr"],"modelos":[],"modo":"continuous","nombre":"Tena Hda","region":"Amazonia","resumen":null,"ventana":"7"}
+{"aviso":null,"bloque":"tmin","codigo":"M1219","met_cols":["mae","rmse","bias","corr"],"modelos":[],"modo":"continuous","nombre":"Tena Hda","region":"Amazonia","resumen":null,"ventana":"7"}

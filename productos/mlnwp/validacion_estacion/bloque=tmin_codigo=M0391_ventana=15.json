@@ -1,1 +1,1 @@
-{"bloque":"tmin","codigo":"M0391","met_cols":["mae","rmse","bias","corr"],"modelos":[],"modo":"continuous","nombre":"Pallatanga","region":"Interandina","resumen":null,"ventana":"15"}
+{"aviso":null,"bloque":"tmin","codigo":"M0391","met_cols":["mae","rmse","bias","corr"],"modelos":[],"modo":"continuous","nombre":"Pallatanga","region":"Interandina","resumen":null,"ventana":"15"}

@@ -1,1 +1,1 @@
-{"bloque":"tmax","codigo":"HN26","met_cols":["mae","rmse","bias","corr"],"modelos":[],"modo":"continuous","nombre":"Rio Congo","region":"Litoral","resumen":null,"ventana":"15"}
+{"aviso":null,"bloque":"tmax","codigo":"HN26","met_cols":["mae","rmse","bias","corr"],"modelos":[],"modo":"continuous","nombre":"Rio Congo","region":"Litoral","resumen":null,"ventana":"15"}

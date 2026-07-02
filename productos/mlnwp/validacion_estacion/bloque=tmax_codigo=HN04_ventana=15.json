@@ -1,1 +1,1 @@
-{"bloque":"tmax","codigo":"HN04","met_cols":["mae","rmse","bias","corr"],"modelos":[],"modo":"continuous","nombre":"La Cocha","region":"Interandina","resumen":null,"ventana":"15"}
+{"aviso":null,"bloque":"tmax","codigo":"HN04","met_cols":["mae","rmse","bias","corr"],"modelos":[],"modo":"continuous","nombre":"La Cocha","region":"Interandina","resumen":null,"ventana":"15"}

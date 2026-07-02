@@ -115,8 +115,8 @@
     // que el contorno no desaparezca sobre el mar oscuro.
     const _osc = (App.tema && App.tema() === "oscuro");
     return [
-      Object.assign({}, base, { line: { color: _osc ? "#0B1322" : "#ffffff", width: wWhite || 4.5 } }),
-      Object.assign({}, base, { line: { color: _osc ? "#AEBBD0" : "#0b0d12", width: wBlack || 2 } }),
+      Object.assign({}, base, { line: { color: _osc ? "#0B1322" : "#ffffff", width: wWhite || 3.4 } }),
+      Object.assign({}, base, { line: { color: _osc ? "#AEBBD0" : "#000000", width: wBlack || 2 } }),
     ];
   }
 
@@ -265,8 +265,8 @@
     return { type: "scattergl", mode: "markers", x: hx, y: hy, text: ht,
       marker: { size: 13, color: "rgba(0,0,0,0)" },
       hovertemplate: "%{text}<extra></extra>",
-      hoverlabel: { bgcolor: oscuro ? "#0B1322" : "#10233F", bordercolor: "#46597A",
-        font: { color: "#fff", size: 11 } },
+      hoverlabel: { bgcolor: oscuro ? "#0B1322" : "#ffffff", bordercolor: oscuro ? "#46597A" : "#c7cfdb",
+        font: { color: oscuro ? "#fff" : "#1c2433", size: 11 } },
       showlegend: false };
   }
 
@@ -510,7 +510,7 @@
       const mc = trazaMicrocuencas();
       if (mc) traces.push(mc);
     }
-    traces.push(...trazasOutline("x", "y", null, 1.5, 3.4));
+    traces.push(...trazasOutline("x", "y", null, 2, 3.4));
 
     // TOGGLE Estaciones: puntos de las estaciones dentro del recuadro principal.
     if (cap.estaciones) { await asegurarEstaciones(); const te = trazaEstaciones(ext, "x", "y"); if (te) traces.push(te); }
@@ -2010,6 +2010,20 @@
     if (E.alerta) E.alerta._desClave = null;
     if (vp) recargar();
     else E._stale = true;   // NO destruir E.productos: rompería un panel FFGS montado bajo Hidrología; re-fetch perezoso en asegurarEstado
+  });
+
+  // Cambio de tema: los mapas Plotly eligen sus colores AL DIBUJAR (contornos,
+  // tooltip, grilla), así que hay que redibujar. Con vp se re-pinta la pestaña
+  // visible; sin vp (p.ej. panel FFGS montado bajo Hidrología) se re-montan los
+  // lienzos ya dibujados con la paleta del tema nuevo.
+  document.addEventListener("temacambiado", () => {
+    if (!E) return;
+    if (vp) { try { vp.pintar(vp.activa()); } catch (e) {} return; }
+    const montados = [...document.querySelectorAll(".ct-lienzo[data-datos]")]
+      .filter(d => d._montado && d.isConnected);
+    if (!montados.length) return;
+    montados.forEach(d => { d._montado = false; });
+    montarMapasCarta(document);
   });
 
   // Descarga de shapefile (alertas / FFGS) O carta JPG: se GUARDA en la carpeta Descargas desde el
