@@ -150,10 +150,14 @@
       else if (g.type === "MultiPolygon") g.coordinates.forEach(p => p.forEach(empuja));
     }
     if (!xs.length) return null;
-    // scattergl: 1682 cuencas = muchos puntos; WebGL las dibuja sin lag. Línea fina
+    // scatter SVG, NO scattergl: Plotly pinta los trazos WebGL en un canvas que queda
+    // SIEMPRE DEBAJO de la capa SVG (fills por banda, heatmap, contorno), así que con
+    // scattergl las microcuencas quedaban tapadas por el campo opaco y no se veían.
+    // Son ~39k vértices en una sola traza de líneas: SVG las dibuja sin lag y respeta
+    // el orden del array (sobre el campo, bajo el contorno provincial). Línea fina
     // y tenue para que el COLOR del campo siga siendo lo dominante. FFGS es TEMÁTICO:
     // trazo oscuro sobre papel claro, claro sobre el fondo oscuro del tema.
-    return { type: "scattergl", mode: "lines", x: xs, y: ys, hoverinfo: "skip", meta: "microcuencas",
+    return { type: "scatter", mode: "lines", x: xs, y: ys, hoverinfo: "skip", meta: "microcuencas",
       line: { color: osc ? "rgba(174,187,208,.38)" : "rgba(35,49,77,.32)", width: 0.6 },
       showlegend: false };
   }
@@ -273,7 +277,10 @@
     }
     if (!hx.length) return null;
     const oscuro = !!(App.tema && App.tema() === "oscuro");
-    return { type: "scattergl", mode: "markers", x: hx, y: hy, text: ht,
+    // scatter SVG (markers transparentes, solo hover): sin trazas WebGL en las cartas.
+    // Con scattergl cada panel abría un contexto WebGL y el navegador los limita (~16):
+    // en la grilla FFGS los contextos viejos se perdían y esas trazas desaparecían.
+    return { type: "scatter", mode: "markers", x: hx, y: hy, text: ht,
       marker: { size: 13, color: "rgba(0,0,0,0)" },
       hovertemplate: "%{text}<extra></extra>",
       hoverlabel: { bgcolor: oscuro ? "#0B1322" : "#ffffff", bordercolor: oscuro ? "#46597A" : "#c7cfdb",

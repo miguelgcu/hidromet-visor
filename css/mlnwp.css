@@ -45,7 +45,10 @@
 
 /* localizador de estación */
 .ml-loc { position: relative; display: flex; align-items: center; }
-.ml-grupo.ml-loc-grp { min-width: 240px; max-width: 320px; }
+/* Combobox de ESTACIÓN más ancho (pedido del dueño: 240→320 / 320→420). */
+.ml-grupo.ml-loc-grp { min-width: 320px; max-width: 420px; }
+/* Divisor ANCHO entre el grupo de estación y el de familia (más separación). */
+.ml-deck-div.ml-deck-div-ancha { margin: 0 26px; }
 .ml-loc .ml-loc-mira { position: absolute; left: 11px; display: flex; pointer-events: none; }
 .ml-loc select { width: 100%; -webkit-appearance: none; appearance: none; padding: 7px 30px 7px 32px;
   border: 1px solid var(--line-2); border-radius: 9px; background: var(--surface); font: 500 13px var(--fuente);
@@ -166,6 +169,26 @@ html[data-tema="oscuro"] .ml-tabla-modelos tbody tr { border-bottom-color: var(-
 .ml-mod-tipo { color: var(--faint); font-size: 11px; }
 .ml-calif-badge { font: 700 11px var(--mono); padding: 2px 9px; border-radius: 999px; }
 
+/* VEREDICTO PARA MAÑANA (tarjeta sobre la serie) -------------------------
+   3 respuestas operativas grandes: temperatura más adecuada, lluvia SÍ/NO
+   y tendencia vs hoy. Tokens de tema → correcto en claro y oscuro. */
+.ml-veredicto { border-left: 3px solid var(--ml-purple); margin-bottom: 13px; }
+.ml-ver-cab { font-weight: 650; font-size: 13.5px; color: var(--ink); margin-bottom: 10px; }
+.ml-ver-cab .f { font: 500 12px var(--mono); color: var(--muted-2); }
+.ml-ver-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.ml-ver-item { background: var(--surface-2); border: 1px solid var(--line-3); border-radius: 9px; padding: 11px 13px; }
+.ml-ver-item .et { display: block; font: 600 10px var(--mono); letter-spacing: .08em;
+  color: var(--faint); text-transform: uppercase; margin-bottom: 5px; }
+.ml-ver-item .tx { font-size: 15px; font-weight: 600; color: var(--ink); line-height: 1.5; }
+.ml-ver-item .tx b { font-size: 18px; font-family: var(--mono); }
+.ml-ver-item .rng { font: 500 12px var(--mono); color: var(--muted-2); white-space: nowrap; }
+.ml-ver-item .suave { font-size: 12.5px; font-weight: 500; color: var(--muted); }
+.ml-ver-si { color: var(--blue); }
+.ml-ver-no { color: var(--muted); }
+.ml-ver-calido { color: #D9541E; }
+.ml-ver-frio { color: var(--blue); }
+html[data-tema="oscuro"] .ml-ver-calido { color: #F08A24; }
+
 /* SERIES ---------------------------------------------------------------- */
 .ml-serie-tit { text-align: center; font-weight: 600; font-size: 13.5px; margin-bottom: 4px; color: var(--ink); }
 .ml-serie-plot { width: 100%; height: 380px; }
@@ -256,6 +279,7 @@ html[data-tema="oscuro"] .ml-region-tabla td { border-top-color: var(--line-3); 
 .ml-gloss-niveles { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--ink-2); }
 
 @media (max-width: 980px) {
-  .ml-grid-mapa, .ml-grid-detalle, .ml-grid-mapas, .ml-gloss-metricas { grid-template-columns: 1fr; }
+  .ml-grid-mapa, .ml-grid-detalle, .ml-grid-mapas, .ml-gloss-metricas,
+  .ml-ver-grid { grid-template-columns: 1fr; }
   .ml-side.alto-520, .ml-mapa.alto-520 { height: 420px; }
 }

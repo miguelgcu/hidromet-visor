@@ -11,18 +11,24 @@
   const esc = v => String(v ?? "").replace(/[&<>"']/g,
     c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-  const CENTRO_EC = [-1.6, -78.6];
-  const ZOOM_INI = 6;
+  // Encuadre ECUADOR CONTINENTAL (mismo bbox que clima.js): [lat, lon] SW → NE.
+  const LIMITES_EC = [[-5.1, -81.2], [1.6, -75.1]];
   const COLOR_ALERTA = { 0: "#2EA043", 2: "#C5B11B", 5: "#C5B11B", 10: "#E08A1E",
     25: "#D2691E", 50: "#CF362B", 100: "#7A1FA2" };
   const colorNivel = na => (na && COLOR_ALERTA[na.anios] != null) ? COLOR_ALERTA[na.anios]
     : (na && na.color) ? na.color : "#6B7785";
   const fmt = n => (n == null ? "—" : Number(n).toLocaleString("es-EC", { maximumFractionDigits: 0 }));
+  const fmt1 = n => (n == null ? "—" : Number(n).toLocaleString("es-EC", { maximumFractionDigits: 1 }));
+  const NOM_MES = ["enero", "febrero", "marzo", "abril", "mayo", "junio",
+    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+  const primerValor = s => { if (!s) return null;
+    for (const v of s) if (v != null && isFinite(v)) return v; return null; };
+  const encuadrar = m => m && m.fitBounds(LIMITES_EC, { padding: [8, 8] });
 
   let estado, epocaGlobal = 0, _onTema = null;
   function crear() {
     estado = { mapa: null, tiles: null, capaRios: null, lienzoRios: null,
-               marcadores: null, items: [], selRid: null, epoca: ++epocaGlobal };
+               marcadores: null, items: [], selRid: null, detActual: null, epoca: ++epocaGlobal };
   }
   function vigente(E) { return estado === E && E.epoca >= 0; }
 
@@ -59,13 +65,13 @@
             <button class="gg-btn primario" data-rol="actualizar">⟳ Actualizar</button>
           </div>
         </div>
-        <div class="gg-cols">
-          <aside class="gg-card gg-picks">
-            <div class="gg-picks-tit">Ríos vigilados</div>
-            <div class="gg-picks-list" data-rol="picks">
-              <div class="gg-empty"><span class="spin"></span><span>Cargando ríos…</span></div>
-            </div>
-          </aside>
+        <section class="gg-card gg-picks">
+          <div class="gg-picks-tit">Ríos vigilados</div>
+          <div class="gg-picks-list" data-rol="picks">
+            <div class="gg-empty"><span class="spin"></span><span>Cargando ríos…</span></div>
+          </div>
+        </section>
+        <div class="gg-main">
           <section class="gg-card gg-mapwrap">
             <div class="gg-map" data-rol="mapa"></div>
             <div class="gg-map-hint">Pulsa un río o un punto del mapa</div>
@@ -76,14 +82,17 @@
             </div>
             <div class="gg-leyenda" data-rol="leyenda"></div>
           </section>
+          <section class="gg-card gg-hidro">
+            <div class="gg-hidro-head"><h3 data-rol="hg-tit">Hidrograma</h3></div>
+            <div class="gg-alerta" data-rol="hg-badge"></div>
+            <div class="gg-plot" data-rol="hg-plot">
+              <div class="gg-empty"><span>Selecciona un río en la lista o pulsa el mapa.</span></div>
+            </div>
+          </section>
         </div>
-        <section class="gg-card gg-hidro">
-          <div class="gg-hidro-head"><h3 data-rol="hg-tit">Hidrograma</h3></div>
-          <div class="gg-alerta" data-rol="hg-badge"></div>
-          <div class="gg-plot" data-rol="hg-plot">
-            <div class="gg-empty"><span>Selecciona un río en la lista o pulsa el mapa.</span></div>
-          </div>
-          <div class="gg-retro" data-rol="hg-retro"></div>
+        <section class="gg-card gg-detalle" data-rol="detalle">
+          <div class="gg-empty"><span>Selecciona un río para ver sus detalles: métricas del
+            pronóstico, umbrales de crecida y contexto histórico.</span></div>
         </section>
       </div>`;
   }
@@ -125,9 +134,14 @@
 
   /* ---------------- mapa (propio) ---------------- */
   function iniciarMapa(div) {
+    const E = estado;
     const map = L.map(div, { zoomControl: false, attributionControl: false,
-      minZoom: 5, maxZoom: 16, maxBoundsViscosity: 0.7 }).setView(CENTRO_EC, ZOOM_INI);
+      minZoom: 5, maxZoom: 16, maxBoundsViscosity: 0.7 });
+    encuadrar(map);   // Ecuador continental centrado desde el arranque
     estado.mapa = map;
+    // El contenedor puede terminar de medirse DESPUÉS de crear el mapa (grid recién
+    // maquetado) → el encuadre inicial quedaba descentrado. Re-medir y re-encuadrar.
+    setTimeout(() => { if (vigente(E) && E.mapa) { E.mapa.invalidateSize(); encuadrar(E.mapa); } }, 80);
     estado.tiles = L.tileLayer(urlTiles(), { subdomains: "abcd", maxZoom: 19, crossOrigin: true }).addTo(map);
     map.createPane("pRios").style.zIndex = 370;
     estado.lienzoRios = L.canvas({ padding: 0.5, pane: "pRios" });
@@ -197,9 +211,68 @@
     if (tit) tit.textContent = `Hidrograma — ${nombre || ("tramo " + r.river_id)}`;
     pintarHidrograma(plot, r);
     pintarBadge(badge, r);
-    if (retro) retro.innerHTML = `<button class="gg-btn mini" data-rol="ver-retro">📈 Ver contexto histórico (1940→)</button>`;
+    pintarDetalle(r, nombre);
     const vr = document.querySelector('[data-rol="ver-retro"]');
     if (vr) vr.onclick = () => cargarRetro(r.river_id);
+  }
+
+  /* ---------------- detalle del río seleccionado (tarjeta bajo el mapa) ---------------- */
+  function pintarDetalle(r, nombre) {
+    const det = document.querySelector('[data-rol="detalle"]');
+    if (!det) return;
+    const na = r.nivel_alerta || {};
+    const f = r.forecast || {};
+    // "Caudal actual" = primer valor del pronóstico (alta resolución si existe; si no, mediana).
+    const actual = primerValor(f.high_res) != null ? primerValor(f.high_res) : primerValor(f.med);
+    estado.detActual = actual;   // lo usa cargarRetro para el % vs. media histórica del mes
+    const rets = r.retornos || [];
+    const pico = r.pico;
+    let cercano = null;
+    if (pico != null && rets.length)
+      cercano = rets.reduce((a, b) => Math.abs(b.caudal - pico) < Math.abs(a.caudal - pico) ? b : a);
+    const filas = rets.map(rp => {
+      const sup = pico != null && pico >= rp.caudal;
+      return `<tr${sup ? ` class="sup" style="--c:${rp.color}"` : ""}>
+        <td><i class="pt" style="background:${rp.color}"></i>RP ${rp.anios} años</td>
+        <td class="num">${fmt1(rp.caudal)}</td>
+        <td class="est">${sup ? "⚠ superado por el pico" : "—"}</td></tr>`;
+    }).join("");
+    det.innerHTML = `
+      <div class="gg-det-head">
+        <div>
+          <div class="gg-det-nom">${esc(nombre || ("Tramo " + r.river_id))}</div>
+          <div class="gg-det-meta">
+            <span class="gg-tag">COMID <b>${esc(r.river_id)}</b></span>
+            ${(typeof r.lat === "number" && typeof r.lon === "number")
+              ? `<span class="gg-tag">${r.lat.toFixed(3)}°, ${r.lon.toFixed(3)}°</span>` : ""}
+            <span class="gg-tag">${esc(r.fuente || "GEOGLOWS ECMWF v2")}</span>
+            ${r.emitido ? `<span class="gg-tag">emitido <b>${esc(String(r.emitido).slice(0, 10))}</b></span>` : ""}
+          </div>
+        </div>
+        <span class="gg-chip" style="--c:${colorNivel(na)}">${esc(na.etiqueta || "—")}</span>
+      </div>
+      <div class="gg-stats">
+        <div class="gg-stat"><span class="lbl">Caudal actual</span>
+          <span class="val">${fmt1(actual)} <i>m³/s</i></span>
+          <span class="sub">inicio del pronóstico</span></div>
+        <div class="gg-stat"><span class="lbl">Pico previsto</span>
+          <span class="val">${fmt1(pico)} <i>m³/s</i></span>
+          <span class="sub">máximo del ensemble · 15 días</span></div>
+        <div class="gg-stat"><span class="lbl">RP más cercano</span>
+          <span class="val">${cercano ? `RP ${cercano.anios} <i>años</i>` : "—"}</span>
+          <span class="sub">${cercano ? `umbral ${fmt(cercano.caudal)} m³/s` : "sin umbrales"}</span></div>
+        <div class="gg-stat"><span class="lbl">Vs. media del mes</span>
+          <span class="val" data-rol="stat-hist">—</span>
+          <span class="sub" data-rol="stat-hist-sub">pulsa «contexto histórico»</span></div>
+      </div>
+      ${rets.length ? `
+      <div class="gg-tablawrap"><table class="gg-tabla">
+        <thead><tr><th>Periodo de retorno</th><th class="num">Umbral (m³/s)</th><th>Estado</th></tr></thead>
+        <tbody>${filas}</tbody>
+      </table></div>` : ""}
+      <div class="gg-retro" data-rol="hg-retro">
+        <button class="gg-btn mini" data-rol="ver-retro">📈 Ver contexto histórico (1940→)</button>
+      </div>`;
   }
 
   function pintarBadge(cont, r) {
@@ -238,8 +311,8 @@
         hovertemplate: `RP ${rp.anios} años: ${rp.caudal.toLocaleString("es-EC")} m³/s<extra></extra>` });
     }
     const layout = App.plotlyLayoutSerie("", {
-      height: 340, showlegend: true,
-      legend: { orientation: "h", y: -0.18, font: { size: 10 } },
+      height: 420, showlegend: true,
+      legend: { orientation: "h", y: -0.16, font: { size: 10 } },
       margin: { l: 54, r: 12, t: 8, b: 28 },
       yaxis: { title: "Caudal (m³/s)", rangemode: "tozero" }, xaxis: { type: "date" },
     });
@@ -254,6 +327,15 @@
     catch (e) { if (cont) cont.innerHTML = `<div class="gg-sub">${esc(e.message)}</div>`; return; }
     if (r.error) { if (cont) cont.innerHTML = `<div class="gg-sub">${esc(r.error)}</div>`; return; }
     const MES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+    // Rellena la métrica "Vs. media del mes" de la fila de stats (caudal actual / promedio
+    // histórico del mes en curso, retrospectiva 1940→).
+    const prom = (r.promedio_mensual || [])[new Date().getMonth()];
+    const stv = document.querySelector('[data-rol="stat-hist"]');
+    const sts = document.querySelector('[data-rol="stat-hist-sub"]');
+    if (stv && estado.detActual != null && prom > 0) {
+      stv.innerHTML = `${fmt(100 * estado.detActual / prom)} <i>%</i>`;
+      if (sts) sts.textContent = `media histórica de ${NOM_MES[new Date().getMonth()]}: ${fmt(prom)} m³/s`;
+    } else if (sts) { sts.textContent = "sin datos históricos para comparar"; }
     cont.innerHTML = `<div class="gg-hidro-head" style="margin-top:6px"><h3 style="font-size:.95rem">Caudal medio mensual histórico</h3></div>
       <div class="gg-plot" data-rol="retro-plot" style="min-height:200px;height:200px"></div>`;
     const el = document.querySelector('[data-rol="retro-plot"]');
@@ -290,7 +372,7 @@
     cont.querySelector('[data-rol="glosario"]').onclick = verGlosario;
     cont.querySelector('[data-rol="zoom+"]').onclick = () => estado.mapa && estado.mapa.zoomIn();
     cont.querySelector('[data-rol="zoom-"]').onclick = () => estado.mapa && estado.mapa.zoomOut();
-    cont.querySelector('[data-rol="reset"]').onclick = () => estado.mapa && estado.mapa.setView(CENTRO_EC, ZOOM_INI);
+    cont.querySelector('[data-rol="reset"]').onclick = () => encuadrar(estado.mapa);
     iniciarMapa(cont.querySelector('[data-rol="mapa"]'));
 
     if (_onTema) document.removeEventListener("temacambiado", _onTema);

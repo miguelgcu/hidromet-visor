@@ -2,6 +2,7 @@
    HidroMet · Caudales GEOGLOWS (pestaña de Hidrología).
    Identidad PROPIA (no reutiliza sngr.css). Acento agua: azul/teal.
    Colores TEMA-CONSCIENTES: todo via tokens reales de base.css (claro/oscuro).
+   Layout: fila de ríos vigilados → mapa (izq) + hidrograma (der) → detalle del río.
    ============================================================ */
 
 .gg { --gg-acc: #1763B6; --gg-acc2: #0E94A4; display: flex; flex-direction: column; gap: 14px; }
@@ -16,32 +17,35 @@ html[data-tema="oscuro"] .gg { --gg-acc: #5AA9E6; --gg-acc2: #2FC2D4; }
 .gg-sub { margin: 4px 0 0; color: var(--muted); font-size: .9rem; max-width: 70ch; }
 .gg-actions { display: flex; gap: 8px; flex-shrink: 0; }
 
-/* columnas: lista de ríos | mapa */
-.gg-cols { display: grid; grid-template-columns: 270px 1fr; gap: 14px; }
-@media (max-width: 880px) { .gg-cols { grid-template-columns: 1fr; } }
-
 /* tarjeta genérica */
 .gg-card { background: var(--surface); border: 1px solid var(--line);
   border-radius: 14px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 
-/* lista de ríos vigilados (quick-picks) */
-.gg-picks { display: flex; flex-direction: column; min-height: 0; }
-.gg-picks-tit { padding: 12px 14px 8px; font-weight: 700; font-size: .95rem;
+/* ríos vigilados (quick-picks): FILA horizontal de fichas a lo ancho */
+.gg-picks-tit { padding: 11px 14px 8px; font-weight: 700; font-size: .95rem;
   color: var(--ink); border-bottom: 1px solid var(--line); }
-.gg-picks-list { overflow-y: auto; max-height: 420px; padding: 6px; display: flex; flex-direction: column; gap: 4px; }
-.gg-rio { display: grid; grid-template-columns: 12px 1fr auto; align-items: center; gap: 9px;
-  padding: 9px 10px; border-radius: 10px; cursor: pointer; border: 1px solid transparent;
-  background: transparent; text-align: left; width: 100%; transition: background .12s, border-color .12s; }
+.gg-picks-list { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 10px; }
+.gg-picks-list .gg-empty { min-height: 44px; width: 100%; padding: 8px; flex-direction: row; }
+.gg-rio { display: grid; grid-template-columns: 10px 1fr auto; align-items: center; gap: 8px;
+  flex: 0 1 auto; min-width: 172px; padding: 7px 10px; border-radius: 10px; cursor: pointer;
+  border: 1px solid var(--line); background: transparent; text-align: left;
+  transition: background .12s, border-color .12s; }
 .gg-rio:hover { background: var(--surface-2); }
 .gg-rio.activo { background: color-mix(in srgb, var(--gg-acc) 10%, transparent); border-color: var(--gg-acc); }
-.gg-rio .dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,.3); }
-.gg-rio .nom { font-size: .9rem; font-weight: 600; color: var(--ink); line-height: 1.15; }
-.gg-rio .sub { font-size: .74rem; color: var(--muted); }
-.gg-rio .pico { font: 600 .76rem/1 "IBM Plex Mono", monospace; color: var(--muted); white-space: nowrap; }
+.gg-rio .dot { width: 10px; height: 10px; border-radius: 50%; border: 1px solid rgba(0,0,0,.3); }
+.gg-rio .nom { display: block; font-size: .82rem; font-weight: 600; color: var(--ink); line-height: 1.15; white-space: nowrap; }
+.gg-rio .sub { display: block; font-size: .68rem; color: var(--muted); white-space: nowrap; }
+.gg-rio .pico { font: 600 .74rem/1.1 "IBM Plex Mono", monospace; color: var(--muted);
+  white-space: nowrap; text-align: right; }
+
+/* fila principal: mapa (izquierda) + hidrograma (derecha), ~55/45 */
+.gg-main { display: grid; grid-template-columns: 55fr 45fr; gap: 14px; align-items: stretch; }
+@media (max-width: 1100px) { .gg-main { grid-template-columns: 1fr; } }
 
 /* mapa */
-.gg-mapwrap { position: relative; overflow: hidden; }
-.gg-map { width: 100%; height: 440px; border-radius: 14px 14px 0 0; background: var(--surface-2); }
+.gg-mapwrap { position: relative; overflow: hidden; display: flex; flex-direction: column; }
+.gg-map { width: 100%; flex: 1; min-height: 480px; border-radius: 14px 14px 0 0; background: var(--surface-2); }
+@media (max-width: 1100px) { .gg-map { min-height: 400px; } }
 .gg-map-hint { position: absolute; left: 12px; top: 12px; z-index: 500; pointer-events: none;
   background: color-mix(in srgb, var(--surface) 85%, transparent); backdrop-filter: blur(4px);
   border: 1px solid var(--line); border-radius: 8px; padding: 5px 9px;
@@ -57,15 +61,53 @@ html[data-tema="oscuro"] .gg { --gg-acc: #5AA9E6; --gg-acc2: #2FC2D4; }
 /* bordes de los puntos/dots: claros en oscuro para que no se fundan con el fondo */
 html[data-tema="oscuro"] .gg-rio .dot, html[data-tema="oscuro"] .gg-leyenda i { border-color: rgba(255,255,255,.32); }
 
-/* hidrograma */
-.gg-hidro { padding: 14px 16px; }
+/* hidrograma (columna derecha) */
+.gg-hidro { padding: 14px 16px; display: flex; flex-direction: column; min-width: 0; }
 .gg-hidro-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
 .gg-hidro-head h3 { margin: 0; font-size: 1.05rem; color: var(--ink); }
 .gg-alerta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 6px 0; }
 .gg-chip { display: inline-block; padding: 3px 11px; border-radius: 999px; font-size: .78rem;
-  font-weight: 700; color: #fff; background: var(--c, #6B7785); }
-.gg-plot { width: 100%; min-height: 340px; }
-.gg-retro { margin-top: 10px; }
+  font-weight: 700; color: #fff; background: var(--c, #6B7785); white-space: nowrap; }
+.gg-plot { width: 100%; flex: 1; min-height: 420px; }
+@media (max-width: 1100px) { .gg-plot { min-height: 340px; } }
+
+/* detalle del río seleccionado (tarjeta a lo ancho, bajo mapa+hidrograma) */
+.gg-detalle { padding: 14px 16px; }
+.gg-det-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.gg-det-nom { font-size: 1.12rem; font-weight: 700; color: var(--ink); }
+.gg-det-meta { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 7px; }
+.gg-tag { font: 500 .72rem/1 "IBM Plex Mono", monospace; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 999px; padding: 4px 9px; background: var(--surface-2); }
+.gg-tag b { color: var(--ink); font-weight: 700; }
+
+/* fila de métricas clave */
+.gg-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px; margin: 12px 0; }
+.gg-stat { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 12px; min-width: 0; }
+.gg-stat .lbl { display: block; font: 600 .66rem/1 "IBM Plex Mono", monospace;
+  letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; }
+.gg-stat .val { font: 700 1.18rem/1.15 "IBM Plex Mono", monospace; color: var(--ink); }
+.gg-stat .val i { font: 600 .72rem/1 "IBM Plex Mono", monospace; font-style: normal; color: var(--muted); }
+.gg-stat .sub { display: block; margin-top: 5px; font-size: .72rem; color: var(--muted); }
+
+/* tabla compacta de periodos de retorno */
+.gg-tablawrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+.gg-tabla { width: 100%; border-collapse: collapse; font-size: .82rem; }
+.gg-tabla th { text-align: left; font: 600 .68rem/1 "IBM Plex Mono", monospace;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
+  padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--surface-2); }
+.gg-tabla td { padding: 7px 12px; border-bottom: 1px solid var(--line); color: var(--ink); white-space: nowrap; }
+.gg-tabla tbody tr:last-child td { border-bottom: 0; }
+.gg-tabla th.num, .gg-tabla td.num { text-align: right; font-family: "IBM Plex Mono", monospace; }
+.gg-tabla td .pt { width: 10px; height: 10px; border-radius: 50%; display: inline-block;
+  margin-right: 7px; vertical-align: -1px; border: 1px solid rgba(0,0,0,.25); }
+html[data-tema="oscuro"] .gg-tabla td .pt { border-color: rgba(255,255,255,.3); }
+.gg-tabla td.est { color: var(--muted); font-size: .78rem; }
+.gg-tabla tr.sup td { background: color-mix(in srgb, var(--c, #CF362B) 9%, transparent); }
+.gg-tabla tr.sup td.est { color: var(--c, #CF362B); font-weight: 600; }
+
+.gg-retro { margin-top: 12px; }
 
 .gg-empty { min-height: 130px; display: flex; flex-direction: column; align-items: center;
   justify-content: center; gap: 8px; color: var(--muted); font-size: .88rem; text-align: center; padding: 16px; }
