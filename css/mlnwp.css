@@ -23,9 +23,12 @@
   height: 2.5px; background: var(--ml-purple); border-radius: 3px 3px 0 0; }
 
 /* control deck (tarjeta con rail púrpura izquierda) ---------------------- */
+/* overflow VISIBLE: el dropdown de estación cuelga fuera de la tarjeta (con hidden
+   se recortaba en su contenedor — en pantallas anchas no se veía ninguna opción). */
 .ml-deck { display: flex; align-items: stretch; background: var(--surface); border: 1px solid var(--line);
-  border-radius: 13px; box-shadow: var(--shadow-card); overflow: hidden; margin-bottom: 13px; }
-.ml-deck-rail { width: 4px; background: linear-gradient(180deg, #8A6BE0, #6A47CE); flex: none; }
+  border-radius: 13px; box-shadow: var(--shadow-card); overflow: visible; margin-bottom: 13px; }
+.ml-deck-rail { width: 4px; background: linear-gradient(180deg, #8A6BE0, #6A47CE); flex: none;
+  border-radius: 13px 0 0 13px; }
 /* v11: deck en UNA fila — etiqueta AL LADO del control (160px → ~56px) */
 .ml-deck-cuerpo { flex: 1; display: flex; align-items: center; padding: 9px 16px; flex-wrap: wrap; row-gap: 8px; }
 .ml-grupo { display: flex; flex-direction: row; align-items: center; gap: 9px; }

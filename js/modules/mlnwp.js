@@ -683,19 +683,24 @@
       }
     }
 
-    // Modelos (atenuados por calificación: opacity ya viene de /series).
+    // Modelos (atenuados por calificación: opacity ya viene de /series). En OSCURO
+    // los pasteles atenuados se fantasmagorizan sobre el fondo: piso de opacidad
+    // 0.85 y grosor mínimo 2 conservando la atenuación relativa entre modelos.
     const leyenda = [];
     for (const m of (d.modelos || []).slice(0, 8)) {
       const color = m.color;
+      const opBase = m.opacity ?? .7;
+      const op = oscuro ? Math.max(.85, opBase) : opBase;
+      const wLin = oscuro ? Math.max(2, m.width ?? 1.5) : (m.width ?? 1.5);
       if (esPrecip) {
         traces.push({ type: "bar", x: fx(m.fechas), y: m.valores, name: `${m.modelo} (${num(m.rating, 1)})`,
-          marker: { color, opacity: m.opacity ?? .7 }, hovertemplate: `${esc(m.modelo)}: %{y} ${unidad}<extra></extra>` });
+          marker: { color, opacity: op }, hovertemplate: `${esc(m.modelo)}: %{y} ${unidad}<extra></extra>` });
       } else {
         traces.push({ type: "scatter", mode: "lines", x: fx(m.fechas), y: m.valores, name: `${m.modelo} (${num(m.rating, 1)})`,
-          line: { color, width: m.width ?? 1.5 }, opacity: m.opacity ?? .7,
+          line: { color, width: wLin }, opacity: op,
           hovertemplate: `${esc(m.modelo)}: %{y} ${unidad}<extra></extra>` });
       }
-      leyenda.push(`<span class="it"><span class="sw-caja" style="background:${esc(color)};opacity:${m.opacity ?? .7}"></span>${esc(m.modelo)} (${num(m.rating, 1)})</span>`);
+      leyenda.push(`<span class="it"><span class="sw-caja" style="background:${esc(color)};opacity:${op}"></span>${esc(m.modelo)} (${num(m.rating, 1)})</span>`);
     }
 
     // Observado: línea punteada negra con marcadores cuadrados.
