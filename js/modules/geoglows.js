@@ -26,9 +26,21 @@
   }
   function vigente(E) { return estado === E && E.epoca >= 0; }
 
-  // Teselas SIEMPRE claras: el mapa es papel blanco en ambos temas (decisión del dueño).
+  // Teselas TEMÁTICAS: light_all en claro, dark_all en oscuro (pedido del dueño: el
+  // exterior de Ecuador no puede quedar blanco en modo oscuro). Re-tileo al conmutar.
   function urlTiles() {
-    return "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
+    const osc = App.tema && App.tema() === "oscuro";
+    return "https://{s}.basemaps.cartocdn.com/" + (osc ? "dark_all" : "light_all") + "/{z}/{x}/{y}{r}.png";
+  }
+
+  // Estilo de la red de ríos — DINÁMICO por tema (claro: azules del papel; oscuro:
+  // los azules claros del tema, como --rio-mayor/--rio-menor oscuros de base.css).
+  function estiloRios(f) {
+    const osc = App.tema && App.tema() === "oscuro";
+    const pri = String((f.properties || {}).prioridad || "").trim();
+    const mayor = pri === "1" || pri === "2";
+    return { color: mayor ? (osc ? "#5AA9E6" : "#1763B6") : (osc ? "#37557A" : "#7FA8D4"),
+             weight: mayor ? 1.6 : 0.7, opacity: mayor ? 0.95 : 0.75 };
   }
 
   /* ---------------- maquetado (propio) ---------------- */
@@ -132,15 +144,10 @@
     catch (e) { return; }
     if (!vigente(E) || !estado.mapa || (gj && gj.construyendo)) return;
     // Ríos PROMINENTES para que se vea claro dónde hay red seleccionable.
-    // Paleta clara FIJA (mapa siempre claro en ambos temas).
+    // Estilo temático (estiloRios); el listener de tema lo re-aplica al conmutar.
     estado.capaRios = L.geoJSON(gj, {
       pane: "pRios", renderer: estado.lienzoRios, interactive: false,
-      style: (f) => {
-        const pri = String((f.properties || {}).prioridad || "").trim();
-        const mayor = pri === "1" || pri === "2";
-        return { color: mayor ? "#1763B6" : "#7FA8D4",
-                 weight: mayor ? 1.6 : 0.7, opacity: mayor ? 0.95 : 0.75 };
-      },
+      style: estiloRios,
     }).addTo(estado.mapa);
   }
 
@@ -150,8 +157,10 @@
     const grupo = L.layerGroup();
     for (const it of items) {
       if (typeof it.lat !== "number" || typeof it.lon !== "number") continue;
+      // Aro del marcador temático: negro sobre teselas claras, claro sobre las oscuras.
       const m = L.circleMarker([it.lat, it.lon], {
-        radius: 8, color: "#000000", weight: 1.5, fillColor: colorNivel(it.nivel_alerta), fillOpacity: 0.95 });
+        radius: 8, color: (App.tema && App.tema() === "oscuro") ? "#E8EDF6" : "#000000",
+        weight: 1.5, fillColor: colorNivel(it.nivel_alerta), fillOpacity: 0.95 });
       const na = it.nivel_alerta ? it.nivel_alerta.etiqueta : "sin pronóstico (pulsa Actualizar)";
       m.bindTooltip(`<b>${esc(it.nombre)}</b><br>${esc(na)}`, { direction: "top", sticky: true });
       m.on("click", (e) => { L.DomEvent.stopPropagation(e);
@@ -285,17 +294,12 @@
     iniciarMapa(cont.querySelector('[data-rol="mapa"]'));
 
     if (_onTema) document.removeEventListener("temacambiado", _onTema);
-    // El MAPA ya es fijo (teselas/ríos/marcadores claros siempre): el re-tileo del
-    // listener de tema queda inofensivo (misma URL/estilo); se conserva por si algún
-    // elemento temático vuelve al mapa.
+    // Cambio de tema DINÁMICO sin re-navegar: re-tilea (light_all/dark_all), re-estila
+    // la red de ríos y repinta los marcadores con el aro del tema nuevo.
     _onTema = () => {
       if (!estado) return;
       if (estado.tiles) estado.tiles.setUrl(urlTiles());
-      if (estado.capaRios) estado.capaRios.setStyle(f => {
-        const pri = String((f.properties || {}).prioridad || "").trim();
-        const mayor = pri === "1" || pri === "2";
-        return { color: mayor ? "#1763B6" : "#7FA8D4" };
-      });
+      if (estado.capaRios) estado.capaRios.setStyle(estiloRios);
       pintarMarcadores(estado.items || []);
     };
     document.addEventListener("temacambiado", _onTema);

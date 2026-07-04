@@ -49,12 +49,21 @@
     { id: "cuencas4",   etq: "Cuencas · nivel 4", nivel: "cuencas4", tipo: "cuenca" },
   ];
 
-  // Colores del mapa temático — FIJOS (mapa siempre claro en ambos temas,
-  // decisión del dueño: papel blanco + contornos negros en todo el programa).
+  // Colores del mapa temático — DINÁMICOS por tema (pedido del dueño: en oscuro el
+  // exterior de Ecuador no puede quedar blanco). Claro = papel blanco + contorno negro
+  // (coherente con cartas/mlnwp); oscuro = teselas dark + contorno claro con casing oscuro.
   function paletaMapa() {
-    return {
+    const osc = App.tema && App.tema() === "oscuro";
+    return osc ? {
+      tierra:      "#0B1322",
+      adminBorde:  "#AEBBD0",   // línea clara sobre teselas oscuras
+      casing:      "#0B1322",   // halo oscuro bajo el límite admin
+      rioMayor:    "#5AA9E6",
+      rioMenor:    "#37557A",
+    } : {
       tierra:      "#FFFFFF",   // relleno del continente (mapa base); el borde lo da adminBorde
       adminBorde:  "#000000",   // negro sobre blanco (coherente con cartas/mlnwp)
+      casing:      "#FFFFFF",   // halo blanco bajo el límite admin
       rioMayor:    "#2B6FB0",
       rioMenor:    "#A9C7E2",
     };
@@ -253,10 +262,11 @@
     }).join("");
   }
 
-  // Mapa base OSM (CARTO) SIEMPRE claro: el mapa es papel blanco en ambos temas
-  // (decisión del dueño). El re-tileo del listener de tema queda inofensivo.
+  // Mapa base OSM (CARTO) TEMÁTICO: light_all en claro, dark_all en oscuro.
+  // El listener de tema re-tilea al conmutar sin re-navegar.
   function urlTiles() {
-    return "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
+    const osc = App.tema && App.tema() === "oscuro";
+    return "https://{s}.basemaps.cartocdn.com/" + (osc ? "dark_all" : "light_all") + "/{z}/{x}/{y}{r}.png";
   }
 
   /* ---------------- Leaflet ---------------- */
@@ -344,7 +354,7 @@
       : () => ({ color: P.adminBorde, weight: 1.5, opacity: 0.95, fillOpacity: 0, fill: false });
     if (!esCuenca) {
       estado.capaBaseCasing = L.geoJSON(gj, { pane: "pTematica", interactive: false,
-        style: () => ({ color: "#ffffff", weight: 3.4, opacity: 0.9, fillOpacity: 0, fill: false }) }).addTo(estado.mapa);
+        style: () => ({ color: P.casing, weight: 3.4, opacity: 0.9, fillOpacity: 0, fill: false }) }).addTo(estado.mapa);
     }
     estado.capaBase = L.geoJSON(gj, {
       pane: "pTematica", style: estilo,
@@ -595,6 +605,7 @@
       if (estado.capaTiles) estado.capaTiles.setUrl(urlTiles());
       const cfg = CAPAS.find(c => c.id === estado.capaActual);
       if (estado.capaBase && cfg && cfg.tipo !== "cuenca") estado.capaBase.setStyle({ color: P.adminBorde });
+      if (estado.capaBaseCasing) estado.capaBaseCasing.setStyle({ color: P.casing });
       if (estado.capaRios) estado.capaRios.setStyle(f2 => {
         const pri = String((f2.properties || {}).prioridad || "").trim();
         const mayor = pri === "1" || pri === "2";

@@ -43,13 +43,15 @@
         for (const [x, y] of ring) { xs.push(x); ys.push(y); } xs.push(null); ys.push(null);
       }
     }
-    // Lienzo de mapa = papel blanco en ambos temas → halo blanco + línea negra SIEMPRE
-    // (pedido del dueño: contornos de Ecuador negros sobre fondo blanco, no gris).
+    // Mapa TEMÁTICO (Climatología no es Pronóstico): claro = halo blanco + línea negra
+    // (papel); oscuro = halo del fondo del tema + línea clara, para que el contorno se
+    // lea sobre el mar oscuro. Se redibuja al conmutar el tema (_alTema → dibujar).
+    const osc = App.tema && App.tema() === "oscuro";
     return [
       { type: "scatter", mode: "lines", x: xs, y: ys, hoverinfo: "skip", showlegend: false,
-        line: { color: "#ffffff", width: 2.8 } },
+        line: { color: osc ? "#0B1322" : "#ffffff", width: 2.8 } },
       { type: "scatter", mode: "lines", x: xs, y: ys, hoverinfo: "skip", showlegend: false,
-        line: { color: "#000000", width: 1.2 } },
+        line: { color: osc ? "#AEBBD0" : "#000000", width: 1.2 } },
     ];
   }
 
@@ -77,12 +79,13 @@
     if (!window.Plotly || !host) return;
     if (!d || d.error) { host.innerHTML = `<div class="cl-vacio">${esc(d && d.error || "Sin datos")}</div>`; return; }
     const dec = (d.variable === "tmax" || d.variable === "tmin") ? 1 : (d.variable === "aridez" ? 2 : 0);
+    // Tinta TEMÁTICA del colorbar: oscura sobre el papel claro, clara sobre el fondo oscuro.
+    const tinta = (App.tema && App.tema() === "oscuro") ? "#E8EDF6" : "#283550";
     const heat = {
       type: "heatmap", x: d.lon, y: d.lat, z: d.campo, colorscale: d.colorscale,
       zmin: d.vmin, zmax: d.vmax, zsmooth: "best", hoverongaps: false,
-      // Tinta FIJA (#283550): el colorbar vive sobre el papel blanco del mapa en ambos temas.
-      colorbar: { title: { text: d.unidad || "", side: "right", font: { size: 11, color: "#283550" } }, thickness: 13,
-        len: 0.9, outlinewidth: 0, tickfont: { size: 10, color: "#283550" }, x: 1.01 },
+      colorbar: { title: { text: d.unidad || "", side: "right", font: { size: 11, color: tinta } }, thickness: 13,
+        len: 0.9, outlinewidth: 0, tickfont: { size: 10, color: tinta }, x: 1.01 },
       hovertemplate: `lat %{y:.2f}, lon %{x:.2f}<br><b>%{z:.${dec}f} ${esc(d.unidad || "")}</b><extra></extra>`,
     };
     // Encuadre ECUADOR CONTINENTAL: la grilla es continental, pero el contorno

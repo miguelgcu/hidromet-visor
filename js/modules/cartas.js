@@ -92,10 +92,18 @@
     try { geoCartas = await App.api("/datos/capas/provincias.geojson"); }
     catch (e) { geoCartas = false; }
   }
-  // Contorno de Ecuador (provincias) con ENCASILLADO: línea BLANCA ancha debajo +
-  // NEGRA más fina encima → resalta y se identifica sobre cualquier carta. `bbox`
-  // opcional filtra features por extensión (p.ej. solo Galápagos para el inset).
-  function trazasOutline(ejeX, ejeY, bbox, wBlack, wWhite) {
+  // Tipos cuyo lienzo es PAPEL FIJO (blanco SIEMPRE): las pestañas grilladas del
+  // módulo Pronóstico. El resto (alertas de Advertencias, FFGS bajo Hidrología y
+  // los mapas de cruce/FFR/crecida) TEMATIZA: claro = papel blanco + contorno negro;
+  // oscuro = fondo del tema + contorno claro con halo oscuro.
+  const TIPOS_PAPEL_FIJO = new Set(["pronostico", "calibrado", "hidro", "heladas"]);
+  const papelFijo = () => !!(E && TIPOS_PAPEL_FIJO.has(E.tipo));
+  const temaOscuro = () => !!(App.tema && App.tema() === "oscuro");
+
+  // Contorno de Ecuador (provincias) con ENCASILLADO: halo ancho debajo + línea más
+  // fina encima → resalta y se identifica sobre cualquier carta. `bbox` opcional
+  // filtra features por extensión (p.ej. solo Galápagos para el inset).
+  function trazasOutline(ejeX, ejeY, bbox, wBlack, wWhite, fijo) {
     if (!geoCartas || !geoCartas.features) return [];
     const xs = [], ys = [];
     const dentro = (lo, la) => !bbox || (lo >= bbox[0] && lo <= bbox[1] && la >= bbox[2] && la <= bbox[3]);
@@ -111,12 +119,16 @@
     }
     if (!xs.length) return [];
     const base = { type: "scatter", mode: "lines", x: xs, y: ys, hoverinfo: "skip", showlegend: false, xaxis: ejeX, yaxis: ejeY };
-    // Outline geográfico = halo blanco + línea NEGRA, SIEMPRE (pedido del dueño: las
-    // cartas son papel blanco con contornos negros en ambos temas; el lienzo del mapa
-    // no sigue el tema de la app).
+    // fijo=true (módulo Pronóstico): halo blanco + línea NEGRA SIEMPRE (papel de carta).
+    // fijo=false (resto): en claro igual; en OSCURO halo del fondo + línea clara para
+    // que el contorno se lea sobre el mar oscuro del tema. Los meta permiten forzar
+    // la paleta de papel al exportar el PNG (ver _trazasAPapel).
+    const osc = !fijo && temaOscuro();
     return [
-      Object.assign({}, base, { line: { color: "#ffffff", width: wWhite || 3.4 } }),
-      Object.assign({}, base, { line: { color: "#000000", width: wBlack || 2 } }),
+      Object.assign({}, base, { meta: "outline-halo",
+        line: { color: osc ? "#0B1322" : "#ffffff", width: wWhite || 3.4 } }),
+      Object.assign({}, base, { meta: "outline-linea",
+        line: { color: osc ? "#AEBBD0" : "#000000", width: wBlack || 2 } }),
     ];
   }
 
@@ -128,7 +140,7 @@
     try { geoMicro = await App.api("/datos/capas/ffgs_microcuencas.geojson"); }
     catch (e) { geoMicro = false; }
   }
-  function trazaMicrocuencas() {
+  function trazaMicrocuencas(osc) {
     if (!geoMicro || !geoMicro.features) return null;
     const xs = [], ys = [];
     const empuja = ring => { for (const [lo, la] of ring) { xs.push(lo); ys.push(la); } xs.push(null); ys.push(null); };
@@ -139,10 +151,10 @@
     }
     if (!xs.length) return null;
     // scattergl: 1682 cuencas = muchos puntos; WebGL las dibuja sin lag. Línea fina
-    // y tenue para que el COLOR del campo siga siendo lo dominante. El lienzo de mapa
-    // es papel blanco en ambos temas → trazo oscuro fijo.
-    return { type: "scattergl", mode: "lines", x: xs, y: ys, hoverinfo: "skip",
-      line: { color: "rgba(35,49,77,.32)", width: 0.6 },
+    // y tenue para que el COLOR del campo siga siendo lo dominante. FFGS es TEMÁTICO:
+    // trazo oscuro sobre papel claro, claro sobre el fondo oscuro del tema.
+    return { type: "scattergl", mode: "lines", x: xs, y: ys, hoverinfo: "skip", meta: "microcuencas",
+      line: { color: osc ? "rgba(174,187,208,.38)" : "rgba(35,49,77,.32)", width: 0.6 },
       showlegend: false };
   }
 
@@ -155,7 +167,7 @@
       _estaciones = Array.isArray(r) ? r : (r && Array.isArray(r.estaciones) ? r.estaciones : false);
     } catch (e) { _estaciones = false; }
   }
-  function trazaEstaciones(bbox, ejeX, ejeY) {
+  function trazaEstaciones(bbox, ejeX, ejeY, osc) {
     if (!Array.isArray(_estaciones) || !_estaciones.length) return null;
     const xs = [], ys = [], tx = [];
     for (const e of _estaciones) {
@@ -164,8 +176,9 @@
       xs.push(e.lon); ys.push(e.lat); tx.push(e.nombre || e.codigo || "");
     }
     if (!xs.length) return null;
-    return { type: "scatter", mode: "markers", x: xs, y: ys, text: tx, xaxis: ejeX, yaxis: ejeY,
-      marker: { size: 5, color: "#10233F", line: { width: 1, color: "#fff" } },
+    // osc solo en mapas TEMÁTICOS en tema oscuro (punto claro con halo oscuro).
+    return { type: "scatter", mode: "markers", x: xs, y: ys, text: tx, xaxis: ejeX, yaxis: ejeY, meta: "estaciones-ct",
+      marker: { size: 5, color: osc ? "#E8EDF6" : "#10233F", line: { width: 1, color: osc ? "#0B1322" : "#fff" } },
       hovertemplate: "%{text}<extra></extra>", showlegend: false };
   }
 
@@ -303,7 +316,7 @@
     const shpBtn = (esAlertaNivel || esFFGS) ? `<a class="ct-dl ct-dl-shp" role="button" tabindex="0" data-shp="${esc(shpRuta)}"
            title="Descargar en formato shapefile" aria-label="Descargar en formato shapefile">SHP</a>` : "";
     return `
-      <div class="ct-lienzo" data-datos="${esc(datosUrl)}">
+      <div class="ct-lienzo${papelFijo() ? " ct-lienzo-fijo" : ""}" data-datos="${esc(datosUrl)}">
         <a class="ct-dl ct-dl-jpg" role="button" tabindex="0" data-jpg="${esc(jpgRuta)}" data-nombre="${esc(slugNombre)}"
            title="Descargar carta (imagen)" aria-label="Descargar carta">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -458,7 +471,9 @@
 
     const ext = P.extension || d.extension || [-81.3, -75.0, -5.1, 1.6];
     const cap = (E && E.capas) || {};
-    const oscuro = false;   // lienzo de mapa = papel blanco en ambos temas (pedido del dueño)
+    // Módulo Pronóstico = papel blanco SIEMPRE (fijo); alertas y FFGS tematizan.
+    const fijo = papelFijo();
+    const oscuro = !fijo && temaOscuro();
     const traces = [];
     // FFGS: RELLENO VECTORIAL POR SUBCUENCA. Cada microcuenca se pinta con su valor
     // exacto (d.cuencas), igual que el MAPSERVER oficial — NÍTIDO, sin el pixelado
@@ -509,13 +524,13 @@
     // Contorno de las MICROCUENCAS encima (define los bordes de subcuenca, FFGS).
     if (d.malla) {
       await asegurarMicrocuencas();
-      const mc = trazaMicrocuencas();
+      const mc = trazaMicrocuencas(oscuro);
       if (mc) traces.push(mc);
     }
-    traces.push(...trazasOutline("x", "y", null, 1.5, 3.4));   // spec grillas: 1.5/3.4
+    traces.push(...trazasOutline("x", "y", null, 1.5, 3.4, fijo));   // spec grillas: 1.5/3.4
 
     // TOGGLE Estaciones: puntos de las estaciones dentro del recuadro principal.
-    if (cap.estaciones) { await asegurarEstaciones(); const te = trazaEstaciones(ext, "x", "y"); if (te) traces.push(te); }
+    if (cap.estaciones) { await asegurarEstaciones(); const te = trazaEstaciones(ext, "x", "y", oscuro); if (te) traces.push(te); }
 
     // Zoom SOLO de acercamiento: minallowed/maxallowed fijan el extent como tope.
     // TOGGLE Grilla: rejilla lat/lon punteada y tenue (ejes ocultos si está apagada).
@@ -548,8 +563,8 @@
         colorscale: d.colorscale, zmin: d.vmin, zmax: d.vmax, zsmooth: d.malla ? false : "best",
         hoverongaps: false, showscale: false,
         hovertemplate: `%{y:.2f}°, %{x:.2f}°<br><b>%{z:.2f} ${esc(d.unidad || "")}</b><extra></extra>` });
-      traces.push(...trazasOutline("x2", "y2", _gb, 0.9, 2));   // contorno de las islas con encasillado
-      if (cap.estaciones) { await asegurarEstaciones(); const teg = trazaEstaciones(_gb, "x2", "y2"); if (teg) traces.push(teg); }
+      traces.push(...trazasOutline("x2", "y2", _gb, 0.9, 2, fijo));   // contorno de las islas con encasillado
+      if (cap.estaciones) { await asegurarEstaciones(); const teg = trazaEstaciones(_gb, "x2", "y2", oscuro); if (teg) traces.push(teg); }
     }
     // Panel VACÍO: rótulo claro en vez de un mapa en blanco. "sin_datos" = el modelo
     // no llega a esta fecha (su corrida no la cubre); "sin_alerta" = sí hay pronóstico
@@ -1673,8 +1688,8 @@
     }
     const layout = App.plotlyLayoutBase({
       showlegend: anillos.length > 0,
-      // tinta FIJA: la leyenda se dibuja sobre el lienzo blanco (papel de mapa), no sobre el tema
-      legend: { orientation: "h", x: 0, y: -0.03, xanchor: "left", font: { size: 10.5, color: "#283550" } },
+      // tinta TEMÁTICA: mapa de Advertencias → papel claro en claro, fondo del tema en oscuro
+      legend: { orientation: "h", x: 0, y: -0.03, xanchor: "left", font: { size: 10.5, color: temaOscuro() ? "#E8EDF6" : "#283550" } },
       margin: { l: 0, r: 0, t: 0, b: anillos.length ? 40 : 6 },
       xaxis: { range: [ext[0], ext[1]], visible: false, fixedrange: false },
       yaxis: { range: [ext[2], ext[3]], scaleanchor: "x", scaleratio: 1, visible: false, fixedrange: false },
@@ -1775,8 +1790,8 @@
     const ext = datos.bbox || [-81.2, -75, -5.2, 1.6];
     const layout = App.plotlyLayoutBase({
       showlegend: !mini,
-      // tinta FIJA sobre el lienzo blanco del mapa (ilegible en tema oscuro sin esto)
-      legend: { orientation: "h", x: 0, y: -0.03, xanchor: "left", yanchor: "top", font: { size: 10.5, color: "#283550" } },
+      // tinta TEMÁTICA (el lienzo de cruce sigue el tema; el PNG exportado fuerza papel)
+      legend: { orientation: "h", x: 0, y: -0.03, xanchor: "left", yanchor: "top", font: { size: 10.5, color: temaOscuro() ? "#E8EDF6" : "#283550" } },
       margin: mini ? { l: 0, r: 0, t: 0, b: 0 } : { l: 0, r: 0, t: 0, b: 48 },
       xaxis: { range: [ext[0], ext[1]], visible: false, fixedrange: mini },
       yaxis: { range: [ext[2], ext[3]], scaleanchor: "x", scaleratio: 1, visible: false, fixedrange: mini },
@@ -1899,8 +1914,8 @@
     }
     const layout = App.plotlyLayoutBase({
       showlegend: true,
-      // tinta FIJA sobre el lienzo blanco del mapa (ilegible en tema oscuro sin esto)
-      legend: { orientation: "h", x: 0, y: -0.03, xanchor: "left", font: { size: 10.5, color: "#283550" } },
+      // tinta TEMÁTICA (el lienzo de crecida sigue el tema; el PNG exportado fuerza papel)
+      legend: { orientation: "h", x: 0, y: -0.03, xanchor: "left", font: { size: 10.5, color: temaOscuro() ? "#E8EDF6" : "#283550" } },
       margin: { l: 0, r: 0, t: 0, b: 46 },
       xaxis: { range: [ext[0], ext[1]], visible: false, fixedrange: false },
       yaxis: { range: [ext[2], ext[3]], scaleanchor: "x", scaleratio: 1, visible: false, fixedrange: false },
@@ -2122,17 +2137,48 @@
       "paper_bgcolor": L.paper_bgcolor || "rgba(0,0,0,0)",
       "plot_bgcolor": L.plot_bgcolor || "rgba(0,0,0,0)",
       "font.color": (L.font && L.font.color) || null,
+      "legend.font.color": (L.legend && L.legend.font && L.legend.font.color) || null,
     };
   }
-  const _FONDO_PNG = { "paper_bgcolor": "#ffffff", "plot_bgcolor": "#ffffff", "font.color": "#0F1B2D" };
+  const _FONDO_PNG = { "paper_bgcolor": "#ffffff", "plot_bgcolor": "#ffffff", "font.color": "#0F1B2D",
+                       "legend.font.color": "#283550" };
+
+  // Los mapas TEMÁTICOS dibujan contorno/microcuencas/estaciones con la paleta del
+  // tema; el PNG de descarga es SIEMPRE la carta blanca (entregable externo). Antes
+  // del toImage se fuerzan esos trazos (por su meta) a la paleta de PAPEL y se
+  // devuelve una función que restituye los colores que tenían en pantalla.
+  const _PAPEL_TRAZA = {
+    "outline-halo":   { "line.color": "#ffffff" },
+    "outline-linea":  { "line.color": "#000000" },
+    "microcuencas":   { "line.color": "rgba(35,49,77,.32)" },
+    "estaciones-ct":  { "marker.color": "#10233F", "marker.line.color": "#fff" },
+  };
+  async function _trazasAPapel(plot) {
+    const data = plot.data || [];
+    const revertir = [];
+    for (let i = 0; i < data.length; i++) {
+      const fix = _PAPEL_TRAZA[data[i].meta];
+      if (!fix) continue;
+      const prev = {};
+      for (const clave of Object.keys(fix)) {
+        let v = data[i];
+        for (const p of clave.split(".")) v = v ? v[p] : undefined;
+        prev[clave] = v === undefined ? null : v;
+      }
+      revertir.push([i, prev]);
+      await window.Plotly.restyle(plot, fix, [i]);
+    }
+    return async () => { for (const [i, prev] of revertir) await window.Plotly.restyle(plot, prev, [i]); };
+  }
 
   // PNG (dataURL) de un mapa de Advertencias/FFR (leyenda ya incluida en la figura):
   // se captura tal cual pero con papel blanco y tinta fija, revertidos después.
   async function _imagenMapaBlanco(plot, w, h) {
     const prev = _fondoPrevio(plot);
+    const restituir = await _trazasAPapel(plot);
     await window.Plotly.relayout(plot, Object.assign({}, _FONDO_PNG));
     try { return await window.Plotly.toImage(plot, { format: "png", width: w, height: h, scale: 1 }); }
-    finally { await window.Plotly.relayout(plot, prev); }
+    finally { await window.Plotly.relayout(plot, prev); await restituir(); }
   }
 
   // PNG (dataURL) de una carta CON su título y su leyenda (colorbar), reconstruidos
@@ -2143,6 +2189,7 @@
     const data = plot.data || [];
     const idx = data.findIndex(t => t.type === "heatmap" && (!t.xaxis || t.xaxis === "x"));
     const prev = _fondoPrevio(plot);
+    const restituir = await _trazasAPapel(plot);
     const relOn = Object.assign({ "margin.t": (c.titulo ? 54 : 12), "margin.r": 96, "margin.b": 14 }, _FONDO_PNG);
     if (c.titulo) {
       relOn["title.text"] = esc(c.titulo) + (c.subtitulo ? `<br><span style="font-size:12px;font-weight:400">${esc(c.subtitulo)}</span>` : "");
@@ -2164,6 +2211,7 @@
     finally {
       await window.Plotly.relayout(plot, Object.assign({ "title.text": "", "margin.t": 0, "margin.r": 0, "margin.b": 0 }, prev));
       if (conBarra) await window.Plotly.restyle(plot, { showscale: false }, [idx]);
+      await restituir();
     }
     return url;
   }
@@ -2174,6 +2222,7 @@
   const ACC_ACTUALIZAR = '<button class="boton oscuro" id="ct-actualizar">⟳ Actualizar</button>';
   function _alDejarCartas() {
     purgarCartas();
+    salirMLNWP();   // si la pestaña ML-NWP estaba montada, purga su serie Plotly
     const cab = document.getElementById("cabecera-vista");
     if (cab) cab.style.display = "";            // restaurar la cabecera global
     vp = null;
@@ -2257,7 +2306,27 @@
     pintar();
   }
 
-  // MENÚ "Pronóstico": pronóstico · calibrado · hidroestimadores · heladas/calor.
+  /* ============================================================
+     PESTAÑA "Series, validación e IA" — el módulo "Validación NWP-ML"
+     migrado como pestaña de Pronóstico: delega en window.MLNWP
+     (ui/js/modules/mlnwp.js). Todos los scripts se cargan al inicio
+     (index.html), así que al CLICAR la pestaña window.MLNWP ya existe
+     aunque mlnwp.js se cargue antes que cartas.js; el guard cubre un
+     fallo de carga. Lazy: solo se renderiza al activar la pestaña
+     (vistaPestanas re-renderiza al volver) y alSalir purga sus Plotly.
+     ============================================================ */
+  async function panelMLNWP(cont) {
+    if (!window.MLNWP || typeof window.MLNWP.render !== "function") {
+      cont.innerHTML = `<div class="vacio"><div class="icono">⚠️</div>No se pudo cargar el módulo de validación (mlnwp.js).</div>`;
+      return;
+    }
+    await window.MLNWP.render(cont);
+  }
+  function salirMLNWP() {
+    if (window.MLNWP && typeof window.MLNWP.alDejar === "function") window.MLNWP.alDejar();
+  }
+
+  // MENÚ "Pronóstico": pronóstico · series/validación/IA · calibrado · hidroestimadores · heladas/calor.
   App.registrar("pronostico", {
     titulo: "Pronóstico", orden: 1,
     async render(vista) {
@@ -2269,6 +2338,7 @@
         inicial: "pronostico",
         pestanas: [
           { id: "pronostico", etiqueta: "Pronóstico", render: panelGrid("pronostico"), alSalir: purgarCartas },
+          { id: "mlnwp", etiqueta: "Series, validación e IA", render: panelMLNWP, alSalir: salirMLNWP },
           { id: "calibrado", etiqueta: "Pronóstico calibrado", render: panelGrid("calibrado"), alSalir: purgarCartas },
           { id: "hidro", etiqueta: "Hidroestimadores", render: panelGrid("hidro"), alSalir: purgarCartas },
           { id: "heladas", etiqueta: "Heladas / Calor", render: panelHeladas, alSalir: purgarCartas },

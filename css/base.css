@@ -29,8 +29,10 @@
   --danger: #CF362B; --danger-bg: #FBEBEA; --danger-bd: #F2CDC9;
   /* riesgo */
   --risk-0: #3AA0DB; --risk-1: #EFC23F; --risk-2: #E98621; --risk-3: #D32A22;
-  /* mar */
+  /* mar — TEMÁTICO (mapas que siguen el tema: Advertencias, FFGS, Climatología, SNGR…) */
   --sea-top: #FFFFFF; --sea-bottom: #FFFFFF;
+  /* mar FIJO (blanco en AMBOS temas): SOLO los mapas del módulo Pronóstico (papel de carta) */
+  --sea-fijo-top: #FFFFFF; --sea-fijo-bottom: #FFFFFF;
   /* sombras */
   --shadow-card: 0 1px 2px rgba(15,27,45,.06); --shadow-hover: 0 10px 24px rgba(15,27,45,.11);
   --shadow-pop: 0 24px 60px rgba(8,16,30,.34);
@@ -63,8 +65,10 @@ html[data-tema="oscuro"] {
   --overlay-bg: rgba(20,32,58,.84); --rio-mayor: #5AA9E6; --rio-menor: #37557A;
   --ok: #3FCB8C; --ok-dot: #2FBE83; --warn: #E6AB4D; --danger: #F07266;
   --ok-bg: #12301F; --ok-bd: #1E4B31; --warn-bg: #2E2510; --warn-bd: #4A3A16; --danger-bg: #321613; --danger-bd: #4C211D;
-  /* Los lienzos de MAPA son papel blanco en AMBOS temas (pedido del dueño:
-     contornos negros sobre fondo blanco siempre) — no se re-define --sea-* aquí. */
+  /* mar TEMÁTICO en oscuro: los mapas fuera de Pronóstico siguen el tema (pedido del
+     dueño: el exterior de Ecuador no puede quedar blanco en modo oscuro). Los mapas
+     del módulo Pronóstico usan --sea-fijo-* (blanco siempre, no se re-define aquí). */
+  --sea-top: #16223C; --sea-bottom: #101A30;
   --shadow-card: 0 1px 2px rgba(0,0,0,.4); --shadow-hover: 0 12px 28px rgba(0,0,0,.45); --shadow-pop: 0 24px 60px rgba(0,0,0,.6);
   --slate: #7E8DA6;
 }

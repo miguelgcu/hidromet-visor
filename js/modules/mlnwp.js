@@ -1,8 +1,10 @@
 /* ============================================================
-   ML-NWP — Validación ML-NWP (v12: vista única por estación).
-   Sin pestañas: Mapas/Resumen retirados; el Glosario vive en su módulo.
+   ML-NWP — Validación ML-NWP (v13: pestaña de Pronóstico).
+   Ya NO es un módulo con entrada en la nav: expone window.MLNWP =
+   { render(container), alDejar() } y cartas.js lo monta como la
+   pestaña "Series, validación e IA" del módulo Pronóstico.
    Acento: púrpura (--ml-purple). data-screen-label="ML-NWP".
-   Arquitectura: App.registrar / App.api / App.tarea. Mapas con Plotly.
+   Arquitectura: App.api / App.tarea. Mapas con Plotly.
    Campos JSON confirmados leyendo app/rutas/mlnwp.py y los módulos
    app/modulos/mlnwp/{productos,validacion,estilo,glosario}.py.
    ============================================================ */
@@ -62,10 +64,14 @@
   const riesgoColor = r => RIESGO_COLOR[r] || "var(--ink-2)";
 
   /* ---------------- estado del módulo ---------------- */
+  // Redes SIEMPRE incluidas (los chips INAMHI/CELEC/Hidronación se retiraron a
+  // pedido del dueño): el filtrado client-side por red se conserva internamente
+  // para no romper los productos congelados, pero sin UI. La red de cada
+  // estación sigue visible por fila en el combobox.
+  const DEPS = ["INAMHI", "CELEC", "Hidronación"];
+
   const S = {
     ctx: null,
-    deps: ["INAMHI"],
-    tab: "validacion",
     variable: "precip",          // precip | tmax | tmin
     ventana: "30",               // desplegable Ventana (nº de fechas)
     familia: "Todos",            // filtro de familia de modelo
@@ -74,74 +80,24 @@
     geojson: null,
   };
 
-  const depsQS = () => "deps=" + encodeURIComponent(S.deps.join(","));
+  const depsQS = () => "deps=" + encodeURIComponent(DEPS.join(","));
 
   // Contador de generación: invalida respuestas async en vuelo cuando el usuario
   // cambia de ámbito/variable/ventana/familia/estación antes de que resuelvan
   // (App.api no cancela). El último cambio gana; los pares viejos se descartan.
   let gen = 0;
 
-  async function guardarDeps() {
-    try { await App.api("/config", { method: "POST", body: { dependencias_mlnwp: S.deps } }); }
-    catch (e) { /* no bloquear la UI por esto */ }
-  }
-
   /* ============================================================
-     RENDER raíz: cabecera propia + chips de dependencia + tabs.
+     RENDER raíz: la vista vive como PESTAÑA dentro de Pronóstico —
+     sin cabecera grande propia (kicker/h1) ni chips de dependencia;
+     solo un sub-encabezado compacto.
      ============================================================ */
-  function chipsDepsHTML() {
-    const def = [
-      { id: "INAMHI", label: "INAMHI", punto: true },
-      { id: "CELEC", label: "CELEC" },
-      { id: "Hidronación", label: "Hidronación" },
-    ];
-    return def.map(d => {
-      const on = S.deps.includes(d.id);
-      return `<button class="chip ${on ? "activo" : ""}" data-dep="${esc(d.id)}">
-        ${d.punto ? `<span class="punto-dep"></span>` : ""}${esc(d.label)}</button>`;
-    }).join("");
-  }
-
-  // v12: sin pestañas — Mapas y Resumen se retiraron (pedido del dueño); queda la
-  // vista única de Validación por estación.
   function pintarRaiz(vista) {
     vista.innerHTML = `
       <div class="ml-raiz" data-screen-label="ML-NWP">
-        <div class="ml-cab">
-          <div>
-            <div class="kicker">Módulos · Núcleo analítico</div>
-            <h1>Validación NWP-ML</h1>
-            <div class="ml-sub">Compara 41 modelos por estación · calificación 1–10 con confianza muestral</div>
-          </div>
-          <div class="ml-deps">${chipsDepsHTML()}</div>
-        </div>
+        <div class="ml-cab-mini">Validación NWP-ML · compara 41 modelos por estación · calificación 1–10 con confianza muestral</div>
         <div id="ml-cuerpo"></div>
       </div>`;
-
-    vista.querySelectorAll(".ml-deps .chip").forEach(b => b.onclick = () => {
-      const id = b.dataset.dep;
-      const next = S.deps.includes(id) ? S.deps.filter(d => d !== id) : [...S.deps, id];
-      if (!next.length) return App.aviso("Selecciona al menos una dependencia.", "error");
-      S.deps = next;
-      vista.querySelector(".ml-deps").innerHTML = chipsDepsHTML();
-      vista.querySelectorAll(".ml-deps .chip").forEach(reBindDep);
-      guardarDeps();
-      pintarTab();
-    });
-  }
-
-  function reBindDep(b) {
-    b.onclick = () => {
-      const id = b.dataset.dep;
-      const next = S.deps.includes(id) ? S.deps.filter(d => d !== id) : [...S.deps, id];
-      if (!next.length) return App.aviso("Selecciona al menos una dependencia.", "error");
-      S.deps = next;
-      const cab = document.querySelector(".ml-deps");
-      cab.innerHTML = chipsDepsHTML();
-      cab.querySelectorAll(".chip").forEach(reBindDep);
-      guardarDeps();
-      pintarTab();
-    };
   }
 
   function cuerpo() { return document.getElementById("ml-cuerpo"); }
@@ -180,7 +136,8 @@
     const vents = ["15", "30", "45", "60"];
     // Las temperaturas solo existen en la red INAMHI: sin ella se deshabilitan
     // (con el motivo en el title) en vez de caer a otro bloque en silencio.
-    const sinTemp = !S.deps.includes("INAMHI");
+    // (Con DEPS fijas siempre está INAMHI; se conserva por robustez.)
+    const sinTemp = !DEPS.includes("INAMHI");
     const optsVar = vars.map(([id, t]) => {
       const des = sinTemp && (id === "tmax" || id === "tmin");
       return `<option value="${id}" ${S.variable === id ? "selected" : ""}${des ? ` disabled title="Requiere la red INAMHI"` : ""}>${t}</option>`;
@@ -244,7 +201,7 @@
     // Sin INAMHI no existe el bloque de temperaturas: se fuerza precipitación
     // ANTES de pintar el deck (que además deshabilita tmax/tmin con el motivo),
     // en vez de dejar que el backend caiga a otro bloque en silencio.
-    if (!S.deps.includes("INAMHI") && (S.variable === "tmax" || S.variable === "tmin")) {
+    if (!DEPS.includes("INAMHI") && (S.variable === "tmax" || S.variable === "tmin")) {
       S.variable = "precip";
       App.aviso("Las temperaturas solo existen en la red INAMHI: se muestra precipitación.", "info");
     }
@@ -315,13 +272,14 @@
     // opciones filtradas quedaban FUERA de la ventana visible — el usuario escribía
     // y veía la lista "vacía" sin nada que clicar.
     const refrescar = q => { lista.innerHTML = opcionesComboHTML(q); lista.scrollTop = 0; };
+    // Al ABRIR se muestra la lista completa DESDE ARRIBA (refrescar ya resetea el
+    // scroll): el viejo scrollIntoView a la estación activa confundía — parecía
+    // que solo había una opción. La activa queda resaltada si se scrollea a ella.
     const abrir = () => {
       if (input.disabled) return;
       lista.hidden = false;
       refrescar("");
       input.select();
-      const act = lista.querySelector(".ml-combo-op.activa");
-      if (act) act.scrollIntoView({ block: "nearest" });
     };
     const cerrar = () => { lista.hidden = true; input.value = etiquetaEst(); };
     const elegir = cod => {
@@ -400,7 +358,7 @@
     const todas = d.estaciones || [];
     const ests = todas
       .map(e => ({ ...e, dependencia: depMap[String(e.codigo)] || "" }))
-      .filter(e => !e.dependencia || S.deps.includes(e.dependencia));
+      .filter(e => !e.dependencia || DEPS.includes(e.dependencia));
     ests.sort((a, b) => String(a.region).localeCompare(String(b.region))
       || String(a.dependencia).localeCompare(String(b.dependencia))
       || String(a.nombre).localeCompare(String(b.nombre)));
@@ -408,7 +366,7 @@
       poblarComboEst([]);
       const cont2 = document.getElementById("ml-vista-est");
       if (cont2) cont2.innerHTML = vacio(todas.length
-        ? `Ninguna estación de la red seleccionada (${S.deps.join(" + ")}) tiene datos para esta combinación.`
+        ? `Ninguna estación de las redes (${DEPS.join(" + ")}) tiene datos para esta combinación.`
         : "Sin estaciones con datos para esta combinación.");
       return;
     }
@@ -904,33 +862,25 @@
   }
 
   /* ============================================================
-     Registro de la vista
+     Exposición de la vista: PESTAÑA "Series, validación e IA" del
+     módulo Pronóstico. cartas.js invoca window.MLNWP.render(container)
+     al activarla y window.MLNWP.alDejar() al salir de la pestaña (o del
+     módulo). Ya NO se registra entrada propia en la nav.
      ============================================================ */
   // El glosario de MODELOS NWP/ML sale a su propio menú "Glosario" (lo reusa glosario.js).
   App.panel("glosario:modelos", (cont) => tabGlosario(cont));
 
-  App.registrar("validacion", {
-    titulo: "Validación NWP-ML", icono: "📈", orden: 2,
+  window.MLNWP = {
     async render(vista) {
-      // Cada módulo OCULTA #cabecera-vista y pinta su propia cabecera.
-      const cab = document.getElementById("cabecera-vista");
-      if (cab) cab.style.display = "none";
-      if (S.tab === "glosario") S.tab = "validacion";   // pestaña heredada → ya no existe aquí
-
+      // La cabecera global ya la gestiona el módulo anfitrión (Pronóstico):
+      // aquí no se toca #cabecera-vista.
       pintarRaiz(vista);
       const c = cuerpo();
       if (c) c.innerHTML = cargando("Cargando contexto…");
-
       try {
+        // El contexto trae el catálogo de estaciones (codigo→dependencia) para el
+        // filtrado interno por red; las DEPS son fijas (los chips se retiraron).
         S.ctx = await App.api("/mlnwp/contexto");
-        // En el VISOR el contexto está congelado con el estado de la máquina que
-        // exportó (deps_seleccionadas podía venir con una sola red y el usuario veía
-        // "no responde"): el visor SIEMPRE arranca con las 3 redes activas.
-        const sel = window.HIDROMET_VISOR ? null : S.ctx.deps_seleccionadas;
-        if (Array.isArray(sel) && sel.length) S.deps = sel;
-        else if (window.HIDROMET_VISOR) S.deps = ["INAMHI", "CELEC", "Hidronación"];
-        const cabDeps = vista.querySelector(".ml-deps");
-        if (cabDeps) { cabDeps.innerHTML = chipsDepsHTML(); cabDeps.querySelectorAll(".chip").forEach(reBindDep); }
       } catch (e) {
         if (c) c.innerHTML = vacio("No se pudo cargar el contexto ML-NWP: " + e.message);
         return;
@@ -939,10 +889,16 @@
     },
     alDejar() {
       purgarPlots();   // libera las instancias Plotly y sus listeners de window
-      const cab = document.getElementById("cabecera-vista");
-      if (cab) cab.style.display = "";
     },
-  });
+  };
+
+  // Deep-links antiguos a la entrada de nav retirada (#/validacion o #/mlnwp):
+  // redirigen al módulo Pronóstico, donde vive ahora la pestaña.
+  const redirigirLegado = () => {
+    if (/^#\/(validacion|mlnwp)$/.test(location.hash || "")) location.hash = "#/pronostico";
+  };
+  redirigirLegado();
+  window.addEventListener("hashchange", redirigirLegado);
 
   // Bus de refresco: tras CUALQUIER actualización, invalida el mapa cacheado (el
   // resumen/validación ya re-fetchean al pintar) y, si la vista está montada,

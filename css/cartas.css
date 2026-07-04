@@ -71,6 +71,10 @@
 .ct-carta-cab .meta { font: 500 11.5px var(--mono); color: var(--muted-2); }
 .ct-lienzo { position: relative; aspect-ratio: 63 / 67;
   background: linear-gradient(180deg, var(--sea-top), var(--sea-bottom)); overflow: hidden; }
+/* Grillas del módulo PRONÓSTICO (pronóstico/calibrado/hidro/heladas): papel BLANCO
+   SIEMPRE (la clase la pone lienzoCarta según el tipo activo). Alertas y FFGS
+   (bajo Hidrología) se quedan con el degradado temático de arriba. */
+.ct-lienzo.ct-lienzo-fijo { background: linear-gradient(180deg, var(--sea-fijo-top), var(--sea-fijo-bottom)); }
 .ct-lienzo img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .ct-mapa-plot { position: absolute; inset: 0; }
 .ct-lienzo .cargando { position: absolute; inset: 0; display: flex; align-items: center;

@@ -6,17 +6,12 @@
    (bloque data-screen-label="ML-NWP") y de las capturas.
    ============================================================ */
 
-/* raíz / cabecera propia ------------------------------------------------ */
+/* raíz / sub-encabezado compacto ----------------------------------------
+   v13: la vista vive como PESTAÑA de Pronóstico — sin cabecera grande
+   (kicker/h1) ni chips de dependencia (retirados a pedido del dueño). */
 .ml-raiz { max-width: 1320px; margin: 0 auto; }
-.ml-cab { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 8px; }
-.ml-cab .kicker { color: var(--ml-purple); }
-.ml-cab h1 { margin: 0; font-size: var(--fs-xl, 17px); font-weight: 700; letter-spacing: -.01em; color: var(--ink); }
-.ml-cab .ml-sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
-.ml-deps { display: flex; gap: 7px; flex-shrink: 0; }
-/* chip de dependencia: activo = relleno navy + texto blanco (su propio token) */
-.ml-deps .chip.activo { --chip-activo: var(--navy-700); }
-.ml-deps .chip .punto-dep { width: 7px; height: 7px; border-radius: 50%; background: var(--blue-bright); }
-.ml-deps .chip.activo .punto-dep { background: #fff; }
+.ml-cab-mini { color: var(--muted); font-size: 12px; font-weight: 600;
+  letter-spacing: .01em; margin: 2px 0 10px; }
 
 /* barra de pestañas — subrayado PÚRPURA ---------------------------------- */
 .ml-tabs { display: flex; gap: 2px; border-bottom: 1.5px solid var(--line-2); margin-bottom: 12px; }
@@ -109,8 +104,9 @@
 
 /* mapa ganador: grid 1fr / 200px ---------------------------------------- */
 .ml-grid-mapa { display: grid; grid-template-columns: 1fr 200px; gap: 14px; align-items: start; }
+/* Pestaña de PRONÓSTICO → papel FIJO (blanco en ambos temas, tokens --sea-fijo-*). */
 .ml-mapa { position: relative; border: 1px solid var(--line-2); border-radius: 10px; overflow: hidden;
-  background: linear-gradient(180deg, var(--sea-top), var(--sea-bottom)); }
+  background: linear-gradient(180deg, var(--sea-fijo-top), var(--sea-fijo-bottom)); }
 .ml-mapa.alto-520 { height: 470px; }
 .ml-mapa.alto-560 { height: 500px; }
 .ml-mapa-grafico { position: absolute; inset: 0; }
