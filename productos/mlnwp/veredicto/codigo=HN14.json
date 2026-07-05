@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"HN14","fecha":"2026-07-05","hoy":"2026-07-04","lluvia":{"llueve":false,"prob":37,"prob_fuerte":7,"q25":10.5,"q75":16.0,"texto":"NO"},"nombre":"La Cancha","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"HN14","fecha":"2026-07-06","hoy":"2026-07-05","lluvia":{"llueve":false,"prob":32,"prob_fuerte":5,"q25":0.0,"q75":2.5,"texto":"NO"},"nombre":"La Cancha","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

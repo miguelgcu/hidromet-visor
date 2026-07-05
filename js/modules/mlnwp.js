@@ -23,7 +23,8 @@
   const FAM_CRUDO = ["GFS05", "ICON", "IFS025", "IFSHRES", "AIFS025", "METEOBLUE", "GEM15"];
 
   // VARIABLE (chip) → bloque de /validacion. Precipitación usa "cuantificación"
-  // (columnas MAE/RMSE/Sesgo/Corr, como en el diseño).
+  // como bloque BASE (selector/serie); la tabla de clasificación añade ADEMÁS
+  // la sección de DETECCIÓN (bloque precip_det: POD/FAR/CSI) — pedido del dueño.
   const VAR_A_BLOQUE = { precip: "precip_cua", tmax: "tmax", tmin: "tmin" };
   // Etiqueta de variable para Series (la ruta /series acepta precip|tmax|tmin).
   const VAR_SERIE = { precip: "precip", tmax: "tmax", tmin: "tmin" };
@@ -394,124 +395,47 @@
     const vent = VENT_A_API[S.ventana];
     const famQS = "&familia=" + encodeURIComponent(S.familia);
     const lookback = parseInt(S.ventana, 10) || 45;
-    let det, ser, ver;
+    const esPrecip = S.variable === "precip";
+    let det, ser, detDet;
     try {
-      [det, ser, ver] = await Promise.all([
+      [det, ser, detDet] = await Promise.all([
         App.api(`/mlnwp/validacion_estacion?bloque=${bloque}&ventana=${vent}&${depsQS()}&codigo=${encodeURIComponent(S.estacion)}`),
         App.api(`/mlnwp/series?${depsQS()}&codigo=${encodeURIComponent(S.estacion)}&variable=${VAR_SERIE[S.variable]}&lookback=${lookback}${famQS}`),
-        // Veredicto de mañana: OPCIONAL — si el producto no está publicado (visor
-        // viejo) o falla, la vista de serie/tabla se pinta igual, sin tarjeta.
-        App.api(`/mlnwp/veredicto?codigo=${encodeURIComponent(S.estacion)}`).catch(() => null),
+        // DETECCIÓN de precip (POD/FAR/CSI, bloque precip_det): segunda sección
+        // de la tabla de clasificación. OPCIONAL — si el producto no está
+        // publicado (visor viejo) o falla, la tabla muestra solo cuantificación.
+        esPrecip
+          ? App.api(`/mlnwp/validacion_estacion?bloque=precip_det&ventana=${vent}&${depsQS()}&codigo=${encodeURIComponent(S.estacion)}`).catch(() => null)
+          : Promise.resolve(null),
       ]);
     } catch (e) { if (mi === gen) cont.innerHTML = vacio("No se pudo cargar la estación: " + e.message); return; }
     // descarta si llegó una selección más nueva durante la carga
     if (mi !== gen || !S.estacion) return;
     purgarPlots();   // libera cualquier serie previa antes de reescribir el contenedor
-    // Veredicto para mañana ARRIBA de la serie; tabla de clasificación DEBAJO.
-    cont.innerHTML = `<div id="ml-veredicto"></div>
-      <div class="ml-card" id="ml-serie-card"></div>
+    // Serie ARRIBA; tabla de clasificación DEBAJO. (La tarjeta 'Veredicto para
+    // mañana' se RETIRÓ de esta pestaña a pedido del dueño; el endpoint
+    // /mlnwp/veredicto sigue vivo — lo consume el submenú nuevo.)
+    cont.innerHTML = `<div class="ml-card" id="ml-serie-card"></div>
       <div id="ml-detalle" style="margin-top:14px"></div>`;
-    pintarVeredicto(document.getElementById("ml-veredicto"), ver);
     pintarSerie(document.getElementById("ml-serie-card"), ser);
-    pintarDetalle(document.getElementById("ml-detalle"), det);
+    pintarDetalle(document.getElementById("ml-detalle"), det, detDet);
   }
 
-  /* ============================================================
-     VEREDICTO PARA MAÑANA — las 3 respuestas operativas directas:
-     ¿qué temperatura es la más adecuada?, ¿mañana llueve sí o no?,
-     ¿habrá tal incremento de calor? (v = /mlnwp/veredicto?codigo=X)
-     ============================================================ */
-  function pintarVeredicto(cont, v) {
-    if (!cont) return;
-    if (!v || v.sin_datos) { cont.innerHTML = ""; return; }
-    const rango = (e, uni) => (e && e.q25 != null && e.q75 != null)
-      ? ` <span class="rng">(${num(e.q25, 1)}–${num(e.q75, 1)}${uni ? " " + uni : ""})</span>` : "";
-
-    // 1) Temperatura más adecuada (BEST_OP_CV → CONSENSO_OP_TOP5) ± Q25-Q75
-    const partesT = [];
-    if (v.tmax && v.tmax.valor != null)
-      partesT.push(`T. máx más probable: <b>${num(v.tmax.valor, 1)}°C</b>${rango(v.tmax)}`);
-    if (v.tmin && v.tmin.valor != null)
-      partesT.push(`T. mín: <b>${num(v.tmin.valor, 1)}°C</b>${rango(v.tmin)}`);
-    const temp = partesT.join(" &nbsp;·&nbsp; ")
-      || `<span class="suave">Sin pronóstico de temperatura para esta estación.</span>`;
-
-    // 2) Lluvia SÍ/NO: P(>=1mm) con regla p>=50 %, rango probable y P(>=10mm) 'fuerte'
-    let lluvia = `<span class="suave">Sin pronóstico probabilístico de lluvia.</span>`;
-    if (v.lluvia) {
-      const L = v.lluvia;
-      const extras = [];
-      if (L.q25 != null && L.q75 != null) extras.push(`${num(L.q25, 1)}–${num(L.q75, 1)} mm`);
-      if (L.prob_fuerte != null) extras.push(`fuerte ${L.prob_fuerte}%`);
-      lluvia = `<b class="${L.llueve ? "ml-ver-si" : "ml-ver-no"}">${esc(L.texto)}</b>`
-        + (L.prob != null ? ` — ${L.prob}%` : "")
-        + (extras.length ? ` <span class="rng">(${extras.join("; ")})</span>` : "");
-    }
-
-    // 3) Tendencia vs hoy (umbral ±0.5 °C, referencia obs de hoy o pronóstico de hoy)
-    let tend = `<span class="suave">Sin referencia de hoy para comparar.</span>`;
-    if (v.tendencia && v.tendencia.delta != null) {
-      const t = v.tendencia;
-      const clase = t.texto === "más cálido" ? "ml-ver-calido" : (t.texto === "más frío" ? "ml-ver-frio" : "");
-      tend = `<b class="${clase}">${sgn(t.delta)}°C</b> ${esc(t.texto === "similar" ? "similar a hoy" : t.texto + " que hoy")}`
-        + ` <span class="rng">(hoy: ${num(t.tmax_hoy, 1)}°C, ${esc(t.referencia)})</span>`;
-    }
-
-    cont.innerHTML = `
-      <div class="ml-card ml-veredicto">
-        <div class="ml-ver-cab">Veredicto para mañana
-          <span class="f">· ${fmtFechaCorta(v.fecha)} · ${esc(v.nombre || v.codigo)}</span></div>
-        <div class="ml-ver-grid">
-          <div class="ml-ver-item"><span class="et">Temperatura más adecuada</span><span class="tx">${temp}</span></div>
-          <div class="ml-ver-item"><span class="et">¿Mañana llueve?</span><span class="tx">${lluvia}</span></div>
-          <div class="ml-ver-item"><span class="et">Calor vs. hoy (T. máx)</span><span class="tx">${tend}</span></div>
-        </div>
-      </div>`;
-  }
-
-  function pintarDetalle(cont, d) {
-    // Filtro de familia: restringe los modelos mostrados y recalcula el resumen.
+  // UNA tabla de clasificación (un bloque de métricas: detección o cuantificación).
+  // La usa pintarDetalle — para precip se pintan DOS (detección + cuantificación).
+  function tablaClasifHTML(d) {
+    // Filtro de familia: restringe los modelos mostrados (client-side, como el resumen).
     const filtrarFam = S.familia && S.familia !== "Todos" && S.familia !== "Mejor desempeño";
     let modelos = d.modelos || [];
     if (filtrarFam) modelos = modelos.filter(m => m.familia === S.familia);
-    let r = d.resumen || {};
-    if (filtrarFam) {
-      const cal = modelos.filter(m => m.califica && m.rating != null);
-      const mejorM = cal.slice().sort((a, b) => (b.rating || 0) - (a.rating || 0))[0];
-      r = {
-        n_modelos: modelos.length, n_califican: cal.length,
-        mejor: mejorM ? mejorM.modelo : "—",
-        mejor_rating: mejorM ? mejorM.rating : null,
-        mejor_confianza: mejorM ? mejorM.confianza : null,
-        calif_media: cal.length ? cal.reduce((s, m) => s + (m.rating || 0), 0) / cal.length : null,
-        fechas_max: r.fechas_max,
-      };
-    }
-    const metCols = d.met_cols || ["mae", "rmse", "bias", "corr"];
     const esDet = d.modo === "detection";
 
-    // Barras: una por modelo (las que califican, hasta 12), altura = calif, opacidad = confianza.
-    const califican = modelos.filter(m => m.califica && m.rating != null);
-    const ratings = califican.map(m => m.rating);
-    const maxR = Math.max(10, ...ratings, 1);
-    const barras = califican.slice(0, 12).map(m => {
-      const h = Math.round((m.rating / maxR) * 158);
-      const op = OPACIDAD_CONF[m.confianza] ?? .5;
-      return `<div class="ml-barra" title="${esc(m.modelo)} · calif. ${num(m.rating, 1)} · ${esc(m.confianza)}">
-        <span class="v">${num(m.rating, 1)}</span>
-        <div class="col" style="height:${h}px;background:${esc(m.color)};opacity:${op}"></div></div>`;
-    }).join("") || `<div class="suave" style="margin:auto;font-size:12px">Sin modelos calificados</div>`;
-
-    const confBadge = c => {
-      const k = confClase(c);
-      return `<span class="v-conf ml-pill ${k}">${esc(c || "—")}</span>`;
-    };
-
-    // Cabeceras de métricas según el modo (detección vs continuo).
+    // Cabeceras de métricas según el modo (detección vs continuo/cuantificación).
     const metHead = esDet
       ? [["pod", "POD"], ["far", "FAR"], ["csi", "CSI"]]
       : [["mae", "MAE"], ["rmse", "RMSE"], ["bias", "Sesgo"], ["corr", "Corr"]];
     const metHeadHTML = metHead.map(([, t]) => `<th class="der">${t}</th>`).join("");
+    const nCols = 5 + metHead.length;
 
     const fmtMet = (m, k) => {
       const v = m[k];
@@ -539,18 +463,38 @@
       </tr>`;
     }).join("");
 
+    return `
+      <table class="ml-tabla-modelos">
+        <thead><tr>
+          <th>#</th><th>Modelo</th><th>Calif.</th><th class="der">Fechas</th><th>Confianza</th>
+          ${metHeadHTML}
+        </tr></thead>
+        <tbody>${filas || `<tr><td colspan="${nCols}" class="suave" style="padding:14px">Sin modelos para esta estación.</td></tr>`}</tbody>
+      </table>`;
+  }
+
+  // Tarjeta 'Clasificación de modelos'. d = bloque principal (cuantificación en
+  // precip; continuo en temperaturas). dDet = bloque precip_det (POD/FAR/CSI) —
+  // solo en precip; el dueño exige ver la DETECCIÓN además de la cuantificación:
+  // detección ARRIBA, cuantificación DEBAJO, cada una con su propia calificación.
+  function pintarDetalle(cont, d, dDet) {
     const nom = d.nombre || S.estacion;
+    const dosSecciones = !!(dDet && (dDet.modelos || []).length);
+    const cuerpo = dosSecciones
+      ? `<div class="ml-clasif-sec">
+           <div class="ml-clasif-cab">Detección <span class="ml-sutil">· ¿acierta SI llueve o no? (POD acierto · FAR falsa alarma · CSI global)</span></div>
+           ${tablaClasifHTML(dDet)}
+         </div>
+         <div class="ml-clasif-sec">
+           <div class="ml-clasif-cab">Cuantificación <span class="ml-sutil">· ¿acierta CUÁNTO llueve? (MAE · RMSE · Sesgo · Corr)</span></div>
+           ${tablaClasifHTML(d)}
+         </div>`
+      : tablaClasifHTML(d);
     cont.innerHTML = `
       <div class="ml-card">
         <h3 class="ml-titulo">Clasificación de modelos en ${esc(nom)}
           <span class="ml-sutil">· ${esc(d.codigo)} · ${esc(d.region)} · ordenados por calificación</span></h3>
-        <table class="ml-tabla-modelos">
-          <thead><tr>
-            <th>#</th><th>Modelo</th><th>Calif.</th><th class="der">Fechas</th><th>Confianza</th>
-            ${metHeadHTML}
-          </tr></thead>
-          <tbody>${filas || `<tr><td colspan="9" class="suave" style="padding:14px">Sin modelos para esta estación.</td></tr>`}</tbody>
-        </table>
+        ${cuerpo}
       </div>`;
   }
 
@@ -734,7 +678,7 @@
       if (b.p50) {
         const intr = !!(b.p25 && b.p75);
         traces.push({ type: "scatter", mode: "lines", x: b.fechas, y: b.p50,
-          line: { color: C.p50, width: 2.4 }, name: "P50 (mediana)", showlegend: false,
+          line: { color: C.p50, width: 2.4 }, name: "P50 (mediana)", showlegend: false, connectgaps: false,
           customdata: b.fechas.map((_, i) => [b.p10[i], b.p90[i], intr ? b.p25[i] : null, intr ? b.p75[i] : null]),
           hovertemplate: `Mediana P50: %{y} mm`
             + (intr ? `<br>50 % probable: %{customdata[2]}–%{customdata[3]} mm` : ``)
@@ -755,8 +699,10 @@
         traces.push({ type: "bar", x: fx(m.fechas), y: m.valores, name: `${m.modelo} (${num(m.rating, 1)})`,
           marker: { color, opacity: op }, hovertemplate: `${esc(m.modelo)}: %{y} ${unidad}<extra></extra>` });
       } else {
+        // connectgaps:false + eje completo con null (series.py): un hueco de fechas
+        // se ve como hueco, NO como diagonal fantasma (queja La Argelia 84270 03/07).
         traces.push({ type: "scatter", mode: "lines", x: fx(m.fechas), y: m.valores, name: `${m.modelo} (${num(m.rating, 1)})`,
-          line: { color, width: wLin }, opacity: op,
+          line: { color, width: wLin }, opacity: op, connectgaps: false,
           hovertemplate: `${esc(m.modelo)}: %{y} ${unidad}<extra></extra>` });
       }
       leyenda.push(`<span class="it"><span class="sw-caja" style="background:${esc(color)};opacity:${op}"></span>${esc(m.modelo)} (${num(m.rating, 1)})</span>`);
@@ -767,7 +713,7 @@
       traces.push({ type: "scatter", mode: "lines+markers+text", x: d.observado.fechas, y: d.observado.valores,
         text: d.observado.valores.map(v => (v == null ? "" : (esPrecip && Number(v) === 0 ? "" : num(v, 1)))),
         textposition: "top center", textfont: { size: 9, color: C.obs }, cliponaxis: false,
-        name: "Observado", line: { color: C.obs, width: 2.8 },
+        name: "Observado", line: { color: C.obs, width: 2.8 }, connectgaps: false,
         marker: { color: C.obs, size: 8, symbol: "circle" },
         hovertemplate: `Observado: %{y} ${unidad}<extra></extra>` });
     }
@@ -914,15 +860,6 @@
           ${conf.nota ? `<p class="suave" style="font-size:12px;margin:10px 0 0">${esc(conf.nota)}</p>` : ""}
         </div>
       </div>`;
-  }
-
-  /* ---------------- utilidades ---------------- */
-  function fmtFechaCorta(iso) {
-    if (!iso) return "—";
-    const s = String(iso).slice(0, 10);
-    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (m) return `${m[3]}/${m[2]}/${m[1]}`;
-    return esc(s);
   }
 
   /* ============================================================

@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"HN07","fecha":"2026-07-05","hoy":"2026-07-04","lluvia":{"llueve":false,"prob":42,"prob_fuerte":3,"q25":13.8,"q75":20.6,"texto":"NO"},"nombre":"Met. Toachi","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"HN07","fecha":"2026-07-06","hoy":"2026-07-05","lluvia":{"llueve":false,"prob":44,"prob_fuerte":12,"q25":0.0,"q75":6.2,"texto":"NO"},"nombre":"Met. Toachi","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

@@ -36,6 +36,47 @@
     { id: "advertencias", etiqueta: "Advertencias oficiales", cuerpo: "advertencias" },
   ];
 
+  /* ---------- ETIQUETAS HUMANAS (centralizado) ----------
+     El árbol de productos trae `etiqueta` humana para casi todo, pero algunas
+     variables nuevas del escaneo (p.ej. temperatura_2m_max nativa de pronóstico)
+     caen al ID crudo — y el dueño lo vio en el selector de Variable, en la
+     cabecera de las cartas y en el título de la serie. Diccionario ÚNICO:
+     cualquier sitio que muestre un nombre de variable pasa por aquí. */
+  const ETIQUETAS_VAR = {
+    lluvia: "Precipitación (mm)",
+    lluvia_acumulada: "Lluvia acumulada 7-7 (mm)",
+    lluvia_acumulada_corrida: "Precipitación acumulada (mm)",
+    temperatura_2m: "Temperatura 2 m (°C)",
+    temperatura_2m_max: "Temperatura máxima (°C)",
+    temperatura_2m_min: "Temperatura mínima (°C)",
+    temperatura_2m_mean: "Temperatura media (°C)",
+    cape: "CAPE (J/kg)",
+    cape_max: "CAPE máximo (J/kg)",
+  };
+  // Etiqueta para un ID de variable. Prefiere la del árbol SI no es el propio ID
+  // crudo; luego el diccionario; luego humedad_*hPa*; último recurso: sin "_".
+  function etiquetaVar(id, etiquetaArbol) {
+    const cruda = String(id || "");
+    if (etiquetaArbol && etiquetaArbol !== cruda) return etiquetaArbol;
+    if (ETIQUETAS_VAR[cruda]) return ETIQUETAS_VAR[cruda];
+    const m = /^humedad_(\d+)hPa(_max)?$/.exec(cruda);
+    if (m) return `Humedad ${m[1]} hPa${m[2] ? " máxima" : ""} (%)`;
+    return cruda.replace(/_/g, " ");
+  }
+  // Versión CORTA (sin unidades) para cabeceras compactas de carta.
+  const etiquetaVarCorta = (id, et) => etiquetaVar(id, et).replace(/\s*\([^)]*\)\s*$/, "");
+  // Reemplaza IDs crudos incrustados en un texto ya compuesto (p.ej. el figcap
+  // "temperatura_2m_max · 6 h" que arma el backend) por su etiqueta corta.
+  function humanizarTexto(s) {
+    let t = String(s || "");
+    // claves más LARGAS primero (temperatura_2m_max antes que temperatura_2m) y
+    // con borde de palabra: no toca prosa que contenga la clave como fragmento.
+    const claves = Object.keys(ETIQUETAS_VAR).sort((a, b) => b.length - a.length);
+    for (const k of claves)
+      t = t.replace(new RegExp(`\\b${k}\\b`, "g"), etiquetaVarCorta(k));
+    return t.replace(/\bhumedad_(\d+)hPa(_max)?\b/g, (_, p, mx) => `Humedad ${p} hPa${mx ? " máxima" : ""}`);
+  }
+
   // Variable de alerta (UI) → {capa base del .nc, variable de validación}.
   const VAR_ALERTA = [
     { id: "alerta_lluvia", etiqueta: "Alerta de lluvia", val: "precip" },
@@ -441,6 +482,51 @@
     }
   }
 
+  // §pixelado (2026-07): el VISOR congela la malla DECIMADA ×2 (71×66 ≈ 0.1°) para
+  // no disparar el peso (DEC=1 cuadruplica los ~500 MB de cartas congeladas: medido
+  // 48→179 KB por carta). A ese paso, el suavizado del heatmap (zsmooth "best"
+  // mezcla colores SOLO entre celdas vecinas) deja escalones cuadrados visibles en
+  // los bordes de banda. Antes de pintar se REFINA la malla EN EL CLIENTE (bilineal
+  // ×2/×3 hasta paso ≤0.06°): recupera la suavidad de la app viva (0.05°, refinado
+  // bicúbico ×5 del backend en carta_datos) sin aumentar un KB el peso publicado.
+  // En la app viva el paso ya es fino → factor 1 (no toca nada). No aplica a mallas
+  // por celda (FFGS, d.malla) ni a campos vacíos. Las esquinas null (máscara del
+  // contorno) entran como promedio ponderado de las finitas → el borde queda suave.
+  function refinarMalla(P) {
+    const lon = P && P.lon, lat = P && P.lat, z = P && P.campo;
+    if (!Array.isArray(lon) || lon.length < 2 || !Array.isArray(lat) || lat.length < 2
+        || !Array.isArray(z) || z.length < 2 || !Array.isArray(z[0]) || z[0].length < 2) return P;
+    const paso = Math.abs(lon[1] - lon[0]);
+    const f = paso > 0.075 ? Math.min(3, Math.round(paso / 0.05)) : 1;
+    if (f <= 1) return P;
+    const eje = (a) => {
+      const out = new Array((a.length - 1) * f + 1);
+      for (let i = 0; i < a.length - 1; i++)
+        for (let k = 0; k < f; k++) out[i * f + k] = a[i] + (a[i + 1] - a[i]) * (k / f);
+      out[out.length - 1] = a[a.length - 1];
+      return out;
+    };
+    const ny = z.length, nx = z[0].length;
+    const NY = (ny - 1) * f + 1, NX = (nx - 1) * f + 1;
+    const val = (j, i) => { const v = z[j][i]; return (v == null || !isFinite(v)) ? null : v; };
+    const campo = new Array(NY);
+    for (let J = 0; J < NY; J++) {
+      const j = Math.min(Math.floor(J / f), ny - 2), ty = J / f - j;
+      const fila = new Array(NX);
+      for (let I = 0; I < NX; I++) {
+        const i = Math.min(Math.floor(I / f), nx - 2), tx = I / f - i;
+        let s = 0, w = 0, v;
+        v = val(j, i);     if (v != null) { const k = (1 - tx) * (1 - ty); s += v * k; w += k; }
+        v = val(j, i + 1); if (v != null) { const k = tx * (1 - ty);       s += v * k; w += k; }
+        v = val(j + 1, i); if (v != null) { const k = (1 - tx) * ty;       s += v * k; w += k; }
+        v = val(j + 1, i + 1); if (v != null) { const k = tx * ty;         s += v * k; w += k; }
+        fila[I] = w > 0.05 ? s / w : null;
+      }
+      campo[J] = fila;
+    }
+    return { lon: eje(lon), lat: eje(lat), campo: campo };
+  }
+
   // Mapa valor→ETIQUETA para cartas CATEGÓRICAS (alertas/riesgo por nivel): el popup
   // debe decir "Medio/Alto/Muy alto", no "1/2/3". Devuelve una función v→etiqueta o null.
   function etiquetasCarta(d) {
@@ -495,23 +581,23 @@
         if (hov) traces.push(hov);
       }
     }
+    // Malla refinada en cliente (§pixelado): en el visor sube 71×66 → 141×131;
+    // en la app viva ya viene fina (0.05°) y refinarMalla devuelve la misma.
+    const PR = (!d.malla && P && P.campo && P.campo.length) ? refinarMalla(P) : P;
     if (!cuencasOk) {
-      // Raster: cartas INTERPOLADAS (precip/temp/ALERTAS) con zsmooth:"fast"
-      // (bilineal: ~3x más rápido en el render que "best" y visualmente equivalente
-      // sobre la malla ya interpolada del backend); las de malla nativa (FFGS sin
-      // dato por cuenca) sin suavizar.
-      // Continuo (precip/temp/HR/CAPE) Y alertas/heladas (campo YA refinado en backend,
-      // escala de color en degradado) → suavizado de ALTA CALIDAD ("best": suave, sin
-      // bloques). Solo la malla nativa por cuenca (FFGS) va SIN suavizar (no mezclar
-      // celdas por microcuenca).
+      // Raster: cartas INTERPOLADAS (precip/temp/ALERTAS) suavizadas.
+      // Continuo (precip/temp/HR/CAPE) Y alertas/heladas (campo YA refinado en backend
+      // y re-refinado aquí si venía decimado, escala de color en degradado) → suavizado
+      // de ALTA CALIDAD ("best": suave, sin bloques). Solo la malla nativa por cuenca
+      // (FFGS) va SIN suavizar (no mezclar celdas por microcuenca).
       const suavizar = d.malla ? false : "best";
       const etiq = etiquetasCarta(d);   // alertas/riesgo → etiqueta de nivel en el popup
       const hov = etiq
-        ? { text: P.campo.map(row => (row || []).map(v => etiq(v) || "")),
+        ? { text: PR.campo.map(row => (row || []).map(v => etiq(v) || "")),
             hovertemplate: `%{y:.2f}°, %{x:.2f}°<br><b>%{text}</b><extra></extra>` }
         : { hovertemplate: `%{y:.2f}°, %{x:.2f}°<br><b>%{z:.2f} ${esc(d.unidad || "")}</b><extra></extra>` };
       traces.push(Object.assign({
-        type: "heatmap", x: P.lon, y: P.lat, z: P.campo,
+        type: "heatmap", x: PR.lon, y: PR.lat, z: PR.campo,
         colorscale: d.colorscale, zmin: d.vmin, zmax: d.vmax,
         zsmooth: suavizar, hoverongaps: false, showscale: false,
       }, hov));
@@ -519,9 +605,9 @@
     // TOGGLE Isolíneas: contornos sobre el campo (aplican a TODAS las cartas raster:
     // pronóstico, calibrado, hidroestimadores, heladas/calor). Traza encima del relleno,
     // sin color (solo líneas) y con etiqueta de valor.
-    if (cap.isolineas && P && P.campo && P.campo.length) {
+    if (cap.isolineas && PR && PR.campo && PR.campo.length) {
       traces.push({
-        type: "contour", x: P.lon, y: P.lat, z: P.campo,
+        type: "contour", x: PR.lon, y: PR.lat, z: PR.campo,
         contours: { coloring: "none", showlabels: true,
           labelfont: { size: 9, color: oscuro ? "#E2E8F7" : "#283550" } },
         line: { color: oscuro ? "rgba(226,232,247,.72)" : "rgba(40,53,80,.7)", width: 0.9, smoothing: 1 },
@@ -555,7 +641,8 @@
 
     // TOGGLE Galápagos: inset en la esquina inferior izquierda. Los modelos globales
     // traen d.galapagos (recorte del archipiélago); los regionales no → se omite.
-    const _G = d.galapagos, _gb = d.bbox_galapagos;
+    const _G0 = d.galapagos, _gb = d.bbox_galapagos;
+    const _G = (_G0 && _G0.campo && _G0.campo.length && !d.malla) ? refinarMalla(_G0) : _G0;
     if (cap.galapagos && _G && _G.campo && _G.campo.length && _gb) {
       // inset en la ESQUINA INFERIOR DERECHA, separado ~0.5 cm de los márgenes der./inf.
       const gx0 = 0.652, gx1 = 0.952, gy0 = 0.043, gy1 = 0.316;
@@ -677,6 +764,25 @@
     return best;
   }
 
+  // §menús dinámicos: fuentes ÚNICAS del período (el escaneo puede DUPLICAR una
+  // fuente cuando una variable existe nativa Y derivada, p.ej. temperatura_2m_max
+  // a 24 h traía GFS/ICON/... dos veces) y DISPONIBILIDAD real por instante:
+  // cuántas de las fuentes MOSTRADAS tienen registro en cada instante. Con eso el
+  // selector de instantes deshabilita (option disabled + title) las fechas sin
+  // ningún dato y anota "n/m" en las incompletas — nadie cae en pantallas vacías.
+  function fuentesVista(p, n) {
+    const vistos = new Set(), out = [];
+    for (const f of (p && p.fuentes) || []) {
+      if (!f || !f.fuente || vistos.has(f.fuente)) continue;
+      vistos.add(f.fuente); out.push(f);
+      if (n && out.length >= n) break;
+    }
+    return out;
+  }
+  const conteoInst = (p, fuentes) =>
+    ((p && p.instantes) || []).map(it =>
+      fuentes.reduce((s, f) => s + ((it.registros || {})[f.fuente] !== undefined ? 1 : 0), 0));
+
   function gridState(tipoId) {
     const t = tipoNodo(tipoId);
     const g = (E.grid[tipoId] = E.grid[tipoId] || {});
@@ -709,7 +815,7 @@
     const t = tipoNodo(tipoId); if (!t) { host.innerHTML = ""; return; }
     const g = gridState(tipoId);
     const v = (t.variables || []).find(x => x.id === g.varId) || {};
-    const etiqV = v.etiqueta || g.varId;
+    const etiqV = etiquetaVarCorta(g.varId, v.etiqueta);
     await asegurarEstaciones();
     const ests = Array.isArray(_estaciones) ? _estaciones : [];
     if (!ests.length) { host.innerHTML = ""; return; }
@@ -781,34 +887,58 @@
     const g = gridState(tipoId);
     const v = t.variables.find(x => x.id === g.varId);
     const p = v.periodos.find(x => x.horas === g.horas);
+
+    // §menús dinámicos: disponibilidad real por instante sobre las fuentes MOSTRADAS.
+    // Si el instante activo quedó sin ninguna (instanteDefecto cuenta TODOS los
+    // registros, incluidos los de fuentes fuera del 2×2), salta al mejor con dato.
+    const fuentes4 = fuentesVista(p, 4);
+    const conteo = conteoInst(p, fuentes4);
+    if (!conteo[g.inst]) {
+      let best = -1, bn = 0;
+      for (let i = 0; i < conteo.length; i++) if (conteo[i] >= bn && conteo[i] > 0) { bn = conteo[i]; best = i; }
+      if (best >= 0) g.inst = best;
+    }
     const inst = p.instantes[g.inst];
+    const figcap = humanizarTexto(p.figcap || "");
 
-    const optsVar = t.variables.map(x =>
-      `<option value="${esc(x.id)}" ${x.id === g.varId ? "selected" : ""}>${esc(x.etiqueta)}</option>`).join("");
-    const optsPer = v.periodos.map(x =>
-      `<option value="${x.horas}" ${x.horas === g.horas ? "selected" : ""}>${esc(x.etiqueta)}</option>`).join("");
-    const optsInst = p.instantes.map((x, i) =>
-      `<option value="${i}" ${i === g.inst ? "selected" : ""}>${esc(x.etiqueta)}</option>`).join("");
+    const optsVar = t.variables.map(x => {
+      const nInst = (x.periodos || []).reduce((s, pp) => s + ((pp.instantes || []).length), 0);
+      const des = nInst === 0 ? ' disabled title="Sin cartas en disco para esta variable"' : "";
+      return `<option value="${esc(x.id)}" ${x.id === g.varId ? "selected" : ""}${des}>${esc(etiquetaVar(x.id, x.etiqueta))}</option>`;
+    }).join("");
+    const optsPer = v.periodos.map(x => {
+      const des = !(x.instantes || []).length ? ' disabled title="Sin cartas en disco para este período"' : "";
+      return `<option value="${x.horas}" ${x.horas === g.horas ? "selected" : ""}${des}>${esc(x.etiqueta)}</option>`;
+    }).join("");
+    const optsInst = p.instantes.map((x, i) => {
+      const n = conteo[i];
+      const des = n === 0 ? ' disabled title="Ningún modelo mostrado tiene dato en este instante"' : "";
+      const sufijo = n > 0 && n < fuentes4.length ? ` · ${n}/${fuentes4.length}` : "";
+      return `<option value="${i}" ${i === g.inst ? "selected" : ""}${des}>${esc(x.etiqueta)}${sufijo}</option>`;
+    }).join("");
 
-    // Grilla 2×2: hasta 4 fuentes del período (cada una con su capa/archivo).
-    const cartas = (p.fuentes || []).slice(0, 4).map(f => {
+    // Grilla 2×2: hasta 4 fuentes ÚNICAS del período (cada una con su capa/archivo).
+    const cartas = fuentes4.map(f => {
       const record = inst.registros ? inst.registros[f.fuente] : undefined;
       const archivo = (inst.archivos && inst.archivos[f.fuente]) || f.archivo;
       if (record === undefined) {
         return `<figure class="ct-carta"><div class="ct-carta-cab"><span class="titulo">${esc(f.fuente)}</span>
-          <span class="meta">${esc(p.figcap || "")}</span></div>
+          <span class="meta">${esc(figcap)}</span></div>
           <div class="ct-lienzo"><div class="fallo"><div class="icono">🗺️</div>Sin dato en este instante</div></div></figure>`;
       }
       const params = { archivo, capa: f.capa, record,
         corrido: f.corrido || p.corrido ? 1 : 0, fin: inst.fin };
       return `<figure class="ct-carta">
         <div class="ct-carta-cab"><span class="titulo">${esc(f.fuente)}</span>
-          <span class="meta">${esc(p.figcap || "")}</span></div>
-        ${lienzoCarta(params, f.fuente + " · " + (p.figcap || ""))}
+          <span class="meta">${esc(figcap)}</span></div>
+        ${lienzoCarta(params, f.fuente + " · " + figcap)}
         <div class="ct-ley-card" data-rol="ley-card"></div>
       </figure>`;
     }).join("");
 
+    // ◀ ▶ se deshabilitan si NO queda ningún instante CON dato en esa dirección.
+    const hayAntes = conteo.slice(0, g.inst).some(n => n > 0);
+    const hayDespues = conteo.slice(g.inst + 1).some(n => n > 0);
     return `
       <div class="ct-barra cols compacta">
         <label class="bloque"><span class="et">Variable</span>
@@ -816,9 +946,9 @@
         <label class="bloque"><span class="et">Período</span>
           <select data-rol="per">${optsPer}</select></label>
         <div class="ct-inst-nav">
-          <button class="ct-nav" data-rol="prev" ${g.inst <= 0 ? "disabled" : ""}>◀</button>
+          <button class="ct-nav" data-rol="prev" ${hayAntes ? "" : "disabled"}>◀</button>
           <select class="ct-instante" data-rol="inst">${optsInst}</select>
-          <button class="ct-nav" data-rol="next" ${g.inst >= p.instantes.length - 1 ? "disabled" : ""}>▶</button>
+          <button class="ct-nav" data-rol="next" ${hayDespues ? "" : "disabled"}>▶</button>
         </div>
         ${capasHTML()}
       </div>
@@ -833,11 +963,18 @@
     const v = t.variables.find(x => x.id === g.varId);
     const p = v.periodos.find(x => x.horas === g.horas);
     const re = () => pintarCuerpo();
+    // ◀ ▶ SALTAN los instantes deshabilitados (sin dato de ninguna fuente mostrada).
+    const conteo = conteoInst(p, fuentesVista(p, 4));
+    const salta = (dir) => {
+      let i = g.inst + dir;
+      while (i >= 0 && i < p.instantes.length && conteo[i] === 0) i += dir;
+      if (i >= 0 && i < p.instantes.length) { g.inst = i; re(); }
+    };
     cont.querySelector('[data-rol="var"]').onchange = (e) => { g.varId = e.target.value; g.horas = null; g.inst = null; re(); };
     cont.querySelector('[data-rol="per"]').onchange = (e) => { g.horas = +e.target.value; g.inst = null; re(); };
     cont.querySelector('[data-rol="inst"]').onchange = (e) => { g.inst = +e.target.value; re(); };
-    cont.querySelector('[data-rol="prev"]').onclick = () => { if (g.inst > 0) { g.inst--; re(); } };
-    cont.querySelector('[data-rol="next"]').onclick = () => { if (g.inst < p.instantes.length - 1) { g.inst++; re(); } };
+    cont.querySelector('[data-rol="prev"]').onclick = () => salta(-1);
+    cont.querySelector('[data-rol="next"]').onclick = () => salta(1);
     cont.querySelectorAll('.ct-toggle[data-capa]').forEach(b => b.onclick = () => { E.capas[b.dataset.capa] = !E.capas[b.dataset.capa]; re(); });
     pintarSeriePron(cont, tipoId);
   }
@@ -2229,7 +2366,8 @@
   const ACC_ACTUALIZAR = '<button class="boton oscuro" id="ct-actualizar">⟳ Actualizar</button>';
   function _alDejarCartas() {
     purgarCartas();
-    salirMLNWP();   // si la pestaña ML-NWP estaba montada, purga su serie Plotly
+    salirMLNWP();       // si la pestaña ML-NWP estaba montada, purga su serie Plotly
+    salirDecisiones();  // ídem la pestaña Decisiones operativas (su mapa Plotly)
     const cab = document.getElementById("cabecera-vista");
     if (cab) cab.style.display = "";            // restaurar la cabecera global
     vp = null;
@@ -2333,6 +2471,25 @@
     if (window.MLNWP && typeof window.MLNWP.alDejar === "function") window.MLNWP.alDejar();
   }
 
+  /* ============================================================
+     PESTAÑA "Decisiones operativas" — mapa de Ecuador con el veredicto
+     de lluvia de mañana por estación + panel con el veredicto desplegado
+     y la VALIDACIÓN de esas decisiones. Delega en window.DECISIONES
+     (ui/js/modules/decisiones.js) con el MISMO patrón lazy/alSalir que
+     la pestaña ML-NWP: solo se renderiza al activarla y alSalir purga
+     su mapa Plotly.
+     ============================================================ */
+  async function panelDecisiones(cont) {
+    if (!window.DECISIONES || typeof window.DECISIONES.render !== "function") {
+      cont.innerHTML = `<div class="vacio"><div class="icono">⚠️</div>No se pudo cargar el módulo de decisiones operativas (decisiones.js).</div>`;
+      return;
+    }
+    await window.DECISIONES.render(cont);
+  }
+  function salirDecisiones() {
+    if (window.DECISIONES && typeof window.DECISIONES.alDejar === "function") window.DECISIONES.alDejar();
+  }
+
   // MENÚ "Pronóstico": pronóstico · series/validación/IA · calibrado · hidroestimadores · heladas/calor.
   App.registrar("pronostico", {
     titulo: "Pronóstico", orden: 1,
@@ -2346,6 +2503,7 @@
         pestanas: [
           { id: "pronostico", etiqueta: "Pronóstico", render: panelGrid("pronostico"), alSalir: purgarCartas },
           { id: "mlnwp", etiqueta: "Series, validación e IA", render: panelMLNWP, alSalir: salirMLNWP },
+          { id: "decisiones", etiqueta: "Decisiones operativas", render: panelDecisiones, alSalir: salirDecisiones },
           { id: "calibrado", etiqueta: "Pronóstico calibrado", render: panelGrid("calibrado"), alSalir: purgarCartas },
           { id: "hidro", etiqueta: "Hidroestimadores", render: panelGrid("hidro"), alSalir: purgarCartas },
           { id: "heladas", etiqueta: "Heladas / Calor", render: panelHeladas, alSalir: purgarCartas },

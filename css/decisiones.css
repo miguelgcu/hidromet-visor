@@ -1,0 +1,72 @@
+/* ============================================================
+   DECISIONES OPERATIVAS — pestaña de Pronóstico (decisiones.js).
+   Layout 2 columnas: mapa de veredictos (izquierda) + panel de la
+   estación (veredicto desplegado + validación de esas decisiones).
+   Reusa clases del módulo ML-NWP (ml-card, ml-pill, ml-combo-*,
+   ml-calif-badge, ml-mod-punto) y los tokens de base.css: funciona
+   en tema claro y oscuro sin colores fijos (salvo el mapa, que es
+   papel blanco SIEMPRE por la regla de Pronóstico).
+   ============================================================ */
+
+.dec-raiz { max-width: 1380px; margin: 0 auto; }
+.dec-layout { display: grid; grid-template-columns: minmax(430px, 20fr) minmax(370px, 17fr);
+  gap: 13px; align-items: start; }
+@media (max-width: 1120px) { .dec-layout { grid-template-columns: 1fr; } }
+
+/* ---- columna del MAPA ---- */
+/* overflow VISIBLE: el dropdown del buscador cuelga fuera de la tarjeta
+   (misma lección que el deck de mlnwp.css — con hidden se recortaba). */
+.dec-mapa-card { padding: 12px; overflow: visible; }
+.dec-buscador { position: relative; margin-bottom: 10px; }
+.dec-mapa { height: 590px; background: #fff; border: 1px solid var(--line-2);
+  border-radius: 10px; overflow: hidden; }
+@media (max-width: 1120px) { .dec-mapa { height: 460px; } }
+
+.dec-leyenda { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px;
+  margin-top: 9px; font-size: 11.5px; color: var(--ink-2); }
+.dec-leyenda .it { display: inline-flex; align-items: center; white-space: nowrap; }
+.dec-leyenda .pt { width: 11px; height: 11px; border-radius: 50%; display: inline-block;
+  margin-right: 5px; border: 1.5px solid #fff; box-shadow: 0 0 0 1px var(--line-2); flex: none; }
+.dec-leyenda .pt.chico { width: 8px; height: 8px; }
+.dec-leyenda .dec-ley-tam { color: var(--muted-2); font-style: italic; }
+.dec-prog { margin-left: auto; font: 500 10.5px var(--mono); color: var(--muted-2); }
+
+/* ---- panel derecho ---- */
+.dec-panel { display: flex; flex-direction: column; gap: 13px; min-width: 0; }
+.dec-hint .vacio { padding: 70px 24px; }
+
+/* aviso de veredicto envejecido (visor: los productos se congelan) */
+.dec-stale { background: var(--warn-bg); border: 1px solid var(--warn-bd); color: var(--warn);
+  border-radius: 8px; padding: 7px 11px; font-size: 12px; line-height: 1.5; margin: 9px 0 0; }
+
+/* tarjeta VEREDICTO: rejilla de KPIs (lluvia a lo ancho + Tmax/Tmin + tendencia) */
+.dec-verd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 11px; }
+@media (max-width: 480px) { .dec-verd-grid { grid-template-columns: 1fr; } }
+.dec-kpi { background: var(--surface-2); border: 1px solid var(--line-3); border-radius: 10px;
+  padding: 11px 13px; min-width: 0; }
+.dec-kpi .lab { display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+  font: 600 10px var(--mono); letter-spacing: .09em; text-transform: uppercase;
+  color: var(--faint); margin-bottom: 6px; }
+.dec-kpi .lab .mod { text-transform: none; letter-spacing: 0; font: 500 10.5px var(--mono);
+  color: var(--muted-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.dec-kpi .valor { font-size: 24px; font-weight: 700; color: var(--ink); line-height: 1.15; }
+.dec-kpi .valor small { font-size: 12px; font-weight: 600; color: var(--muted); margin-left: 5px; }
+.dec-kpi .valor.dec-sin { color: var(--muted-2); }
+.dec-kpi .rango { font: 500 11px var(--mono); color: var(--muted); margin-top: 4px; line-height: 1.5; }
+/* la decisión de lluvia ocupa la fila completa y se tiñe según SÍ/NO */
+.dec-kpi-lluvia { grid-column: 1 / -1; }
+.dec-kpi-lluvia.si { background: var(--blue-50); border-color: var(--blue-100); }
+.dec-kpi-lluvia.si .valor { color: var(--blue); }
+.dec-kpi-lluvia.no .valor { color: var(--muted); }
+
+/* tarjeta VALIDACIÓN: una fila por decisión (Tmax · Tmin · detección de lluvia) */
+.dec-val-filas { margin-top: 7px; }
+.dec-val-fila { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px;
+  padding: 9px 2px; border-top: 1px solid var(--line-3); font-size: 12.5px; color: var(--ink-2); }
+.dec-val-fila:first-child { border-top: none; }
+.dec-val-fila .var { flex: none; width: 122px; font-weight: 650; color: var(--ink); }
+.dec-val-fila .mod { display: inline-flex; align-items: center; font: 600 11px var(--mono);
+  color: var(--muted); white-space: nowrap; }
+.dec-val-fila .met { font: 600 12px var(--mono); color: var(--ink); white-space: nowrap; }
+.dec-val-fila .n { font: 500 11px var(--mono); color: var(--muted-2); margin-left: auto; white-space: nowrap; }
+@media (max-width: 480px) { .dec-val-fila .var { width: 100%; } .dec-val-fila .n { margin-left: 0; } }
