@@ -1,1 +1,1 @@
-{"agg_precip":"sum_07_07","codigo":"M1253","fecha":"2026-07-07","hoy":"2026-07-06","lluvia":{"llueve":false,"prob":2,"prob_fuerte":0,"q25":0.0,"q75":0.3,"texto":"NO"},"nombre":"P. Hondo","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_07_07","codigo":"M1253","fecha":"2026-07-07","hoy":"2026-07-06","lluvia":{"llueve":false,"prob":0,"prob_fuerte":0,"q25":0.0,"q75":0.1,"texto":"NO"},"nombre":"P. Hondo","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

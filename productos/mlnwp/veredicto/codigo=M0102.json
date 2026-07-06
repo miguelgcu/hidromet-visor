@@ -1,1 +1,1 @@
-{"agg_precip":"sum_07_07","codigo":"M0102","fecha":"2026-07-07","hoy":"2026-07-06","lluvia":{"llueve":false,"prob":24,"prob_fuerte":3,"q25":0.0,"q75":1.6,"texto":"NO"},"nombre":"El \u00c1ngel","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_07_07","codigo":"M0102","fecha":"2026-07-07","hoy":"2026-07-06","lluvia":{"llueve":false,"prob":18,"prob_fuerte":3,"q25":0.0,"q75":1.0,"texto":"NO"},"nombre":"El \u00c1ngel","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"HN11","fecha":"2026-07-07","hoy":"2026-07-06","lluvia":{"llueve":false,"prob":32,"prob_fuerte":7,"q25":0.0,"q75":2.0,"texto":"NO"},"nombre":"Cerradora","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"HN11","fecha":"2026-07-07","hoy":"2026-07-06","lluvia":{"llueve":false,"prob":9,"prob_fuerte":4,"q25":0.0,"q75":2.2,"texto":"NO"},"nombre":"Cerradora","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

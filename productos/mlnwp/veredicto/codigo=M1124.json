@@ -1,1 +1,1 @@
-{"agg_precip":"sum_07_07","codigo":"M1124","fecha":"2026-07-07","hoy":"2026-07-06","lluvia":{"llueve":true,"prob":84,"prob_fuerte":44,"q25":0.0,"q75":18.1,"texto":"S\u00cd"},"nombre":"Sierra Azul","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_07_07","codigo":"M1124","fecha":"2026-07-07","hoy":"2026-07-06","lluvia":{"llueve":true,"prob":90,"prob_fuerte":50,"q25":7.6,"q75":27.8,"texto":"S\u00cd"},"nombre":"Sierra Azul","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
