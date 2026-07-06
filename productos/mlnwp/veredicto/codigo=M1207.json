@@ -1,1 +1,1 @@
-{"agg_precip":"sum_07_07","codigo":"M1207","fecha":"2026-07-06","hoy":"2026-07-05","lluvia":{"llueve":false,"prob":13,"prob_fuerte":2,"q25":0.0,"q75":1.3,"texto":"NO"},"nombre":"Nobol","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_07_07","codigo":"M1207","fecha":"2026-07-07","hoy":"2026-07-06","lluvia":{"llueve":false,"prob":15,"prob_fuerte":2,"q25":0.0,"q75":1.4,"texto":"NO"},"nombre":"Nobol","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

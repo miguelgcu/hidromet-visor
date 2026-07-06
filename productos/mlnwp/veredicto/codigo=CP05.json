@@ -1,1 +1,1 @@
-{"agg_precip":"sum_07_07","codigo":"CP05","fecha":"2026-07-06","hoy":"2026-07-05","lluvia":{"llueve":false,"prob":9,"prob_fuerte":2,"q25":0.0,"q75":1.1,"texto":"NO"},"nombre":"Sta.B\u00e1rbara","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_07_07","codigo":"CP05","fecha":"2026-07-07","hoy":"2026-07-06","lluvia":{"llueve":false,"prob":31,"prob_fuerte":5,"q25":0.6,"q75":4.0,"texto":"NO"},"nombre":"Sta.B\u00e1rbara","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
