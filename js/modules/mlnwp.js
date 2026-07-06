@@ -695,17 +695,23 @@
       const opBase = m.opacity ?? .7;
       const op = oscuro ? Math.max(.85, opBase) : opBase;
       const wLin = oscuro ? Math.max(2, m.width ?? 1.5) : (m.width ?? 1.5);
-      if (esPrecip) {
-        traces.push({ type: "bar", x: fx(m.fechas), y: m.valores, name: `${m.modelo} (${num(m.rating, 1)})`,
+      // 'Sin entrenamiento' (m.dash/m.sin_entrenar) = tramo pasado-sin-obs con el fallback
+      // colapsado: UNA línea punteada gris SIN rating (aunque sea precip), en vez de ~26
+      // líneas/barras idénticas superpuestas ("todos los modelos iguales / plano").
+      const rtxt = m.sin_entrenar ? "" : ` (${num(m.rating, 1)})`;
+      if (esPrecip && !m.dash) {
+        traces.push({ type: "bar", x: fx(m.fechas), y: m.valores, name: `${m.modelo}${rtxt}`,
           marker: { color, opacity: op }, hovertemplate: `${esc(m.modelo)}: %{y} ${unidad}<extra></extra>` });
       } else {
         // connectgaps:false + eje completo con null (series.py): un hueco de fechas
         // se ve como hueco, NO como diagonal fantasma (queja La Argelia 84270 03/07).
-        traces.push({ type: "scatter", mode: "lines", x: fx(m.fechas), y: m.valores, name: `${m.modelo} (${num(m.rating, 1)})`,
-          line: { color, width: wLin }, opacity: op, connectgaps: false,
+        traces.push({ type: "scatter", mode: "lines", x: fx(m.fechas), y: m.valores, name: `${m.modelo}${rtxt}`,
+          line: { color, width: wLin, ...(m.dash ? { dash: m.dash } : {}) }, opacity: op, connectgaps: false,
           hovertemplate: `${esc(m.modelo)}: %{y} ${unidad}<extra></extra>` });
       }
-      leyenda.push(`<span class="it"><span class="sw-caja" style="background:${esc(color)};opacity:${op}"></span>${esc(m.modelo)} (${num(m.rating, 1)})</span>`);
+      const swStyle = m.dash ? `border-top:2px dotted ${esc(color)};height:0`
+                             : `background:${esc(color)};opacity:${op}`;
+      leyenda.push(`<span class="it"><span class="sw-caja" style="${swStyle}"></span>${esc(m.modelo)}${rtxt}</span>`);
     }
 
     // Observado: línea punteada negra con marcadores cuadrados.

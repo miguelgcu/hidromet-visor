@@ -497,7 +497,11 @@
     if (!Array.isArray(lon) || lon.length < 2 || !Array.isArray(lat) || lat.length < 2
         || !Array.isArray(z) || z.length < 2 || !Array.isArray(z[0]) || z[0].length < 2) return P;
     const paso = Math.abs(lon[1] - lon[0]);
-    const f = paso > 0.075 ? Math.min(3, Math.round(paso / 0.05)) : 1;
+    // Visor: malla decimada ×2 (~0.10°). Se re-refina a ~0.033° (f≈3) con interpolación
+    // BICÚBICA (Catmull-Rom), no bilineal: recupera la curvatura del bicúbico ×5 del
+    // backend que la decimación descartó → sin escalones en los bordes de banda, +0 KB
+    // de peso. App viva (paso ya ~0.05°) → f=1: no toca nada.
+    const f = paso > 0.06 ? Math.min(4, Math.max(2, Math.round(paso / 0.03))) : 1;
     if (f <= 1) return P;
     const eje = (a) => {
       const out = new Array((a.length - 1) * f + 1);
@@ -508,19 +512,43 @@
     };
     const ny = z.length, nx = z[0].length;
     const NY = (ny - 1) * f + 1, NX = (nx - 1) * f + 1;
-    const val = (j, i) => { const v = z[j][i]; return (v == null || !isFinite(v)) ? null : v; };
+    const at = (j, i) => {                    // acceso con índices recortados al borde
+      j = j < 0 ? 0 : (j > ny - 1 ? ny - 1 : j);
+      i = i < 0 ? 0 : (i > nx - 1 ? nx - 1 : i);
+      const v = z[j][i]; return (v == null || !isFinite(v)) ? NaN : v;
+    };
+    const cr = (a, b, c, d, t) =>             // núcleo Catmull-Rom 1D
+      0.5 * ((2 * b) + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t * t
+             + (-a + 3 * b - 3 * c + d) * t * t * t);
     const campo = new Array(NY);
     for (let J = 0; J < NY; J++) {
       const j = Math.min(Math.floor(J / f), ny - 2), ty = J / f - j;
       const fila = new Array(NX);
       for (let I = 0; I < NX; I++) {
         const i = Math.min(Math.floor(I / f), nx - 2), tx = I / f - i;
-        let s = 0, w = 0, v;
-        v = val(j, i);     if (v != null) { const k = (1 - tx) * (1 - ty); s += v * k; w += k; }
-        v = val(j, i + 1); if (v != null) { const k = tx * (1 - ty);       s += v * k; w += k; }
-        v = val(j + 1, i); if (v != null) { const k = (1 - tx) * ty;       s += v * k; w += k; }
-        v = val(j + 1, i + 1); if (v != null) { const k = tx * ty;         s += v * k; w += k; }
-        fila[I] = w > 0.05 ? s / w : null;
+        // Un solo barrido del entorno 4×4: detecta máscara (NaN) y toma min/max locales.
+        let hueco = false, lmin = Infinity, lmax = -Infinity;
+        for (let dj = -1; dj <= 2; dj++)
+          for (let di = -1; di <= 2; di++) {
+            const v = at(j + dj, i + di);
+            if (isNaN(v)) { hueco = true; }
+            else { if (v < lmin) lmin = v; if (v > lmax) lmax = v; }
+          }
+        if (hueco) {                          // borde tierra-mar: bilineal de las 4 esquinas
+          let s = 0, w = 0, v;                // (conserva la máscara, sin ringing hacia el mar)
+          v = at(j, i);         if (!isNaN(v)) { const k = (1 - tx) * (1 - ty); s += v * k; w += k; }
+          v = at(j, i + 1);     if (!isNaN(v)) { const k = tx * (1 - ty);       s += v * k; w += k; }
+          v = at(j + 1, i);     if (!isNaN(v)) { const k = (1 - tx) * ty;       s += v * k; w += k; }
+          v = at(j + 1, i + 1); if (!isNaN(v)) { const k = tx * ty;             s += v * k; w += k; }
+          fila[I] = w > 0.05 ? s / w : null;
+        } else {                              // interior liso: bicúbico Catmull-Rom 2D
+          const c0 = cr(at(j - 1, i - 1), at(j - 1, i), at(j - 1, i + 1), at(j - 1, i + 2), tx);
+          const c1 = cr(at(j,     i - 1), at(j,     i), at(j,     i + 1), at(j,     i + 2), tx);
+          const c2 = cr(at(j + 1, i - 1), at(j + 1, i), at(j + 1, i + 1), at(j + 1, i + 2), tx);
+          const c3 = cr(at(j + 2, i - 1), at(j + 2, i), at(j + 2, i + 1), at(j + 2, i + 2), tx);
+          let v = cr(c0, c1, c2, c3, ty);
+          fila[I] = v < lmin ? lmin : (v > lmax ? lmax : v);   // clamp anti-ringing
+        }
       }
       campo[J] = fila;
     }
