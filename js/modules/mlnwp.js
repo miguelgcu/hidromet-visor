@@ -775,29 +775,33 @@
     if (probsEl) {
       const pu = d.probs_umbral;
       if (esPrecip && pu && pu.fechas && pu.fechas.length) {
-        // SOLO fechas de pronóstico (>= hoy), TODAS (sin tope de 14). Tabla TRANSPUESTA: una
-        // COLUMNA por fecha y una FILA por umbral → se extiende a TODO el ancho de la serie,
-        // fecha por fecha, alineada con el eje temporal del gráfico.
-        let idx = pu.fechas.map((_, i) => i).filter(i => !_hoy || pu.fechas[i] >= _hoy);   // F5: sin días pasados
-        if (!idx.length) idx = pu.fechas.map((_, i) => i).slice(-10);
+        // MISMO horizonte que la serie de líneas: TODAS las fechas devueltas por el backend
+        // (pasado + pronóstico), que ya llegan acotadas a [max − lookback, max] con el mismo
+        // 'desde' que datos_serie. Tabla TRANSPUESTA: una COLUMNA por fecha y una FILA por
+        // umbral → se extiende a TODO el ancho de la serie, alineada con su eje temporal.
+        let idx = pu.fechas.map((_, i) => i);
+        // Índice de la 1ª columna de pronóstico (>= hoy) para separar visualmente pasado/futuro,
+        // coherente con la línea divisoria 'inicio pronóstico →' del gráfico.
+        const iHoy = _hoy ? idx.find(i => pu.fechas[i] >= _hoy) : undefined;
         const alfa = p => p < 20 ? 0.08 : p < 50 ? 0.20 : p < 75 ? 0.38 : 0.58;
         const celStyle = p => p == null
           ? "color:var(--faint)"
           : `background:rgba(43,93,170,${alfa(p).toFixed(2)});color:${p >= 50 ? "#fff" : "var(--ink)"}`;
         const dd = f => `${f.slice(8, 10)}/${f.slice(5, 7)}`;
-        const cabFechas = idx.map(i => `<th class="ml-pb-f">${dd(pu.fechas[i])}</th>`).join("");
+        const sep = i => i === iHoy ? " ml-pb-hoy" : "";   // borde que marca el inicio del pronóstico
+        const cabFechas = idx.map(i => `<th class="ml-pb-f${sep(i)}">${dd(pu.fechas[i])}</th>`).join("");
         const filasU = (pu.umbrales || []).map((u, j) => {
           const celdas = idx.map(i => {
             const p = (pu.probs[i] || [])[j];
-            return `<td class="ml-pb-c" style="${celStyle(p)}">${p == null ? "—" : p + "%"}</td>`;
+            return `<td class="ml-pb-c${sep(i)}" style="${celStyle(p)}">${p == null ? "—" : p + "%"}</td>`;
           }).join("");
           return `<tr><th class="ml-pb-u">≥${u} mm</th>${celdas}</tr>`;
         }).join("");
         probsEl.innerHTML =
-          `<div class="ml-pb-tit">Probabilidad de lluvia por umbral (pronóstico)</div>
+          `<div class="ml-pb-tit">Probabilidad de lluvia por umbral</div>
            <table class="ml-pb-tabla"><thead><tr><th class="ml-pb-esq">Umbral</th>${cabFechas}</tr></thead>
            <tbody>${filasU}</tbody></table>
-           <div class="ml-pb-nota">Probabilidad calibrada (promedio de clasificadores). Ej.: “≥25 mm = 30 %” = 30 % de probabilidad de que llueva más de 25 mm ese día.</div>`;
+           <div class="ml-pb-nota">Mismo horizonte que la serie (histórico + pronóstico); la línea vertical marca el inicio del pronóstico. Probabilidad calibrada (promedio de clasificadores). Ej.: “≥25 mm = 30 %” = 30 % de probabilidad de que llueva más de 25 mm ese día.</div>`;
       } else {
         probsEl.innerHTML = "";
       }

@@ -243,6 +243,8 @@ html[data-tema="oscuro"] .ml-region-tabla td { border-top-color: var(--line-3); 
 .ml-pb-u { text-align: left !important; color: var(--ink-2); font-weight: 600; white-space: nowrap;
   font-variant-numeric: tabular-nums; }
 .ml-pb-c { font-variant-numeric: tabular-nums; }
+/* Borde punteado que marca el inicio del pronóstico (mismo criterio que la franja de la serie) */
+.ml-pb-hoy { border-left: 1.8px dotted #6B8CB4 !important; }
 .ml-pb-nota { font-size: 10.5px; color: var(--muted-2); margin-top: 6px; }
 
 /* GLOSARIO -------------------------------------------------------------- */

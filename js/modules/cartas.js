@@ -616,9 +616,11 @@
       // Raster: cartas INTERPOLADAS (precip/temp/ALERTAS) suavizadas.
       // Continuo (precip/temp/HR/CAPE) Y alertas/heladas (campo YA refinado en backend
       // y re-refinado aquí si venía decimado, escala de color en degradado) → suavizado
-      // de ALTA CALIDAD ("best": suave, sin bloques). Solo la malla nativa por cuenca
-      // (FFGS) va SIN suavizar (no mezclar celdas por microcuenca).
-      const suavizar = d.malla ? false : "best";
+      // de ALTA CALIDAD ("best": suave, sin bloques).
+      // FFGS (d.malla): lo NÍTIDO es el relleno vectorial por subcuenca de arriba; si ese
+      // falló (cuencasOk=false) llegamos a este raster de RESPALDO → también lo suavizamos,
+      // porque pintarlo con zsmooth:false son los cuadrados duros 0.10° (el pixelado real).
+      const suavizar = "best";
       const etiq = etiquetasCarta(d);   // alertas/riesgo → etiqueta de nivel en el popup
       const hov = etiq
         ? { text: PR.campo.map(row => (row || []).map(v => etiq(v) || "")),
