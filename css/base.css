@@ -17,7 +17,7 @@
   --ml-purple: #6A47CE; --ml-purple-bg: #F6F2FE; --ml-purple-bd: #E6DDF8;
   --cyan: #0E94A4; --cyan-50: #E4F5F7; --cyan-bd: #C4E7EB; --slate: #46597A;
   /* texto */
-  --ink: #0E1A2B; --ink-2: #38465A; --muted: #58667A; --muted-2: #8794A5; --faint: #64748B;
+  --ink: #0E1A2B; --ink-2: #38465A; --muted: #58667A; --muted-2: #6B7789; --faint: #64748B;
   --on-navy: #D4DCE8;
   /* sidebar (siempre navy, sin variante de tema) */
   --sb-ink-2: #AEBBD1; --sb-ink-3: #8FA3C2;
@@ -58,7 +58,7 @@ html[data-tema="oscuro"] {
   --blue: #3D7BE8; --blue-press: #2C68DE; --blue-bright: #5C97F5;
   --blue-50: #182645; --blue-100: #25395E; --ml-purple: #8A6BE0; --ml-purple-bg: #1B1733; --ml-purple-bd: #2A2350;
   --cyan: #2AAFBE; --cyan-50: #102B30; --cyan-bd: #1C4A50;
-  --ink: #E8EDF6; --ink-2: #9DAABF; --muted: #9DAABF; --muted-2: #75859D; --faint: #8496AF;
+  --ink: #E8EDF6; --ink-2: #9DAABF; --muted: #9DAABF; --muted-2: #8A99B2; --faint: #8496AF;
   --line: #28354F; --line-2: #2C3A55; --line-3: #1E2B45; --line-4: #1E2B45;
   /* v11 — componentes (variantes oscuras) */
   --btn-suave-bg: var(--surface-3); --btn-suave-bd: var(--line);
@@ -77,6 +77,24 @@ html[data-tema="oscuro"] {
 html, body { height: 100%; margin: 0; }
 body { font-family: var(--fuente); background: var(--bg-app); color: var(--ink);
   font-size: 14px; overflow: hidden; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+
+/* ---------- accesibilidad global ----------
+   Foco de teclado de MARCA en TODO control interactivo. Antes --focus-ring estaba
+   definido pero sin usar y los controles propios de cada módulo (.gg-btn, .sngr-*,
+   .cl-pill, chips, pestañas…) caían al outline por defecto del navegador o a nada.
+   Esta regla los cubre de golpe; .boton/inputs conservan su anillo propio. */
+button:focus-visible, [role="button"]:focus-visible, a:focus-visible,
+summary:focus-visible, [tabindex]:focus-visible,
+.chip:focus-visible, .nav-item:focus-visible {
+  outline: none; box-shadow: var(--focus-ring);
+}
+/* Respetar la preferencia de movimiento reducido del sistema operativo. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important; animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important; scroll-behavior: auto !important;
+  }
+}
 
 /* ---------- layout raíz ---------- */
 #capa-app { display: flex; height: 100vh; }

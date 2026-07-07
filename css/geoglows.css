@@ -66,8 +66,12 @@ html[data-tema="oscuro"] .gg-rio .dot, html[data-tema="oscuro"] .gg-leyenda i { 
 .gg-hidro-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
 .gg-hidro-head h3 { margin: 0; font-size: 1.05rem; color: var(--ink); }
 .gg-alerta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 6px 0; }
+/* Patrón .etiqueta: texto --ink sobre fondo tintado del color del nivel (antes era
+   texto BLANCO sobre el color sólido → ilegible en los niveles amarillos, ~1.8:1). */
 .gg-chip { display: inline-block; padding: 3px 11px; border-radius: 999px; font-size: .78rem;
-  font-weight: 700; color: #fff; background: var(--c, #6B7785); white-space: nowrap; }
+  font-weight: 700; color: var(--ink); white-space: nowrap;
+  background: color-mix(in srgb, var(--c, #6B7785) 16%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--c, #6B7785) 42%, transparent); }
 .gg-plot { width: 100%; flex: 1; min-height: 420px; }
 @media (max-width: 1100px) { .gg-plot { min-height: 340px; } }
 

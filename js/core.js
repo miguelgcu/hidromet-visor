@@ -340,6 +340,10 @@ const App = (() => {
       vista.innerHTML = `<div class="vacio"><div class="icono">⚠️</div>
         <strong>No se pudo cargar este módulo</strong><span>${e && e.message}</span></div>`;
     }
+    // A11y: tras reemplazar todo el #vista, llevar el foco al encabezado del módulo
+    // para que el teclado y el lector de pantalla no queden perdidos en el body.
+    const _h = vista.querySelector("h1");
+    if (_h) { _h.setAttribute("tabindex", "-1"); try { _h.focus({ preventScroll: true }); } catch (e) {} }
     // §B.8: si una tarea sigue viva, los controles recién pintados por el módulo
     // deben nacer ya bloqueados (el router reemplazó todo el #vista).
     sincronizarBloqueo();

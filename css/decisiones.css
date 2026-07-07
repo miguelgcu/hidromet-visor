@@ -49,7 +49,8 @@
   color: var(--faint); margin-bottom: 6px; }
 .dec-kpi .lab .mod { text-transform: none; letter-spacing: 0; font: 500 10.5px var(--mono);
   color: var(--muted-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.dec-kpi .valor { font-size: 24px; font-weight: 700; color: var(--ink); line-height: 1.15; }
+.dec-kpi .valor { font: 700 24px var(--mono); font-variant-numeric: tabular-nums;
+  color: var(--ink); line-height: 1.15; }
 .dec-kpi .valor small { font-size: 12px; font-weight: 600; color: var(--muted); margin-left: 5px; }
 .dec-kpi .valor.dec-sin { color: var(--muted-2); }
 .dec-kpi .rango { font: 500 11px var(--mono); color: var(--muted); margin-top: 4px; line-height: 1.5; }
