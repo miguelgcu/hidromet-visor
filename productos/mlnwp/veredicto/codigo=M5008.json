@@ -1,1 +1,1 @@
-{"agg_precip":"sum_07_07","codigo":"M5008","fecha":"2026-07-07","hoy":"2026-07-06","lluvia":{"llueve":true,"prob":99,"prob_fuerte":60,"q25":12.6,"q75":27.9,"texto":"S\u00cd"},"nombre":"Quijos-Cosan","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_07_07","codigo":"M5008","fecha":"2026-07-07","hoy":"2026-07-06","lluvia":{"llueve":true,"prob":91,"prob_fuerte":50,"q25":7.3,"q75":21.1,"texto":"S\u00cd"},"nombre":"Quijos-Cosan","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

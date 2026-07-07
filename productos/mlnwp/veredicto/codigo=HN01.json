@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"HN01","fecha":"2026-07-07","hoy":"2026-07-06","lluvia":{"llueve":false,"prob":13,"prob_fuerte":3,"q25":0.0,"q75":1.0,"texto":"NO"},"nombre":"Dique 1","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"HN01","fecha":"2026-07-07","hoy":"2026-07-06","lluvia":{"llueve":false,"prob":14,"prob_fuerte":3,"q25":9.3,"q75":14.1,"texto":"NO"},"nombre":"Dique 1","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

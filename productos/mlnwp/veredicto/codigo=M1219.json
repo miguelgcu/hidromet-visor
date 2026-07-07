@@ -1,1 +1,1 @@
-{"agg_precip":"sum_07_07","codigo":"M1219","fecha":"2026-07-07","hoy":"2026-07-06","lluvia":{"llueve":true,"prob":99,"prob_fuerte":60,"q25":13.6,"q75":28.9,"texto":"S\u00cd"},"nombre":"Tena Hda","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_07_07","codigo":"M1219","fecha":"2026-07-07","hoy":"2026-07-06","lluvia":{"llueve":true,"prob":90,"prob_fuerte":55,"q25":10.6,"q75":24.4,"texto":"S\u00cd"},"nombre":"Tena Hda","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

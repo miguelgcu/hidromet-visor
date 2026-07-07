@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"HN23","fecha":"2026-07-07","hoy":"2026-07-06","lluvia":{"llueve":false,"prob":16,"prob_fuerte":5,"q25":0.0,"q75":2.5,"texto":"NO"},"nombre":"Pto. Lim\u00f3n","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"HN23","fecha":"2026-07-07","hoy":"2026-07-06","lluvia":{"llueve":false,"prob":29,"prob_fuerte":5,"q25":5.0,"q75":12.2,"texto":"NO"},"nombre":"Pto. Lim\u00f3n","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

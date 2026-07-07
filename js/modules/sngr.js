@@ -143,9 +143,12 @@
     const sel = estado.sel.tipo || "";
     document.querySelectorAll('.sngr-pill[data-rol="pill"]').forEach(c => {
       const tipo = c.dataset.tipo || "";
+      const val = tipo ? (conteos[tipo] || 0) : total;
       const num = c.querySelector('[data-rol="num"]');
-      if (num) num.textContent = fmt(tipo ? (conteos[tipo] || 0) : total);
+      if (num) num.textContent = fmt(val);
       c.classList.toggle("activa", tipo === sel);
+      // Dinámico: los tipos sin eventos en el filtro vigente se apagan (Todos nunca).
+      c.classList.toggle("cero", tipo !== "" && Number(val) === 0);
     });
   }
   function conectarConteos() {
@@ -217,10 +220,17 @@
               <span><i class="rio-men"></i>Secundarios</span>
             </div>
           </div>
+          <div class="sngr-conteos-panel">
+            <div class="sngr-conteos-cab">
+              <span class="tit">Eventos recientes</span>
+              <button class="boton chico" data-rol="descargar-xlsx"
+                title="Descargar conteos por cuenca/subcuenca (todos los niveles) en XLSX, según el filtro">⤓ Conteos XLSX</button>
+            </div>
+            ${conteosHTML()}
+          </div>
         </div>
         <div class="sngr-tabla-tarjeta">
-          <div class="tit">Eventos recientes</div>
-          ${conteosHTML()}
+          <div class="tit">Últimos eventos</div>
           <div class="sngr-tabla-scroll">
             <table class="sngr-tabla">
               <thead><tr><th>Fecha</th><th>Tipo</th><th>Lugar</th></tr></thead>
@@ -553,6 +563,17 @@
       App.aviso("Exportar: " + e.message, "error");
     } finally { btn.disabled = false; }
   }
+  // Descarga el XLSX dedicado de conteos por cuenca/subcuenca (N1–N4) del filtro vigente.
+  async function descargarConteos(btn) {
+    const prev = btn.textContent;
+    btn.disabled = true; btn.textContent = "⧗ Generando…";
+    try {
+      const r = await App.api("/sngr/exportar_xlsx" + queryFiltros());
+      App.aviso(`Conteos por cuenca (XLSX) guardado en Descargas: ${r.archivo}`, "ok", 6000);
+    } catch (e) {
+      App.aviso("Descargar conteos: " + e.message, "error");
+    } finally { btn.disabled = false; btn.textContent = prev; }
+  }
   async function actualizar() {
     try {
       // Hidrología = SNGR (eventos ríos) + FFGS, en una sola tarea (áreas en paralelo).
@@ -578,8 +599,8 @@
 
     // v11: sin fila de acciones aparte — los botones van dentro de la fila de filtros
     // (filtrosHTML) y se ligan en conectarFiltros(), sobreviviendo la cascada.
-    // v12: las pastillas de conteo viven en la tarjeta de la tabla (mapaTablaHTML),
-    // no dominando la cabecera de la vista.
+    // v13: las pastillas de conteo viven DEBAJO del mapa (mapaTablaHTML), con su botón
+    // de descarga de conteos por cuenca al lado; la tabla lateral solo lista eventos.
     cont.innerHTML = `<div data-screen-label="Eventos de Ríos">
       ${filtrosHTML(f)}
       ${mapaTablaHTML()}
@@ -587,6 +608,8 @@
 
     conectarFiltros();
     conectarConteos();
+    const bXlsx = cont.querySelector('[data-rol="descargar-xlsx"]');
+    if (bXlsx) bXlsx.onclick = () => descargarConteos(bXlsx);
 
     iniciarMapa(cont.querySelector('[data-rol="mapa"]'));
     cont.querySelector('[data-rol="capa"]').onchange = (e) => pintarCapaBase(e.target.value);

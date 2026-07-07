@@ -1,1 +1,1 @@
-{"agg_precip":"sum_07_07","codigo":"M0188","fecha":"2026-07-07","hoy":"2026-07-06","lluvia":{"llueve":true,"prob":95,"prob_fuerte":34,"q25":7.5,"q75":13.6,"texto":"S\u00cd"},"nombre":"Papallacta","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_07_07","codigo":"M0188","fecha":"2026-07-07","hoy":"2026-07-06","lluvia":{"llueve":true,"prob":77,"prob_fuerte":28,"q25":3.7,"q75":9.8,"texto":"S\u00cd"},"nombre":"Papallacta","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

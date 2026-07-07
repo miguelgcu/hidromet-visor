@@ -652,7 +652,7 @@
       <div class="ml-serie-plot" id="ml-plot-serie"></div>
       <div class="ml-serie-leyenda" id="ml-serie-leyenda"></div>
       <div class="ml-serie-probs" id="ml-serie-probs"></div>
-      <p class="ml-serie-pie">Observado vs. pronóstico (la franja sombreada de la derecha es el horizonte futuro). Los modelos se atenúan según su calificación.${esPrecip ? " Abanico azul = pronóstico probabilístico: franja oscura 50 % probable (P25–P75), clara 80 % (P10–P90); detalle por umbral en la tabla." : ""}</p>`;
+      <p class="ml-serie-pie">Observado vs. pronóstico (la franja sombreada de la derecha es el horizonte futuro). Los modelos se atenúan según su calificación.${esPrecip ? " Abanico azul = pronóstico probabilístico: franja oscura 50 % probable (P25–P75), clara 80 % (P10–P90); detalle por umbral en la tabla." : (d.banda ? " Franja azul = pronóstico probabilístico: rango 50 % probable (Q25–Q75), en el mismo horizonte que las líneas." : "")}</p>`;
 
     const el = document.getElementById("ml-plot-serie");
     if (!window.Plotly || !el) return;
@@ -660,10 +660,11 @@
     const traces = [];
     const fx = arr => (arr || []).map(s => s);
 
-    // ABANICO probabilístico (precip): banda EXTERNA 80 % (P10–P90, clara) + banda
-    // INTERNA 50 % (P25–P75, más oscura) + mediana P50 destacada. Comunica la
-    // incertidumbre con jerarquía (rango probable vs extremos), no una sola sombra.
-    if (esPrecip && d.banda && d.banda.fechas && d.banda.fechas.length) {
+    // ABANICO probabilístico. Precip: banda EXTERNA 80 % (P10–P90, clara) + INTERNA 50 %
+    // (P25–P75, más oscura) + mediana P50. Temperatura: banda 50 % (Q25–Q75) sobre el
+    // MISMO horizonte pasado+pronóstico que las líneas (solo trae p25/p75 → se dibuja la
+    // franja interna; sin p10/p90/p50, esas ramas se saltan solas).
+    if (d.banda && d.banda.fechas && d.banda.fechas.length) {
       const b = d.banda;
       const poligono = (lo, hi, color) => {
         const xs = [], ys = [];
@@ -742,8 +743,15 @@
     // congela los JSON y el 'hoy' del backend envejece; d.hoy queda de fallback.
     const _hoy = (App.hoyEC ? App.hoyEC() : d.hoy);
     if (_hoy) {
-      const finX = (d.banda && d.banda.fechas && d.banda.fechas.length ? d.banda.fechas[d.banda.fechas.length - 1] : null)
-        || ((d.modelos || []).flatMap(m => m.fechas || []).sort().slice(-1)[0]) || _hoy;
+      // finX = la fecha MÁS TARDÍA entre banda y modelos (no solo la banda): banda y
+      // líneas salen de bases distintas y solo comparten el 'desde'; tomar el máximo
+      // hace que la franja de 'futuro' cubra TODO el pronóstico dibujado, sin importar
+      // cuál se extienda más (coherente con el pie 'mismo horizonte que las líneas').
+      const _fins = [];
+      if (d.banda && d.banda.fechas && d.banda.fechas.length) _fins.push(d.banda.fechas[d.banda.fechas.length - 1]);
+      const _modFechas = (d.modelos || []).flatMap(m => m.fechas || []);
+      if (_modFechas.length) _fins.push(_modFechas.slice().sort().slice(-1)[0]);
+      const finX = _fins.length ? _fins.sort().slice(-1)[0] : _hoy;
       layout.shapes = [
         { type: "rect", x0: _hoy, x1: finX, yref: "paper", y0: 0, y1: 1, layer: "below",
           fillcolor: "rgba(107,140,180,.07)", line: { width: 0 } },
@@ -759,7 +767,7 @@
     const leyEl = document.getElementById("ml-serie-leyenda");
     if (leyEl) leyEl.innerHTML =
       `<span class="it"><span class="sw-linea"></span>Observado</span>` + leyenda.join("") +
-      (esPrecip ? `<span class="it"><span class="sw-banda"></span>Pronóstico probabilístico (50 % / 80 %)</span>` : "");
+      (d.banda ? `<span class="it"><span class="sw-banda"></span>Pronóstico probabilístico (${esPrecip ? "50 % / 80 %" : "50 % · Q25–Q75"})</span>` : "");
 
     // Tabla de probabilidades por umbral: los porcentajes por nivel de lluvia (antes
     // solo se veía la 'sombra' de la banda y no estos números).

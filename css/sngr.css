@@ -18,22 +18,32 @@
 
 /* ---------- conteos: pills compactas, clicables y dinámicas por filtro ---------- */
 .sngr-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
-/* v12: las pastillas viven en la tarjeta de la tabla — versión compacta */
-.sngr-tabla-tarjeta .sngr-pills { gap: 5px; margin: 8px 0 10px; }
-.sngr-tabla-tarjeta .sngr-pill { padding: 3px 9px; }
-.sngr-tabla-tarjeta .sngr-pill .et { font-size: 11px; }
-.sngr-tabla-tarjeta .sngr-pill .num { font-size: 11.5px; }
-.sngr-tabla-tarjeta .sngr-pill .punto { width: 7px; height: 7px; flex: 0 0 7px; }
-.sngr-pill { display: inline-flex; align-items: center; gap: 7px; padding: 6px 13px;
+
+/* v13: panel de conteos DEBAJO del mapa (dentro de la tarjeta del mapa) — cabecera con
+   título + botón de descarga de conteos por cuenca, y la fila de pastillas reactivas. */
+.sngr-conteos-panel { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line-3); }
+.sngr-conteos-cab { display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin-bottom: 9px; flex-wrap: wrap; }
+.sngr-conteos-cab .tit { font: 600 10px var(--mono); letter-spacing: .08em; color: var(--faint);
+  text-transform: uppercase; }
+.sngr-conteos-cab .boton.chico { padding: 6px 11px; font-size: 12px; }
+.sngr-conteos-cab .boton.chico:hover { border-color: var(--cyan); color: var(--cyan); }
+.sngr-conteos-panel .sngr-pills { gap: 6px; margin-bottom: 0; }
+
+.sngr-pill { display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px;
   border-radius: 999px; border: 1px solid var(--line); background: var(--surface);
-  cursor: pointer; box-shadow: var(--shadow-card); transition: border-color .12s, background .12s; }
-.sngr-pill .punto { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 9px; }
+  cursor: pointer; box-shadow: var(--shadow-card); transition: border-color .12s, background .12s, opacity .18s; }
+.sngr-pill .punto { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 8px; }
 .sngr-pill .punto.todos { background: linear-gradient(135deg, var(--blue), var(--ml-purple)); }
 .sngr-pill .et { font: 600 12px var(--fuente); color: var(--muted); }
 .sngr-pill .num { font: 700 13px var(--mono); color: var(--ink); }
 .sngr-pill:hover { border-color: var(--cyan); }
 .sngr-pill.activa { border-color: var(--cyan); background: var(--surface-3); }
 .sngr-pill.activa .et { color: var(--ink); }
+/* dinámico: un tipo sin eventos en el filtro vigente se apaga (no se oculta, para no
+   descuadrar la fila y mantener el clic disponible) */
+.sngr-pill.cero { opacity: .42; }
+.sngr-pill.cero:not(:hover) { box-shadow: none; }
 
 /* ---------- filtros en cascada (una fila) ---------- */
 .sngr-filtros { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;

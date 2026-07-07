@@ -1,1 +1,1 @@
-{"agg_precip":"sum_07_07","codigo":"M5021","fecha":"2026-07-07","hoy":"2026-07-06","lluvia":{"llueve":true,"prob":91,"prob_fuerte":27,"q25":3.6,"q75":15.0,"texto":"S\u00cd"},"nombre":"Yura Faccha Oyacachi","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_07_07","codigo":"M5021","fecha":"2026-07-07","hoy":"2026-07-06","lluvia":{"llueve":true,"prob":81,"prob_fuerte":15,"q25":1.4,"q75":12.9,"texto":"S\u00cd"},"nombre":"Yura Faccha Oyacachi","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
