@@ -168,18 +168,23 @@
   function pintarMarcadores(items) {
     if (!estado.mapa) return;
     if (estado.marcadores) estado.mapa.removeLayer(estado.marcadores);
+    // TÁCTIL: marcador MÁS GRANDE (objetivo cómodo al dedo) y SIN tooltip sticky. En iOS el
+    // tooltip roba el primer toque (muestra el globo en vez de accionar) → el usuario sentía que
+    // "no pasa nada". Sin tooltip, el primer tap va directo a cargar el hidrograma.
+    const _touch = !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
     const grupo = L.layerGroup();
     for (const it of items) {
       if (typeof it.lat !== "number" || typeof it.lon !== "number") continue;
       // Aro del marcador temático: negro sobre teselas claras, claro sobre las oscuras.
       const m = L.circleMarker([it.lat, it.lon], {
-        radius: 8, color: (App.tema && App.tema() === "oscuro") ? "#E8EDF6" : "#000000",
-        weight: 1.5, fillColor: colorNivel(it.nivel_alerta), fillOpacity: 0.95 });
+        radius: _touch ? 11 : 8, color: (App.tema && App.tema() === "oscuro") ? "#E8EDF6" : "#000000",
+        weight: 1.5, fillColor: colorNivel(it.nivel_alerta), fillOpacity: 0.95, bubblingMouseEvents: false });
       const na = it.nivel_alerta ? it.nivel_alerta.etiqueta : "sin pronóstico (pulsa Actualizar)";
-      m.bindTooltip(`<b>${esc(it.nombre)}</b><br>${esc(na)}`, { direction: "top", sticky: true });
-      m.on("click", (e) => { L.DomEvent.stopPropagation(e);
+      if (!_touch) m.bindTooltip(`<b>${esc(it.nombre)}</b><br>${esc(na)}`, { direction: "top", sticky: true });
+      const _sel = (e) => { if (e) L.DomEvent.stopPropagation(e);
         if (it.river_id) cargarHidrograma(it.river_id, it.nombre, it.lat, it.lon);
-        else if (!window.HIDROMET_VISOR) consultarPunto(it.lat, it.lon); });
+        else if (!window.HIDROMET_VISOR) consultarPunto(it.lat, it.lon); };
+      m.on("click", _sel);           // ratón + tap normalizado por Leaflet
       grupo.addLayer(m);
     }
     grupo.addTo(estado.mapa);

@@ -20,6 +20,10 @@
   const esc = v => String(v ?? "").replace(/[&<>"']/g,
     c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const api = (r) => "/api" + r;                       // ruta directa para <img src>
+  // TÁCTIL: en pantallas de puntero grueso (teléfonos/tablets) las cartas se renderizan
+  // ESTÁTICAS (Plotly no captura el toque) → un dedo NO hace pan/deforma el mapa (la página se
+  // desplaza normal) y el zoom es el PELLIZCO NATIVO del navegador (dos dedos, sin deformar).
+  const TOUCH_COARSE = !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
   const qs = (o) => Object.entries(o).filter(([, v]) => v !== undefined && v !== null && v !== "")
     .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&");
 
@@ -745,7 +749,7 @@
     }
     const c = div.querySelector(".cargando"); if (c) c.remove();
     const plot = div.querySelector(".ct-mapa-plot");
-    Plotly.newPlot(plot, traces, layout, App.plotlyConfig({ scrollZoom: true, displayModeBar: false, doubleClick: "reset" }));
+    Plotly.newPlot(plot, traces, layout, App.plotlyConfig({ scrollZoom: !TOUCH_COARSE, staticPlot: TOUCH_COARSE, displayModeBar: false, doubleClick: "reset" }));
     // Datos para reconstruir la carta FORMAL al descargar en el VISOR (título + leyenda/
     // colorbar), ya que ahí no hay backend que renderice el PNG formal. En la app se usa
     // el render del servidor. Se guardan en el propio div del plot.
@@ -1927,7 +1931,7 @@
       yaxis: { range: [ext[2], ext[3]], scaleanchor: "x", scaleratio: 1, visible: false, fixedrange: false },
       dragmode: "pan",
     });
-    Plotly.newPlot(div, traces, layout, App.plotlyConfig({ scrollZoom: true, displayModeBar: false, doubleClick: "reset" }));
+    Plotly.newPlot(div, traces, layout, App.plotlyConfig({ scrollZoom: !TOUCH_COARSE, staticPlot: TOUCH_COARSE, displayModeBar: false, doubleClick: "reset" }));
   }
 
   function tarjetaAdvertencia(adv) {
@@ -2030,7 +2034,7 @@
       dragmode: mini ? false : "pan",
     });
     Plotly.newPlot(div, trazasCruce(datos, mini), layout,
-      App.plotlyConfig({ scrollZoom: !mini, displayModeBar: false, doubleClick: mini ? false : "reset" }));
+      App.plotlyConfig({ scrollZoom: !mini && !TOUCH_COARSE, staticPlot: TOUCH_COARSE, displayModeBar: false, doubleClick: mini ? false : "reset" }));
   }
 
   // Pinta los mini-mapas de las tarjetas en SECUENCIA (yield entre cada uno para no
@@ -2153,7 +2157,7 @@
       yaxis: { range: [ext[2], ext[3]], scaleanchor: "x", scaleratio: 1, visible: false, fixedrange: false },
       dragmode: "pan",
     });
-    Plotly.newPlot(div, traces, layout, App.plotlyConfig({ scrollZoom: true, displayModeBar: false, doubleClick: "reset" }));
+    Plotly.newPlot(div, traces, layout, App.plotlyConfig({ scrollZoom: !TOUCH_COARSE, staticPlot: TOUCH_COARSE, displayModeBar: false, doubleClick: "reset" }));
   }
 
   /* ============================================================
