@@ -1788,12 +1788,13 @@
           ${banner}
           <div class="ct-stats" style="margin:0 0 10px">
             <div class="ct-stat"><div class="v ok">${ag.pod_pct != null ? fmtPct(ag.pod_pct) + "<small> %</small>" : "—"}</div><div class="k">POD global (Σcubiertos/Σeventos)</div></div>
+            <div class="ct-stat"><div class="v">${ag.far_dia_pct != null ? fmtPct(ag.far_dia_pct) + "<small> %</small>" : "—"}</div><div class="k">FAR diaria (avisos sin evento / avisos)</div></div>
             <div class="ct-stat"><div class="v">${fmtNum(ag.cubiertos || 0)}/${fmtNum(ag.eventos || 0)}</div><div class="k">Eventos cubiertos / observados</div></div>
             <div class="ct-stat"><div class="v">${fmtNum(ag.fechas_con_eventos || 0)}<small> de ${fmtNum(ag.fechas || 0)}</small></div><div class="k">Fechas con eventos</div></div>
             <div class="ct-stat"><div class="v">${ag.area_km2_mediana != null ? fmtNum(Math.round(ag.area_km2_mediana)) : "—"}</div><div class="k">Área mediana de la zona (km²)</div></div>
           </div>
           <table class="rm-tabla"><thead><tr><th>Fecha</th><th>Eventos</th><th>Cubiertos</th><th>POD</th><th>Estado</th></tr></thead><tbody>${filas}</tbody></table>
-          <div class="rm-pie mono">POD por fecha = desbordes/crecidas SNGR dentro de la zona FFR de ese día. «Sin zona» = el FFR no marcó riesgo (si hubo eventos, cuentan como no cubiertos) · «Sin datos SNGR» = el feed aún no cubre esa fecha · las fechas atenuadas no entran al POD global.</div>`;
+          <div class="rm-pie mono">POD por fecha = desbordes/crecidas SNGR dentro de la zona FFR de ese día. FAR diaria = de los días con aviso, fracción sin ningún evento observado (sobre-aviso; no es FAR gridded — imposible con eventos puntuales). «Sin zona» = el FFR no marcó riesgo (si hubo eventos, cuentan como no cubiertos) · «Sin datos SNGR» = el feed aún no cubre esa fecha · las fechas atenuadas no entran al POD global.</div>`;
       } catch (e) { serieHost.innerHTML = `<span class="suave" style="font-size:12px">Métricas del historial no disponibles${window.HIDROMET_VISOR ? " en el visor" : ""}.</span>`; }
     };
     const cargarValida = async () => {

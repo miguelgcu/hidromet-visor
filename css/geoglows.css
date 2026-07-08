@@ -131,3 +131,23 @@ html[data-tema="oscuro"] .gg-tabla td .pt { border-color: rgba(255,255,255,.3); 
 .spin { width: 15px; height: 15px; border-radius: 50%; border: 2px solid var(--line);
   border-top-color: var(--gg-acc2); display: inline-block; animation: gg-spin .8s linear infinite; vertical-align: middle; }
 @keyframes gg-spin { to { transform: rotate(360deg); } }
+
+/* ---------- MÓVIL (teléfonos 360–430px) ---------- */
+@media (max-width: 560px) {
+  .gg { gap: 11px; }
+  .gg-title { font-size: 1.25rem; }
+  .gg-actions { flex-wrap: wrap; }
+  /* fichas de río a ancho completo (no se cortan los nombres) */
+  .gg-rio { min-width: 0; flex: 1 1 100%; }
+  /* métricas clave a 2 columnas (el auto-fit de 170px dejaría 1 sola) */
+  .gg-stats { grid-template-columns: 1fr 1fr; gap: 8px; }
+  /* mapa e hidrograma más bajos + menos padding */
+  .gg-map { min-height: 320px; }
+  .gg-plot { min-height: 300px; }
+  .gg-hidro, .gg-detalle { padding: 12px; }
+  /* zoom cómodo al tacto */
+  .gg-zoom button { width: 34px; height: 34px; }
+  .gg-btn { padding: 8px 13px; }
+  /* leyenda del mapa envuelve sin desbordar */
+  .gg-leyenda { gap: 7px 12px; }
+}

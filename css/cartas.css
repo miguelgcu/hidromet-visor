@@ -252,3 +252,28 @@
   .ct-adv-grid { grid-template-columns: repeat(2, 1fr); }
   .ct-desenlaces, .ct-stats { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ---------- MÓVIL (teléfonos 360–430px) ---------- */
+@media (max-width: 560px) {
+  /* cabecera propia a columna */
+  .ct-cabecera { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .ct-cabecera h1 { font-size: 19px; }
+  /* barras de control / buscador: menos padding, sin divisor vertical */
+  .ct-barra, .ct-barra.cols, .ct-buscador { padding: 10px 12px; gap: 9px 12px; }
+  .ct-div { display: none; }
+  .ct-derecha, .ct-capas { margin-left: 0; }
+  .ct-inst-nav, .ct-derecha { flex-wrap: wrap; }
+  /* el buscador de advertencias deja de forzar 280px */
+  .ct-buscador label { min-width: 0; flex: 1 1 100%; }
+  /* controles de instante cómodos al tacto */
+  .ct-nav { width: 36px; height: 36px; }
+  /* grillas de cartas → 1 columna; desenlaces/stats → 2 */
+  .ct-grid, .ct-grid.cuencas, .ct-adv-grid { grid-template-columns: 1fr; }
+  .ct-desenlaces, .ct-stats { grid-template-columns: repeat(2, 1fr); }
+  /* paneles y tarjetas con menos padding */
+  .ct-panel { padding: 14px; }
+  .ct-puntaje-headline { flex-wrap: wrap; gap: 10px; padding: 12px 13px; }
+  .ct-puntaje-headline .pg-num { font-size: 28px; }
+  /* tabla de umbrales (modal) con scroll horizontal */
+  .ct-umbrales-tabla { display: block; overflow-x: auto; }
+}

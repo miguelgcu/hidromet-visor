@@ -274,3 +274,28 @@ html[data-tema="oscuro"] .ml-region-tabla td { border-top-color: var(--line-3); 
   .ml-gloss-metricas { grid-template-columns: 1fr; }
   .ml-side.alto-520, .ml-mapa.alto-520 { height: 420px; }
 }
+
+/* ---------- MÓVIL (teléfonos 360–430px) ---------- */
+@media (max-width: 560px) {
+  /* pestañas: scroll horizontal en lugar de romper el layout */
+  .ml-tabs { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
+  .ml-tab { flex: none; padding: 10px 13px; }
+  /* deck de controles: estación a ancho completo, sin divisores verticales */
+  .ml-deck-cuerpo { padding: 10px 12px; }
+  .ml-grupo.ml-loc-grp { min-width: 0; max-width: none; flex: 1 1 100%; }
+  .ml-deck-div, .ml-deck-div.ml-deck-div-ancha { display: none; }
+  .ml-telemetria { margin-left: 0; padding-left: 0; }
+  /* tarjetas y rejillas */
+  .ml-card { padding: 13px; }
+  .ml-stats-grid { grid-template-columns: 1fr; }
+  .ml-ministats { gap: 7px; }
+  .ml-ministat { padding: 9px; }
+  .ml-nav-botones { flex-wrap: wrap; }
+  /* barra de color del mapa no desborda en pantallas estrechas */
+  .ml-colorbar .barra, .ml-colorbar .ticks { width: min(260px, 72vw); }
+  /* series más bajas */
+  .ml-serie-plot { height: 300px; }
+  /* tablas anchas → scroll horizontal (no hay envoltorio en el HTML) */
+  .ml-tabla-modelos, .ml-region-tabla, .ml-top10, .ml-pb-tabla {
+    display: block; overflow-x: auto; white-space: nowrap; }
+}

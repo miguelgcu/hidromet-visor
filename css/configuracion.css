@@ -130,3 +130,18 @@
 @media (max-width: 860px) {
   .cfg-rejilla { grid-template-columns: 1fr; }
 }
+
+/* ---------- MÓVIL (teléfonos 360–430px) ---------- */
+@media (max-width: 560px) {
+  .cfg-cab-tarjeta { flex-wrap: wrap; gap: 8px; }
+  /* filas clave/valor envuelven en lugar de comprimirse */
+  .cfg-clave, .cfg-fila-acerca { flex-wrap: wrap; gap: 6px; }
+  /* rutas de motores: la ruta larga se parte y no desborda */
+  .cfg-ruta { flex-direction: column; align-items: flex-start; gap: 3px; }
+  .cfg-ruta .valor-ruta { word-break: break-all; }
+  /* valores del "Acerca de" a la izquierda al envolver */
+  .cfg-fila-acerca .valor-acerca { text-align: left; }
+  .cfg-creador, .cfg-creador-edit { text-align: left; }
+  .cfg-creador-edit { min-width: 0; width: 100%; }
+  .cfg-temas { gap: 8px; }
+}

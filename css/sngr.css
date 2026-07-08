@@ -189,3 +189,24 @@ html[data-tema="oscuro"] .sngr-leyenda-mapa i.rio-men { border-top-color: #37557
 
 .sngr-popup-desc { margin-top: 5px; max-width: 240px; white-space: normal; line-height: 1.35; }
 .sngr-popup { max-width: 270px; }
+
+/* ---------- MÓVIL (teléfonos 360–430px) ---------- */
+@media (max-width: 560px) {
+  .sngr-cabecera { gap: 12px; }
+  .sngr-cabecera h1 { font-size: 19px; }
+  .sngr-acciones { flex-wrap: wrap; }
+  /* filtros a columna: cada campo/control a ancho completo (modo no compacto) */
+  .sngr-filtros { padding: 11px 12px; gap: 10px; }
+  .sngr-filtros:not(.compacta) label { width: 100%; }
+  .sngr-filtros:not(.compacta) select,
+  .sngr-filtros:not(.compacta) input[type="date"] { width: 100%; }
+  /* controles del mapa: envuelven y son cómodos al tacto */
+  .sngr-mapa-cab { gap: 8px; }
+  .sngr-mapa-controles { gap: 6px; }
+  .sngr-zoom { margin-left: 0; }
+  .sngr-zoom .zb { width: 34px; height: 34px; }
+  /* tarjetas con menos padding y tabla con scroll horizontal */
+  .sngr-mapa-tarjeta, .sngr-tabla-tarjeta { padding: 12px; }
+  .sngr-tabla-scroll { overflow-x: auto; }
+  .sngr-tabla { min-width: 380px; }
+}

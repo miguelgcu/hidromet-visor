@@ -132,3 +132,22 @@ html[data-tema="oscuro"] .datos-pag { background: var(--surface-3); border-color
 .datos-avanzadas-cuerpo { padding: 16px 17px; }
 .datos-diag { max-height: 320px; overflow: auto; background: #0B1729; color: #CFE3F7;
   border-radius: 9px; padding: 12px; font-size: 11.5px; line-height: 1.5; white-space: pre-wrap; margin: 0; }
+
+/* ---------- MÓVIL (teléfonos 360–430px) ---------- */
+@media (max-width: 560px) {
+  .datos-cabecera { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .datos-h1 { font-size: 19px; }
+  /* cabecera del catálogo: buscador a ancho completo */
+  .datos-catalogo-cab { gap: 8px; }
+  .datos-catalogo-acc { flex: 1 1 100%; }
+  .datos-buscar { width: 100%; flex: 1; }
+  /* tabla del catálogo con scroll horizontal (la caja recortaba el contenido) */
+  .datos-tabla-caja { overflow-x: auto; }
+  .datos-tabla { min-width: 460px; }
+  /* formularios del modal a 1 columna */
+  .datos-form, .datos-estaciones-chk { grid-template-columns: 1fr; }
+  .datos-form .datos-ancho2 { grid-column: auto; }
+  /* paginación envuelve */
+  .datos-paginacion { flex-wrap: wrap; gap: 8px; }
+  .datos-avanzadas-cuerpo { padding: 13px; }
+}

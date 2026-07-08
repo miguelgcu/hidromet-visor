@@ -235,3 +235,17 @@
   .ini-act-grid { grid-template-columns: 1fr; }
   .ini-cabecera { flex-direction: column; align-items: flex-start; }
 }
+
+/* ---------- MÓVIL (teléfonos 360–430px) ---------- */
+@media (max-width: 560px) {
+  .ini-saludo { font-size: 23px; }
+  /* Centro de actualización: cabecera y acciones envuelven */
+  .ini-centro { padding: 15px; }
+  .ini-centro-cab { flex-wrap: wrap; }
+  .ini-centro-cab .boton.oscuro { flex: 1 1 100%; justify-content: center; }
+  .ini-centro-acc { flex-wrap: wrap; }
+  .ini-centro-acc .boton { flex: 1; }
+  /* tarjetas laterales / métricas más ajustadas */
+  .ini-riesgo-tarjeta, .ini-cred-tarjeta { padding: 15px; }
+  .ini-card-metricas { gap: 12px; }
+}

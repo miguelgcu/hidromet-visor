@@ -24,6 +24,7 @@
     { clave: "Crecida / aumento de caudal",         etq: "Crecida",        badge: "Crecida",   color: "var(--warn)",   bg: "var(--warn-bg)"   },
     { clave: "Estiaje / bajo caudal",               etq: "Estiaje",        badge: "Estiaje",   color: "var(--warn)",   bg: "var(--warn-bg)"   },
     { clave: "Alerta GEOGLOWS",                     etq: "GEOGLOWS",       badge: "GEOGLOWS",  color: "var(--ml-purple)", bg: "var(--ml-purple-bg)" },
+    { clave: "Sin clasificar",                      etq: "Sin clasificar", badge: "S/C",       color: "var(--muted)",  bg: "var(--surface-3)" },
   ];
   const PORCLAVE = Object.fromEntries(TIPOS.map(t => [t.clave, t]));
   // Color absoluto (no token CSS) para Leaflet/canvas, por clave de tipo.
@@ -33,6 +34,7 @@
     "Crecida / aumento de caudal": "#C5781B",
     "Estiaje / bajo caudal": "#C99A2E",
     "Alerta GEOGLOWS": "#6A47CE",
+    "Sin clasificar": "#64748B",
   };
   const colorDe = clave => COLOR_HEX[clave] || "#0E94A4";
   const badgeDe = clave => PORCLAVE[clave] || { badge: clave || "—", color: "var(--muted)", bg: "var(--surface-3)" };
