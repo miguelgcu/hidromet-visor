@@ -371,15 +371,11 @@ table.tabla td.num, table.tabla th.num { text-align: right; font-family: var(--m
     box-shadow: 0 4px 14px rgba(44,104,222,.35), inset 0 1px 0 rgba(255,255,255,.25); }
   .hm-modbar h1, .hm-vista-cab h1 { font-size: 25px; font-weight: 800; letter-spacing: -.022em; }
   .hm-modbar .hm-vista-acc { padding-bottom: 4px; justify-content: center; }
-  /* PESTAÑAS (estilo TAB con subrayado, NO cápsulas): UNA sola fila que se DESLIZA horizontal.
-     SIN mask-image (rompe el scroll táctil en iOS Safari) y SIN snap/touch-action (estorban el
-     swipe). El scroll nativo con -webkit-overflow-scrolling:touch basta; la pestaña activa lleva
-     subrayado de acento (heredado de la base). Un borde inferior recorre toda la fila. */
-  .hm-pestanas { display: flex; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden;
-    justify-content: flex-start; gap: 2px; margin: 8px 0 14px;
-    border-bottom: 1.5px solid var(--line); -webkit-overflow-scrolling: touch; scrollbar-width: none; }
-  .hm-pestanas::-webkit-scrollbar { display: none; }
-  .hm-pestana { flex: 0 0 auto; white-space: nowrap; font-size: 14px; padding: 10px 16px; }
+  /* PESTAÑAS en VARIAS FILAS: se ven TODAS de una (sin depender del deslizamiento). Centradas,
+     estilo tab con subrayado de acento en la activa (heredado de la base). */
+  .hm-pestanas { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 6px;
+    margin: 8px 0 14px; border-bottom: 1.5px solid var(--line); padding-bottom: 2px; }
+  .hm-pestana { flex: 0 0 auto; white-space: nowrap; font-size: 13.5px; padding: 8px 13px; }
 }
 
 /* ---------- v11: barra de controles compacta (componente de sistema) ---------- */
