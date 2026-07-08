@@ -603,7 +603,7 @@ const App = (() => {
       `<div class="hm-modbar">
          <div class="hm-vista-cab">
            <div>${opts.kicker ? `<div class="hm-kicker">${opts.kicker}</div>` : ""}
-             <h1>${opts.titulo || ""}</h1>
+             <div class="hm-cab-tit"><span class="hm-logo" aria-hidden="true">HM</span><h1>${opts.titulo || ""}</h1></div>
              ${opts.sub ? `<div class="hm-sub">${opts.sub}</div>` : ""}</div>
          </div>
          <div class="hm-pestanas">${barra}</div>

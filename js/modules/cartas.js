@@ -176,6 +176,38 @@
     ];
   }
 
+  // MÁSCARA al polígono de Ecuador: recorta el campo ráster (celdas 0.1° dentadas) al
+  // contorno del país. Antes, con las cartas TEMATIZADAS (fondo oscuro), el ráster sobresalía
+  // del contorno en bloques cuadrados feos; recortándolo al polígono el campo queda limpio y
+  // el mar del tema se ve suave alrededor. Se cachea por firma de la malla (constante) → el
+  // point-in-polygon (ray casting) corre UNA vez por resolución.
+  let _mascaraCache = { sig: null, mask: null };
+  function mascaraEcuador(lon, lat) {
+    if (!geoCartas || !geoCartas.features || !lon || !lat) return null;
+    const sig = `${lon.length}x${lat.length}:${lon[0]},${lat[0]},${lon[lon.length - 1]},${lat[lat.length - 1]}`;
+    if (_mascaraCache.sig === sig) return _mascaraCache.mask;
+    const anillos = [];
+    for (const f of geoCartas.features) {
+      const g = f.geometry; if (!g) continue;
+      if (g.type === "Polygon") anillos.push(g.coordinates[0]);
+      else if (g.type === "MultiPolygon") g.coordinates.forEach(p => anillos.push(p[0]));
+    }
+    const dentro = (x, y) => {
+      for (const r of anillos) {
+        let c = false;
+        for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+          const yi = r[i][1], yj = r[j][1];
+          if (((yi > y) !== (yj > y)) && (x < (r[j][0] - r[i][0]) * (y - yi) / (yj - yi) + r[i][0])) c = !c;
+        }
+        if (c) return true;
+      }
+      return false;
+    };
+    const mask = lat.map(y => lon.map(x => dentro(x, y)));
+    _mascaraCache = { sig, mask };
+    return mask;
+  }
+
   // Microcuencas operativas del FFGS (NWSAFFGS, 1682 subcuencas): contorno que se
   // dibuja sobre las cartas FFGS para ver el dato por subcuenca.
   let geoMicro = null;                         // FeatureCollection microcuencas (cache)
@@ -629,8 +661,15 @@
         ? { text: PR.campo.map(row => (row || []).map(v => etiq(v) || "")),
             hovertemplate: `%{y:.2f}°, %{x:.2f}°<br><b>%{text}</b><extra></extra>` }
         : { hovertemplate: `%{y:.2f}°, %{x:.2f}°<br><b>%{z:.2f} ${esc(d.unidad || "")}</b><extra></extra>` };
+      // Recorte al polígono de Ecuador SOLO en cartas TEMATIZADAS (heladas/alertas): sin esto
+      // el ráster 0.1° sobresale del contorno en bloques cuadrados feos sobre el fondo oscuro.
+      let _zCampo = PR.campo;
+      if (!fijo) {
+        const _mk = mascaraEcuador(PR.lon, PR.lat);
+        if (_mk) _zCampo = PR.campo.map((row, i) => (row || []).map((v, j) => (_mk[i] && _mk[i][j]) ? v : null));
+      }
       traces.push(Object.assign({
-        type: "heatmap", x: PR.lon, y: PR.lat, z: PR.campo,
+        type: "heatmap", x: PR.lon, y: PR.lat, z: _zCampo,
         colorscale: d.colorscale, zmin: d.vmin, zmax: d.vmax,
         zsmooth: suavizar, hoverongaps: false, showscale: false,
       }, hov));
