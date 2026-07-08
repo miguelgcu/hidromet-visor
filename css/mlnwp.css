@@ -189,6 +189,7 @@ html[data-tema="oscuro"] .ml-tabla-modelos tbody tr { border-bottom-color: var(-
 
 /* SERIES ---------------------------------------------------------------- */
 .ml-serie-tit { text-align: center; font-weight: 600; font-size: 13.5px; margin-bottom: 4px; color: var(--ink); }
+.ml-plot-scroll { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .ml-serie-plot { width: 100%; height: 380px; }
 .ml-serie-leyenda { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; margin-top: 10px; font-size: 11.5px; color: var(--muted); }
 .ml-serie-leyenda span.it { display: inline-flex; align-items: center; gap: 6px; }
@@ -302,8 +303,9 @@ html[data-tema="oscuro"] .ml-region-tabla td { border-top-color: var(--line-3); 
   .ml-nav-botones { flex-wrap: wrap; }
   /* barra de color del mapa no desborda en pantallas estrechas */
   .ml-colorbar .barra, .ml-colorbar .ticks { width: min(260px, 72vw); }
-  /* series más bajas */
-  .ml-serie-plot { height: 300px; }
+  /* series: ancho mínimo + scroll horizontal para que ~60 puntos no se aplasten
+     (Plotly renderiza a este ancho y el usuario desplaza; el eje X queda legible) */
+  .ml-serie-plot { height: 320px; min-width: 680px; }
   /* tablas anchas → scroll horizontal (no hay envoltorio en el HTML) */
   .ml-tabla-modelos, .ml-region-tabla, .ml-top10, .ml-pb-tabla {
     display: block; overflow-x: auto; white-space: nowrap; }

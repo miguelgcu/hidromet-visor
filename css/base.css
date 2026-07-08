@@ -354,6 +354,17 @@ table.tabla td.num, table.tabla th.num { text-align: right; font-family: var(--m
 .hm-modbar .hm-pestanas { border-bottom: 0; margin: 0; flex: 1; align-self: flex-end; }
 .hm-modbar .hm-vista-acc { padding-bottom: 8px; display: flex; gap: 9px; align-items: center; }
 @media (max-width: 1279px) { .hm-modbar .hm-sub { display: none; } }
+/* MÓVIL: la barra de módulo pasa a columna y las pestañas a UNA fila con scroll
+   horizontal (antes flex-wrap las apilaba centradas y ocupaban media pantalla). */
+@media (max-width: 820px) {
+  .hm-modbar { flex-direction: column; align-items: stretch; gap: 6px; }
+  .hm-modbar .hm-vista-cab { padding: 4px 0 2px; }
+  .hm-modbar .hm-vista-acc { padding-bottom: 6px; }
+  .hm-pestanas { flex-wrap: nowrap; overflow-x: auto; justify-content: flex-start;
+    -webkit-overflow-scrolling: touch; scrollbar-width: none; margin: 6px 0 12px; }
+  .hm-pestanas::-webkit-scrollbar { display: none; }
+  .hm-pestana { flex: 0 0 auto; white-space: nowrap; padding: 9px 13px; }
+}
 
 /* ---------- v11: barra de controles compacta (componente de sistema) ---------- */
 .hm-controles, .filtros.compacta, .ct-barra.compacta, .sngr-filtros.compacta, .cl-toolbar.compacta {

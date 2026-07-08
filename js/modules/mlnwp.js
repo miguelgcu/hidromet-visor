@@ -665,7 +665,7 @@
     const tit = `${esc(d.variable === "precip" ? "Precipitación 7-7" : (d.variable === "tmax" ? "T. máxima" : "T. mínima"))} — ${esc(d.nombre || "")} (${esc(d.codigo)})`;
     card.innerHTML = `
       <div class="ml-serie-tit">${tit}</div>
-      <div class="ml-serie-plot" id="ml-plot-serie"></div>
+      <div class="ml-plot-scroll"><div class="ml-serie-plot" id="ml-plot-serie"></div></div>
       <div class="ml-serie-leyenda" id="ml-serie-leyenda"></div>
       <div class="ml-serie-probs" id="ml-serie-probs"></div>
       <p class="ml-serie-pie">Observado vs. pronóstico (la franja sombreada de la derecha es el horizonte futuro). Los modelos se atenúan según su calificación.${esPrecip ? " Abanico azul = pronóstico probabilístico: franja oscura 50 % probable (P25–P75), clara 80 % (P10–P90); detalle por umbral en la tabla." : (d.banda ? " Franja azul = pronóstico probabilístico: rango 50 % probable (Q25–Q75), en el mismo horizonte que las líneas." : "")}</p>`;
