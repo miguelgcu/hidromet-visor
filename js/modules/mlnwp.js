@@ -445,6 +445,14 @@
       return Number(v).toFixed(1);
     };
 
+    // GANADOR del bloque = mayor calificación entre los que califican (con muestra suficiente).
+    // El mejor DETECTOR (POD/FAR/CSI) puede no ser el mejor CUANTIFICADOR (MAE) → por eso el
+    // ganador y el banner son POR BLOQUE, no uno global: es más honesto.
+    let mejorIdx = -1, mejorRating = -Infinity;
+    modelos.forEach((m, i) => {
+      if (m.califica && m.rating != null && m.rating > mejorRating) { mejorRating = m.rating; mejorIdx = i; }
+    });
+
     const filas = modelos.map((m, i) => {
       const sinCal = !m.califica || m.rating == null;
       const [bg, fg] = calColor(m.rating);
@@ -452,9 +460,10 @@
         ML: "calibrado", Postprocesamiento: "combinación" }[m.familia] || "crudo";
       const metTds = metHead.map(([k]) =>
         `<td class="num">${sinCal ? "—" : fmtMet(m, k)}</td>`).join("");
-      return `<tr class="${sinCal ? "sin-calif" : ""}">
+      const esMejor = i === mejorIdx;
+      return `<tr class="${sinCal ? "sin-calif" : ""}${esMejor ? " ml-best" : ""}">
         <td class="idx">${sinCal ? "—" : i + 1}</td>
-        <td><span class="ml-mod-punto" style="background:${esc(m.color)}"></span>${esc(m.modelo)}<span class="ml-mod-tipo"> · ${tipoFam}</span></td>
+        <td><span class="ml-mod-punto" style="background:${esc(m.color)}"></span>${esc(m.modelo)}${esMejor ? " ★" : ""}<span class="ml-mod-tipo"> · ${tipoFam}</span></td>
         <td>${sinCal ? `<span style="color:var(--muted-2)">sin calif.</span>`
           : `<span class="ml-calif-badge" style="background:${bg};color:${fg}">${num(m.rating, 1)}</span>`}</td>
         <td class="num">${m.n}</td>
@@ -463,7 +472,14 @@
       </tr>`;
     }).join("");
 
-    return `
+    // Banner del ganador con su n (evita coronar a un modelo con muestra diminuta).
+    const mg = mejorIdx >= 0 ? modelos[mejorIdx] : null;
+    const banner = mg
+      ? `<div class="ml-mejor-banner"><span class="ml-mejor-estrella">★</span> Mejor en ${esDet ? "detección de eventos" : "cuantificación"}:
+         <b>${esc(mg.modelo)}</b> — calif. ${num(mg.rating, 1)}/10 · confianza ${esc(String(mg.confianza || "—")).toLowerCase()} · <b>${mg.n}</b> fechas</div>`
+      : "";
+
+    return `${banner}
       <table class="ml-tabla-modelos">
         <thead><tr>
           <th>#</th><th>Modelo</th><th>Calif.</th><th class="der">Fechas</th><th>Confianza</th>

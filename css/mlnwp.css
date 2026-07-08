@@ -165,6 +165,15 @@ html[data-tema="oscuro"] .ml-tabla-modelos tbody tr { border-bottom-color: var(-
 .ml-tabla-modelos td.num { text-align: right; font-family: var(--mono); }
 .ml-tabla-modelos td.idx { font-family: var(--mono); color: var(--muted-2); }
 .ml-tabla-modelos tr.sin-calif { opacity: .62; font-style: italic; }
+/* fila GANADORA del bloque: fondo verde tenue + nombre en verde (paralelo a rm-best en cartas) */
+.ml-tabla-modelos tr.ml-best td { background: var(--ok-bg); }
+.ml-tabla-modelos tr.ml-best td:nth-child(2) { color: var(--ok); font-weight: 700; }
+/* banner "Mejor en …": veredicto inmediato con su n para no coronar muestras diminutas */
+.ml-mejor-banner { display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  font-size: 12px; color: var(--ink-2); background: var(--ok-bg); border: 1px solid var(--ok-bd);
+  border-radius: 9px; padding: 8px 11px; margin: 0 0 9px; line-height: 1.4; }
+.ml-mejor-banner b { color: var(--ink); }
+.ml-mejor-estrella { color: var(--ok); font-size: 14px; }
 .ml-mod-punto { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; vertical-align: middle; }
 .ml-mod-tipo { color: var(--faint); font-size: 11px; }
 .ml-calif-badge { font: 700 11px var(--mono); padding: 2px 9px; border-radius: 999px; }

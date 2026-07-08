@@ -1369,15 +1369,17 @@
         rk.innerHTML = `
           <div class="rm-tit mono">Desempeño por modelo · habilidad de alerta (mayor CSI = mejor)</div>
           <table class="rm-tabla"><thead><tr>
-            <th>Modelo</th><th>Puntaje</th><th>CSI</th><th>POD</th><th>HSS</th><th>n</th>
+            <th>Modelo</th><th>Puntaje</th><th>CSI</th><th>POD</th><th>FAR</th><th>FBI</th><th>HSS</th><th>Fechas</th>
           </tr></thead><tbody>${filas.map((f, i) => {
             const t = f.tot;
+            const fbiCls = (t.FBI == null) ? "" : (t.FBI > 1.3 || t.FBI < 0.7 ? " rm-alerta" : "");
             return `<tr${i === mejor ? ' class="rm-best"' : ""}><td>${esc(f.fuente)}${i === mejor ? " ★" : ""}</td>
               <td class="mono">${t.puntaje_pct == null ? "—" : fmtPct(t.puntaje_pct) + "%"}</td>
               <td class="mono">${fmt(t.CSI)}</td><td class="mono">${fmt(t.POD)}</td>
+              <td class="mono">${fmt(t.FAR)}</td><td class="mono${fbiCls}">${fmt(t.FBI)}</td>
               <td class="mono">${fmt(t.HSS)}</td><td class="mono suave">${fmtNum(t.n_eval || 0)}</td></tr>`;
           }).join("")}</tbody></table>
-          <div class="rm-pie mono">Mayor CSI = mejor (balancea fallos y falsas alarmas). POD = detección de eventos · HSS = habilidad frente al azar · Puntaje = calificación graduada.</div>`;
+          <div class="rm-pie mono">Mayor CSI = mejor (balancea detección y falsas alarmas). <b>POD</b> = detección de eventos · <b>FAR</b> = fracción de alertas que no ocurrieron (menor mejor) · <b>FBI</b> = sesgo de frecuencia (1 ideal; &gt;1 sobre-avisa, &lt;1 sub-avisa) · <b>HSS</b> = habilidad frente al azar · <b>Puntaje</b> = calificación graduada. Ojo con <b>Fechas</b> pequeñas: pocos casos = ranking poco fiable.</div>`;
       } else if (rk) { rk.innerHTML = ""; }
       // §serie: GRÁFICO TEMPORAL de habilidad (CSI) por modelo — ver cuál va mejor en el tiempo.
       const sdiv = panel.querySelector('[data-rol="serie"]');
@@ -1403,11 +1405,17 @@
         }, { displayModeBar: false, responsive: true });
       } else if (sdiv) { sdiv.innerHTML = ""; }
       const ph = panel.querySelector('[data-rol="puntaje-headline"]');
-      if (ph) ph.innerHTML = (r.puntaje_global == null) ? "" :
-        `<div class="pg-num mono">${fmtPct(r.puntaje_global)}<small>%</small></div>
-         <div class="pg-txt"><b>Puntaje global del consenso</b> — calificación graduada, el resumen real del desempeño.
-         Los desenlaces de abajo se miden sobre <b>${fmtNum(r.activos || 0)} casos con evento o alerta</b>; aparte,
-         <b>${fmtNum(r.correcto_sin_alerta_n || 0)}</b> días sin evento se resolvieron correctamente sin alerta.</div>`;
+      if (ph) {
+        const pg = r.puntaje_global;
+        // color por VALOR (no siempre verde): ≥70 bueno · 45–70 medio · <45 flojo
+        const tono = (pg == null) ? "" : (pg >= 70 ? " pg-alto" : (pg >= 45 ? " pg-medio" : " pg-bajo"));
+        ph.className = "ct-puntaje-headline" + tono;
+        ph.innerHTML = (pg == null) ? "" :
+          `<div class="pg-num mono">${fmtPct(pg)}<small>%</small></div>
+           <div class="pg-txt"><b>Puntaje global del consenso</b> — calificación graduada, el resumen real del desempeño.
+           Los desenlaces de abajo se miden sobre <b>${fmtNum(r.activos || 0)} casos con evento o alerta</b>; aparte,
+           <b>${fmtNum(r.correcto_sin_alerta_n || 0)}</b> días sin evento se resolvieron correctamente sin alerta.</div>`;
+      }
       const varEt = (VAR_ALERTA.find(x => x.id === a.varId) || VAR_ALERTA[0]).etiqueta.toLowerCase();
       const fuente = r.fuente_lecturas || "consenso";
       panel.querySelector('[data-rol="dsub"]').textContent =
