@@ -1,101 +1,168 @@
 /* ============================================================
    HidroMet — Climatología (ui/js/modules/clima.js).
-   Estilos del módulo, antes inyectados por inyectarCSS() en el JS.
-   Solo tokens de base.css (sin fallbacks solo-claro) → el modo
-   oscuro hereda su paleta automáticamente.
+   Rediseño 2026-07: acento TEAL propio del módulo (--cl-acc), pills con
+   swatch de color por variable (enseñan la paleta del mapa), KPIs con
+   franja de acento, estados con voz propia. Solo tokens de base.css →
+   el modo oscuro hereda la paleta automáticamente.
    ============================================================ */
+
+/* Acento del módulo: teal (clima/agua/vegetación), distinto del azul de Cartas
+   y el púrpura de ML. Se usa en pestaña activa, marcadores de sección y foco. */
+.vista-clima, .cl-wrap { --cl-acc: var(--cyan); --cl-acc-bd: var(--cyan-bd); --cl-acc-bg: var(--cyan-50); }
 
 .cl-wrap{display:flex;flex-direction:column;gap:14px}
 
-/* Toolbar en UNA fila compacta: grupos en fila (etiqueta a la izquierda);
-   si no cabe, desplaza horizontal en vez de partirse en varias filas. */
-.cl-toolbar{display:flex;flex-wrap:nowrap;gap:12px;align-items:center;overflow-x:auto;
-  background:var(--surface);border:1px solid var(--line);border-radius:13px;
-  padding:10px 14px;box-shadow:var(--shadow-card)}
-.cl-grupo{display:flex;flex-direction:row;align-items:center;gap:8px;flex:0 0 auto}
-.cl-grupo>span{font:600 10px var(--mono);letter-spacing:.07em;text-transform:uppercase;
+/* ── Toolbar: barra de control en una fila, con divisores sutiles entre grupos ──
+   Si no cabe, scroll horizontal en vez de romper en varias filas. */
+.cl-toolbar{display:flex;flex-wrap:wrap;gap:0;align-items:stretch;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card,13px);
+  box-shadow:var(--shadow-card)}
+.cl-grupo{display:flex;flex-direction:row;align-items:center;gap:9px;flex:0 1 auto;
+  padding:10px 15px;border-right:1px solid var(--line-3)}
+.cl-grupo:last-child{border-right:0}
+/* el grupo de meses puede envolver sus celdas si el ancho aprieta, sin cortar controles */
+.cl-grupo:has(.cl-meses){flex-wrap:wrap}
+.cl-grupo>span{font:600 9.5px var(--mono);letter-spacing:.09em;text-transform:uppercase;
   color:var(--faint);white-space:nowrap}
-.cl-pills{display:flex;flex-wrap:nowrap;gap:5px}
-.cl-pill{border:1px solid var(--line);background:var(--surface-2);color:var(--muted);
-  border-radius:999px;padding:5px 10px;font:600 11.5px var(--fuente);cursor:pointer;
-  white-space:nowrap;transition:all .14s}
-.cl-pill:hover{border-color:var(--blue)}
-.cl-pill.on{background:var(--blue);border-color:var(--blue);color:#fff;
-  box-shadow:0 2px 8px rgba(47,127,193,.25)}
-.cl-meses{display:flex;flex-wrap:nowrap;gap:3px}
-.cl-mes{min-width:24px;text-align:center;border:1px solid var(--line);background:var(--surface-2);
-  color:var(--muted);border-radius:8px;padding:4px 5px;font:600 10.5px var(--mono);
-  cursor:pointer;white-space:nowrap}
-/* .on con --navy-700 (NO --ink: en oscuro --ink es casi blanco y el texto #fff se perdía) */
-.cl-mes.on{background:var(--navy-700);border-color:var(--navy-700);color:#fff}
 
-.cl-card{background:var(--surface);border:1px solid var(--line);border-radius:13px;
-  padding:14px 16px;box-shadow:var(--shadow-card)}
-.cl-maptit{font:600 14px var(--fuente);color:var(--ink);margin:0 0 8px}
+/* Pills de variable — con swatch de color (--pc = color de esa variable en el mapa) */
+.cl-pills{display:flex;flex-wrap:nowrap;gap:5px}
+.cl-pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);
+  background:var(--surface-2);color:var(--muted);border-radius:var(--r-pill,999px);
+  padding:5px 11px 5px 9px;font:600 11.5px var(--fuente);cursor:pointer;white-space:nowrap;
+  transition:background .14s,border-color .14s,color .14s,box-shadow .14s}
+.cl-pill::before{content:"";width:8px;height:8px;border-radius:50%;flex:0 0 auto;
+  background:var(--pc,var(--cl-acc));box-shadow:0 0 0 2px color-mix(in srgb,var(--pc,var(--cl-acc)) 22%,transparent)}
+.cl-pill:hover{border-color:var(--pc,var(--cl-acc));color:var(--ink)}
+.cl-pill.on{background:var(--pc,var(--cl-acc));border-color:var(--pc,var(--cl-acc));color:#fff;
+  box-shadow:0 2px 9px color-mix(in srgb,var(--pc,var(--cl-acc)) 34%,transparent)}
+.cl-pill.on::before{background:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.35)}
+.cl-pill:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+
+/* Selector de escala (Anual + 12 meses): celdas compactas segmentadas */
+.cl-meses{display:flex;flex-wrap:nowrap;gap:3px}
+.cl-mes{min-width:26px;text-align:center;border:1px solid var(--line);background:var(--surface-2);
+  color:var(--muted);border-radius:var(--r-ctrl,8px);padding:5px 6px;font:600 10.5px var(--mono);
+  cursor:pointer;white-space:nowrap;transition:background .13s,border-color .13s,color .13s}
+.cl-mes:hover{border-color:var(--cl-acc);color:var(--ink)}
+.cl-mes.on{background:var(--navy-700);border-color:var(--navy-700);color:#fff}
+.cl-mes:focus-visible{outline:none;box-shadow:var(--focus-ring)}
+
+/* ── Tarjetas ── */
+.cl-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card,13px);
+  padding:15px 17px;box-shadow:var(--shadow-card)}
+.cl-maptit{display:flex;align-items:center;gap:8px;font:650 13.5px var(--fuente);color:var(--ink);margin:0 0 10px}
+.cl-maptit::before{content:"";width:7px;height:7px;border-radius:2px;background:var(--cl-acc);flex:0 0 auto}
 .cl-plot{width:100%}
-/* Lienzo de MAPA TEMÁTICO (--sea-*): claro = papel blanco; oscuro = fondo del tema
-   (Climatología NO es Pronóstico → tematiza). Climogramas y récords siguen el tema. */
+/* Lienzo de MAPA TEMÁTICO (--sea-*): claro = papel; oscuro = fondo del tema. */
 .cl-plot-mapa{background:linear-gradient(180deg,var(--sea-top),var(--sea-bottom));
   border-radius:10px;overflow:hidden}
-.cl-grid2{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(260px,.85fr);gap:14px;align-items:start}
+.cl-grid2{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(270px,.85fr);gap:14px;align-items:start}
 @media(max-width:920px){.cl-grid2{grid-template-columns:1fr}}
 
-.cl-kpis{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px}
-.cl-kpi{background:var(--surface-2);border:1px solid var(--line-3);border-radius:10px;padding:10px 12px}
-.cl-kpi .v{font:700 19px var(--mono);color:var(--ink)}
-.cl-kpi .v small{font-size:11px;color:var(--muted-2);font-weight:600}
-.cl-kpi .e{font:600 10px var(--mono);letter-spacing:.05em;text-transform:uppercase;
-  color:var(--faint);margin-top:3px}
+/* Pantallas estrechas: menos padding, KPIs a 2 columnas, controles cómodos al tacto. */
+@media(max-width:560px){
+  .cl-wrap{gap:11px}
+  .cl-grupo{padding:9px 12px;gap:8px}
+  .cl-card{padding:13px}
+  .cl-kpis{grid-template-columns:1fr 1fr;gap:8px}
+  .cl-kpi .v{font-size:19px}
+  .cl-pill{padding:6px 11px 6px 10px}      /* objetivo táctil algo mayor */
+  .cl-mes{min-width:28px;padding:6px}
+  .cl-coords{gap:10px}
+  .cl-campo input{width:120px}
+}
 
-.cl-conf{display:inline-flex;align-items:center;gap:7px;font-size:12px;border-radius:999px;
-  padding:4px 11px;margin-top:2px}
-.cl-conf.ok{background:var(--ok-bg);color:var(--ok)}
-.cl-conf.med{background:var(--warn-bg);color:var(--warn)}
-.cl-conf.baja{background:var(--danger-bg);color:var(--danger)}
+/* ── KPIs: valor grande + franja de acento a la izquierda ── */
+.cl-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:2px}
+.cl-kpi{position:relative;background:var(--surface-2);border:1px solid var(--line-3);
+  border-radius:var(--r-panel,11px);padding:11px 13px 11px 15px;overflow:hidden}
+.cl-kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;
+  background:var(--kc,var(--cl-acc));border-radius:3px 0 0 3px}
+.cl-kpi .v{font:700 21px var(--mono);color:var(--ink);line-height:1.1;letter-spacing:-.01em}
+.cl-kpi .v small{font-size:11px;color:var(--muted-2);font-weight:600;letter-spacing:0}
+.cl-kpi .e{font:600 9.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;
+  color:var(--faint);margin-top:5px}
 
-.cl-buscar{border:1px solid var(--line);border-radius:9px;padding:8px 11px;min-width:180px;
+/* ── Chip de confianza ── */
+.cl-conf{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;
+  border-radius:var(--r-pill,999px);padding:4px 12px;margin-top:10px;border:1px solid transparent}
+.cl-conf.ok{background:var(--ok-bg);color:var(--ok);border-color:var(--ok-bd)}
+.cl-conf.med{background:var(--warn-bg);color:var(--warn);border-color:var(--warn-bd)}
+.cl-conf.baja{background:var(--danger-bg);color:var(--danger);border-color:var(--danger-bd)}
+
+/* ── Buscador y controles ── */
+.cl-buscar{border:1px solid var(--line);border-radius:var(--r-ctrl,8px);padding:8px 11px;min-width:180px;
   font:500 13px var(--fuente);background:var(--surface);color:var(--ink)}
+.cl-buscar:focus-visible,.cl-campo input:focus-visible,select[data-rol="est"]:focus-visible{
+  outline:none;border-color:var(--cl-acc);box-shadow:var(--focus-ring)}
 .cl-chk{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted);
   cursor:pointer;white-space:nowrap}
+.cl-chk input,.cl-grupo input[type=checkbox]{accent-color:var(--cl-acc)}
 
+/* ── Tablas ── */
+/* Envoltorio con scroll horizontal + pista visual de que hay más columnas */
+.cl-tabla-scroll{overflow-x:auto;margin-top:10px;
+  -webkit-overflow-scrolling:touch;scrollbar-width:thin}
 .cl-tabla{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums;margin-top:6px}
-.cl-tabla th{font:600 10px var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--faint);
-  text-align:right;padding:5px 7px;border-bottom:1px solid var(--line)}
+.cl-tabla th{font:600 9.5px var(--mono);letter-spacing:.05em;text-transform:uppercase;color:var(--faint);
+  text-align:right;padding:6px 8px;border-bottom:1.5px solid var(--line);white-space:nowrap}
 .cl-tabla th:first-child{text-align:left}
-.cl-tabla td{padding:4px 7px;text-align:right;border-bottom:1px solid var(--line-3);color:var(--ink-2)}
+.cl-tabla td{padding:5px 8px;text-align:right;border-bottom:1px solid var(--line-3);color:var(--ink-2);white-space:nowrap}
+.cl-tabla tbody tr:hover td{background:var(--surface-2)}
 .cl-tabla td:first-child{text-align:left;font-weight:600;color:var(--muted)}
-/* Fila de percentiles P10–P90 observados (rango, más tenue que la normal) */
-.cl-tabla .cl-pct td{color:var(--faint);font-size:10.5px}
+/* Primera columna FIJA: al hacer scroll horizontal la etiqueta de variable no se pierde. */
+.cl-tabla th:first-child,.cl-tabla td:first-child{position:sticky;left:0;z-index:1;
+  background:var(--surface);box-shadow:1px 0 0 var(--line-3)}
+.cl-tabla tbody tr:hover td:first-child{background:var(--surface-2)}
+/* Fila de percentiles P10–P90 observados (rango, más tenue y compacta que la normal) */
+.cl-tabla .cl-pct td{color:var(--faint);font-size:10px;padding-top:2px;padding-bottom:5px}
+.cl-tabla .cl-pct td:first-child{font-weight:500;color:var(--faint)}
 /* Resumen de la serie observada (años · completitud · récords con fecha) */
 .cl-tabla-obs td,.cl-tabla-obs th{text-align:left;white-space:nowrap}
 .cl-tabla-obs td small{color:var(--muted-2)}
 .cl-fecha{font:600 10px var(--mono);color:var(--faint)}
 
+/* ── Consulta por coordenada ── */
 .cl-coords{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
 .cl-campo{display:flex;flex-direction:column;gap:5px}
-.cl-campo>span{font:600 10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
-.cl-campo input{width:130px;border:1px solid var(--line);border-radius:9px;padding:8px 11px;
+.cl-campo>span{font:600 9.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.cl-campo input{width:130px;border:1px solid var(--line);border-radius:var(--r-ctrl,8px);padding:8px 11px;
   font:600 13px var(--mono);background:var(--surface);color:var(--ink)}
-.cl-btn{background:var(--blue);color:#fff;border:none;border-radius:9px;padding:9px 18px;
+.cl-btn{background:var(--cl-acc);color:#fff;border:none;border-radius:var(--r-ctrl,8px);padding:9px 18px;
   font:600 13px var(--fuente);cursor:pointer;transition:filter .15s}
-.cl-btn:hover{filter:brightness(1.07)}
+.cl-btn:hover{filter:brightness(1.08)}
+.cl-btn:focus-visible{outline:none;box-shadow:var(--focus-ring)}
 .cl-hint{font-size:11.5px;color:var(--faint);margin-top:7px}
-.cl-nota{font-size:11.5px;color:var(--muted-2);line-height:1.5;margin:10px 0 0}
+.cl-nota{font-size:11.5px;color:var(--muted-2);line-height:1.55;margin:11px 0 0}
 
+/* ── Metodología ── */
 .cl-glo{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:13px}
-.cl-glo-card{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:15px 17px;
-  box-shadow:var(--shadow-card)}
+.cl-glo-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card,13px);padding:15px 17px;
+  box-shadow:var(--shadow-card);transition:border-color .15s,box-shadow .15s}
+.cl-glo-card:hover{border-color:var(--cl-acc-bd);box-shadow:var(--shadow-hover)}
 .cl-glo-card h4{margin:0 0 7px;font:650 13.5px var(--fuente);color:var(--ink);
   display:flex;align-items:center;gap:8px}
-.cl-glo-card h4::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--blue);flex:0 0 auto}
+.cl-glo-card h4::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--cl-acc);flex:0 0 auto}
 .cl-glo-card p{margin:0;font-size:12.8px;line-height:1.6;color:var(--ink-2)}
-.cl-glo-intro{background:linear-gradient(135deg,rgba(47,127,193,.10),rgba(47,127,193,.02));
-  border:1px solid rgba(47,127,193,.22);border-radius:14px;padding:16px 19px;margin-bottom:14px}
+.cl-glo-intro{background:linear-gradient(135deg,var(--cl-acc-bg),transparent 70%);
+  border:1px solid var(--cl-acc-bd);border-radius:14px;padding:17px 20px;margin-bottom:14px}
 .cl-glo-intro h3{margin:0 0 7px;font:700 16px var(--fuente);color:var(--ink)}
 .cl-glo-intro p{margin:0;font-size:13.2px;line-height:1.65;color:var(--ink-2)}
 
-.cl-vacio{text-align:center;color:var(--faint);padding:34px 12px;font-size:13px}
+/* ── Estados (vacío / cargando / sin histórico) con voz propia ── */
+.cl-vacio{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;
+  color:var(--muted-2);padding:38px 16px;font-size:13px;line-height:1.5}
+.cl-vacio .ic{font-size:26px;opacity:.6;line-height:1}
+.cl-vacio b{color:var(--ink-2)}
+/* Aviso informativo embebido (estación nueva sin histórico, fuera de dominio…) */
+.cl-aviso{display:flex;gap:11px;align-items:flex-start;background:var(--cl-acc-bg);
+  border:1px solid var(--cl-acc-bd);border-radius:var(--r-panel,11px);padding:12px 14px;margin-top:10px}
+.cl-aviso .ic{font-size:17px;line-height:1.2;flex:0 0 auto}
+.cl-aviso p{margin:0;font-size:12.3px;line-height:1.5;color:var(--ink-2)}
+.cl-aviso b{color:var(--ink)}
 
+/* ── Validación de advertencias (adv_chirps) ── */
 .cl-adv{padding:0;overflow:hidden}
 .cl-adv-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;
   border-bottom:1px solid var(--line-3);font-size:14px;color:var(--ink)}

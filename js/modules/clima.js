@@ -11,14 +11,25 @@
     c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const num = (v, d = 0) => (v == null || isNaN(v) ? "—" : Number(v).toLocaleString("es-EC",
     { minimumFractionDigits: d, maximumFractionDigits: d }));
+  // Estados con voz propia: icono + texto centrado (usa .cl-vacio de clima.css).
+  const vacio = (ic, txt) => `<div class="cl-vacio"><span class="ic">${ic}</span><span>${txt}</span></div>`;
+  const cargando = txt => vacio("⏳", txt || "Cargando…");
+  // Sobre un host que YA es un plot de Plotly, hacer host.innerHTML=... deja estado
+  // interno huérfano y el siguiente Plotly.react renderiza a 0px de alto. Purga primero.
+  function limpiarPlot(host) {
+    try { if (window.Plotly && host && host.classList && host.classList.contains("js-plotly-plot")) Plotly.purge(host); }
+    catch (e) {}
+  }
 
+  // c = color representativo de la variable (≈ su paleta en el mapa); alimenta el
+  // swatch del pill (--pc) para que el control enseñe el color del campo.
   const VARS = [
-    { id: "precip", et: "Precipitación", u: "mm" },
-    { id: "tmax", et: "T. máxima", u: "°C" },
-    { id: "tmin", et: "T. mínima", u: "°C" },
-    { id: "pet", et: "PET", u: "mm" },
-    { id: "balance", et: "Balance P−PET", u: "mm/año", soloAnual: true },
-    { id: "aridez", et: "Aridez P/PET", u: "", soloAnual: true },
+    { id: "precip", et: "Precipitación", u: "mm", c: "#2f7fc1" },
+    { id: "tmax", et: "T. máxima", u: "°C", c: "#e0562d" },
+    { id: "tmin", et: "T. mínima", u: "°C", c: "#2e8bc0" },
+    { id: "pet", et: "PET", u: "mm", c: "#d08a2e" },
+    { id: "balance", et: "Balance P−PET", u: "mm/año", soloAnual: true, c: "#2f9e8f" },
+    { id: "aridez", et: "Aridez P/PET", u: "", soloAnual: true, c: "#b07a2e" },
   ];
   const MESES = ["Anual", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
   const COL = { precip: "#2f7fc1", pet: "#d08a2e", tmax: "#e0562d", tmin: "#2e8bc0", obs: "#10243f" };
@@ -66,9 +77,9 @@
       type: "scatter", mode: "markers", meta: "estaciones", showlegend: false,
       x: pts.map(e => e.lon), y: pts.map(e => e.lat),
       customdata: pts.map(e => [e.nombre || e.codigo, e.codigo, num(e.valor, dec)]),
-      marker: { size: 8, color: pts.map(e => e.valor), colorscale: d.colorscale,
+      marker: { size: 8.5, color: pts.map(e => e.valor), colorscale: d.colorscale,
         cmin: d.vmin, cmax: d.vmax, showscale: false,
-        line: { color: "#ffffff", width: 1.3 } },
+        line: { color: "#ffffff", width: 1.5 } },
       hovertemplate: `<b>%{customdata[0]}</b> (%{customdata[1]})<br>` +
         `<b>%{customdata[2]} ${esc(ce.unidad || "")}</b> · clic → ficha de la estación<extra></extra>`,
     }];
@@ -77,15 +88,16 @@
   // Mapa de una normal --------------------------------------------------------
   function pintarMapa(host, d, ce) {
     if (!window.Plotly || !host) return;
-    if (!d || d.error) { host.innerHTML = `<div class="cl-vacio">${esc(d && d.error || "Sin datos")}</div>`; return; }
+    if (!d || d.error) { limpiarPlot(host); host.innerHTML = vacio("🗺️", esc(d && d.error || "Sin datos")); return; }
     const dec = (d.variable === "tmax" || d.variable === "tmin") ? 1 : (d.variable === "aridez" ? 2 : 0);
     // Tinta TEMÁTICA del colorbar: oscura sobre el papel claro, clara sobre el fondo oscuro.
     const tinta = (App.tema && App.tema() === "oscuro") ? "#E8EDF6" : "#283550";
     const heat = {
       type: "heatmap", x: d.lon, y: d.lat, z: d.campo, colorscale: d.colorscale,
       zmin: d.vmin, zmax: d.vmax, zsmooth: "best", hoverongaps: false,
-      colorbar: { title: { text: d.unidad || "", side: "right", font: { size: 11, color: tinta } }, thickness: 13,
-        len: 0.9, outlinewidth: 0, tickfont: { size: 10, color: tinta }, x: 1.01 },
+      colorbar: { title: { text: d.unidad || "", side: "right", font: { size: 11, color: tinta } }, thickness: 14,
+        len: 0.92, outlinewidth: 0, ticks: "outside", ticklen: 3, tickcolor: tinta,
+        tickfont: { size: 10, color: tinta }, x: 1.012 },
       hovertemplate: `lat %{y:.2f}, lon %{x:.2f}<br><b>%{z:.${dec}f} ${esc(d.unidad || "")}</b><extra></extra>`,
     };
     // Encuadre ECUADOR CONTINENTAL: la grilla es continental, pero el contorno
@@ -103,37 +115,46 @@
   // Climograma (barras precip + líneas temp + PET + obs) ----------------------
   function pintarClimograma(host, p) {
     if (!window.Plotly || !host) return;
-    // Observado = casi negro en claro; en OSCURO se aclara para no desaparecer sobre el fondo.
-    const obsCol = (App.tema && App.tema() === "oscuro") ? "#E8EDF6" : COL.obs;
+    const osc = App.tema && App.tema() === "oscuro";
+    const obsCol = osc ? "#AEBBD0" : "#64748B";                    // observado, discreto (no compite)
+    const grid = osc ? "rgba(140,155,185,.12)" : "rgba(120,130,150,.14)";
+    const linea = osc ? "#3a4a66" : "#d3dbe6";
+    const txt = osc ? "#c6d0e0" : "#46597A";
+    const brdM = osc ? "#101a2b" : "#ffffff";                      // borde de marcador (separa del fondo)
     const meses = p.meses || MESES.slice(1);
     const V = p.vars || {};
     const traces = [];
     if (V.precip) traces.push({ type: "bar", x: meses, y: V.precip.valores, name: "Precipitación",
-      marker: { color: COL.precip, opacity: .82 }, yaxis: "y", hovertemplate: "%{y} mm<extra>Precip</extra>" });
+      marker: { color: COL.precip, opacity: .85 }, yaxis: "y", hovertemplate: "%{y} mm<extra>Precip</extra>" });
     if (V.pet) traces.push({ type: "scatter", mode: "lines", x: meses, y: V.pet.valores, name: "PET",
-      line: { color: COL.pet, width: 1.8, dash: "dot" }, yaxis: "y", hovertemplate: "%{y} mm<extra>PET</extra>" });
+      line: { color: COL.pet, width: 1.8, dash: "dot", shape: "spline" }, yaxis: "y", hovertemplate: "%{y} mm<extra>PET</extra>" });
     if (V.tmax) traces.push({ type: "scatter", mode: "lines+markers", x: meses, y: V.tmax.valores, name: "T. máx",
-      line: { color: COL.tmax, width: 2.4 }, marker: { size: 5 }, yaxis: "y2", hovertemplate: "%{y} °C<extra>Tmáx</extra>" });
+      line: { color: COL.tmax, width: 2.6, shape: "spline" }, marker: { size: 5.5, color: COL.tmax, line: { color: brdM, width: 1 } },
+      yaxis: "y2", hovertemplate: "%{y} °C<extra>Tmáx</extra>" });
     if (V.tmin) traces.push({ type: "scatter", mode: "lines+markers", x: meses, y: V.tmin.valores, name: "T. mín",
-      line: { color: COL.tmin, width: 2.4 }, marker: { size: 5 }, yaxis: "y2", hovertemplate: "%{y} °C<extra>Tmín</extra>" });
+      line: { color: COL.tmin, width: 2.6, shape: "spline" }, marker: { size: 5.5, color: COL.tmin, line: { color: brdM, width: 1 } },
+      yaxis: "y2", hovertemplate: "%{y} °C<extra>Tmín</extra>" });
     const o = p.observado;
     if (o) {
       if (o.precip) traces.push({ type: "scatter", mode: "markers", x: meses, y: o.precip, name: "Precip. observada",
-        marker: { color: obsCol, symbol: "circle-open", size: 7, line: { width: 1.6 } }, yaxis: "y",
+        marker: { color: obsCol, symbol: "circle", size: 5, opacity: .9 }, yaxis: "y",
         hovertemplate: "%{y} mm<extra>Obs</extra>" });
       if (o.tmax) traces.push({ type: "scatter", mode: "markers", x: meses, y: o.tmax, name: "Tmáx observada",
-        marker: { color: obsCol, symbol: "x-thin-open", size: 7, line: { width: 1.6 } }, yaxis: "y2", showlegend: false,
+        marker: { color: obsCol, symbol: "diamond", size: 5, opacity: .9 }, yaxis: "y2", showlegend: false,
         hovertemplate: "%{y} °C<extra>Obs</extra>" });
       if (o.tmin) traces.push({ type: "scatter", mode: "markers", x: meses, y: o.tmin, name: "Tmín observada",
-        marker: { color: obsCol, symbol: "x-thin-open", size: 7, line: { width: 1.6 } }, yaxis: "y2", showlegend: false,
+        marker: { color: obsCol, symbol: "diamond", size: 5, opacity: .9 }, yaxis: "y2", showlegend: false,
         hovertemplate: "%{y} °C<extra>Obs</extra>" });
     }
     const layout = App.plotlyLayoutBase({
-      height: 360, margin: { l: 50, r: 50, t: 12, b: 34 }, barmode: "overlay",
-      legend: { orientation: "h", y: 1.13, x: 0.5, xanchor: "center", font: { size: 11 } },
-      xaxis: { tickfont: { size: 11 }, fixedrange: true },
-      yaxis: { title: { text: "Precipitación / PET (mm)", font: { size: 10.5 } }, rangemode: "tozero", fixedrange: true },
-      yaxis2: { title: { text: "Temperatura (°C)", font: { size: 10.5 } }, overlaying: "y", side: "right", fixedrange: true },
+      height: 360, margin: { l: 52, r: 52, t: 16, b: 36 }, barmode: "overlay",
+      legend: { orientation: "h", y: 1.15, x: 0.5, xanchor: "center", font: { size: 11 }, bgcolor: "rgba(0,0,0,0)" },
+      xaxis: { tickfont: { size: 11, color: txt }, fixedrange: true, showgrid: false, showline: true,
+        linecolor: linea, ticks: "outside", ticklen: 4, tickcolor: linea },
+      yaxis: { title: { text: "Precipitación / PET (mm)", font: { size: 10.5, color: txt } }, tickfont: { size: 10, color: txt },
+        rangemode: "tozero", fixedrange: true, gridcolor: grid, griddash: "dot", zeroline: false, showline: false },
+      yaxis2: { title: { text: "Temperatura (°C)", font: { size: 10.5, color: txt } }, tickfont: { size: 10, color: txt },
+        overlaying: "y", side: "right", fixedrange: true, showgrid: false, zeroline: false },
     });
     Plotly.react(host, traces, layout, App.plotlyConfig());
   }
@@ -173,7 +194,7 @@
           <td>${num(o.completitud, 0)}%</td><td>${rec(o.record_max)}</td><td>${k === "precip" ? "—" : rec(o.record_min)}</td></tr>`;
       }).join("");
     if (!filas) return "";
-    return `<div style="overflow-x:auto;margin-top:10px"><table class="cl-tabla cl-tabla-obs">
+    return `<div class="cl-tabla-scroll"><table class="cl-tabla cl-tabla-obs">
       <thead><tr><th>Serie observada</th><th>Años</th><th title="Días con dato sobre el periodo">Compl.</th>
       <th>Récord máx (día)</th><th>Récord mín (día)</th></tr></thead><tbody>${filas}</tbody></table>
       <p class="cl-nota" style="margin-top:6px">Serie diaria observada/PISCO de la estación: récords absolutos con su fecha
@@ -190,24 +211,25 @@
   }
 
   function tarjetaPunto(p, titulo) {
-    if (p.error) return `<div class="cl-vacio">${esc(p.error)}</div>`;
+    if (p.error) return vacio("⚠️", esc(p.error));
     const fuera = p.fuera_dominio || !(p.vars && p.vars.precip && p.vars.precip.anual != null);
-    if (fuera) return `<div class="cl-card"><p class="cl-maptit">${esc(titulo || "")}</p>
-      <div class="cl-vacio">Esta ubicación está fuera del dominio continental de la Climatología
-      (Ecuador continental, 0.05°). Galápagos y el océano no tienen climatología grillada.</div>
+    if (fuera) return `<div class="cl-card">${titulo ? `<p class="cl-maptit">${esc(titulo)}</p>` : ""}
+      <div class="cl-aviso"><span class="ic">🌐</span><p><b>Fuera del dominio continental.</b> La climatología grillada
+      cubre Ecuador continental (0.05°); Galápagos y el océano quedan fuera. Si es una estación insular,
+      abajo tienes su serie observada.</p></div>
       ${resumenObs(p.resumen_obs)}</div>`;
     const V = p.vars;
-    const kpi = (e, v, u, d) => `<div class="cl-kpi"><div class="v">${num(v, d)} <small>${esc(u)}</small></div><div class="e">${esc(e)}</div></div>`;
+    const kpi = (e, v, u, d, c) => `<div class="cl-kpi" style="--kc:${c}"><div class="v">${num(v, d)} <small>${esc(u)}</small></div><div class="e">${esc(e)}</div></div>`;
     return `<div class="cl-card">
       ${titulo ? `<p class="cl-maptit">${esc(titulo)}</p>` : ""}
       <div class="cl-kpis">
-        ${kpi("Lluvia anual", V.precip && V.precip.anual, "mm", 0)}
-        ${kpi("PET anual", V.pet && V.pet.anual, "mm", 0)}
-        ${kpi("Tmáx media", V.tmax && V.tmax.anual, "°C", 1)}
-        ${kpi("Tmín media", V.tmin && V.tmin.anual, "°C", 1)}
+        ${kpi("Lluvia anual", V.precip && V.precip.anual, "mm", 0, COL.precip)}
+        ${kpi("PET anual", V.pet && V.pet.anual, "mm", 0, COL.pet)}
+        ${kpi("Tmáx media", V.tmax && V.tmax.anual, "°C", 1, COL.tmax)}
+        ${kpi("Tmín media", V.tmin && V.tmin.anual, "°C", 1, COL.tmin)}
       </div>
       ${chipConfianza(p.confianza)}
-      <div style="overflow-x:auto">${tablaMensual(p)}</div>
+      <div class="cl-tabla-scroll">${tablaMensual(p)}</div>
       ${resumenObs(p.resumen_obs)}
       ${p.observado ? `<p class="cl-nota">Marcadores = normales <b>observadas</b> de la estación. Como el producto está
         corregido con observaciones, sobre la estación coinciden casi exactamente con la Climatología.</p>` : ""}
@@ -227,7 +249,7 @@
     c.innerHTML = `<div class="cl-wrap">
       <div class="cl-toolbar">
         <div class="cl-grupo"><span>Variable</span><div class="cl-pills" data-rol="vars">
-          ${VARS.map(v => `<button class="cl-pill ${v.id === E.mapVar ? "on" : ""}" data-v="${v.id}">${esc(v.et)}</button>`).join("")}
+          ${VARS.map(v => `<button class="cl-pill ${v.id === E.mapVar ? "on" : ""}" data-v="${v.id}" style="--pc:${v.c}">${esc(v.et)}</button>`).join("")}
         </div></div>
         <div class="cl-grupo"><span>Escala</span><div class="cl-meses" data-rol="meses">
           ${MESES.map((m, i) => `<button class="cl-mes ${(i === 0 ? "anual" : i) == E.mapEsc ? "on" : ""}" data-e="${i === 0 ? "anual" : i}">${esc(m)}</button>`).join("")}
@@ -255,7 +277,7 @@
       let d = E.mapaCache[key];
       if (!d) {
         try { d = await App.api(`/clima/mapa?variable=${E.mapVar}&escala=${E.mapEsc}`); E.mapaCache[key] = d; }
-        catch (e) { tit.textContent = "Error"; plot.innerHTML = `<div class="cl-vacio">${esc(e.message)}</div>`; return; }
+        catch (e) { limpiarPlot(plot); tit.textContent = "Error"; plot.innerHTML = vacio("⚠️", esc(e.message)); return; }
       }
       let ce = null;
       if (E.mapEst) {
@@ -297,10 +319,10 @@
   // PESTAÑA 2 — POR ESTACIÓN --------------------------------------------------
   async function tabEstacion(c) {
     inyectarCSS(); _alTema = null;
-    c.innerHTML = `<div class="cl-vacio">Cargando estaciones…</div>`;
+    c.innerHTML = cargando("Cargando estaciones…");
     let ests = [];
     try { ests = (await App.api("/clima/estaciones")).estaciones || []; } catch (e) {}
-    if (!ests.length) { c.innerHTML = `<div class="cl-vacio">No hay estaciones disponibles.</div>`; return; }
+    if (!ests.length) { c.innerHTML = vacio("📭", "No hay estaciones disponibles."); return; }
     // Opciones agrupadas por región; las insulares van etiquetadas (hay récords
     // observados pero no climatología grillada).
     const opciones = lista => {
@@ -340,13 +362,13 @@
       if (!cod) return;
       const nom = (ests.find(e => String(e.codigo) === String(cod)) || {}).nombre || cod;
       tit.textContent = `Climograma — ${nom}`;
-      climo.innerHTML = `<div class="cl-vacio">Cargando…</div>`; ficha.innerHTML = ""; ultimo = null;
+      limpiarPlot(climo); climo.innerHTML = cargando(); ficha.innerHTML = ""; ultimo = null;
       let p;
       try { p = await App.api(`/clima/estacion?codigo=${encodeURIComponent(cod)}`); }
-      catch (e) { climo.innerHTML = `<div class="cl-vacio">${esc(e.message)}</div>`; return; }
+      catch (e) { climo.innerHTML = vacio("⚠️", esc(e.message)); return; }
       ficha.innerHTML = tarjetaPunto(p, `${nom} (${cod})`);
       if (p.error || p.fuera_dominio || !(p.vars && p.vars.precip && p.vars.precip.anual != null)) {
-        climo.innerHTML = `<div class="cl-vacio">Sin climatología grillada en esta estación (fuera del dominio continental).</div>`;
+        climo.innerHTML = vacio("🌐", "Sin climatología grillada aquí (fuera del dominio continental). La ficha muestra su serie observada.");
       } else { climo.innerHTML = ""; pintarClimograma(climo, p); ultimo = p; }
     }
     // Buscador en vivo: filtra las opciones sin perder la selección (patrón datos.js).
@@ -389,13 +411,13 @@
       const la = parseFloat(lat.value), lo = parseFloat(lon.value);
       if (isNaN(la) || isNaN(lo)) { App.aviso("Ingresa latitud y longitud válidas.", "error"); return; }
       tit.textContent = `Climograma — ${la.toFixed(2)}, ${lo.toFixed(2)}`;
-      climo.innerHTML = `<div class="cl-vacio">Cargando…</div>`; ficha.innerHTML = ""; ultimo = null;
+      limpiarPlot(climo); climo.innerHTML = cargando(); ficha.innerHTML = ""; ultimo = null;
       let p;
       try { p = await App.api(`/clima/punto?lat=${la}&lon=${lo}`); }
-      catch (e) { climo.innerHTML = `<div class="cl-vacio">${esc(e.message)}</div>`; return; }
+      catch (e) { climo.innerHTML = vacio("⚠️", esc(e.message)); return; }
       ficha.innerHTML = tarjetaPunto(p, `Punto ${la.toFixed(3)}, ${lo.toFixed(3)}`);
       if (p.error || p.fuera_dominio || !(p.vars && p.vars.precip && p.vars.precip.anual != null)) {
-        climo.innerHTML = `<div class="cl-vacio">Fuera del dominio continental.</div>`;
+        climo.innerHTML = vacio("🌐", "Fuera del dominio continental.");
       } else { climo.innerHTML = ""; pintarClimograma(climo, p); ultimo = p; }
     }
     c.querySelector('[data-rol="ir"]').onclick = consultar;
@@ -407,9 +429,9 @@
   // PESTAÑA 4 — METODOLOGÍA ---------------------------------------------------
   async function tabGlosario(c) {
     inyectarCSS(); _alTema = null;
-    c.innerHTML = `<div class="cl-vacio">Cargando…</div>`;
+    c.innerHTML = cargando();
     let g;
-    try { g = await App.api("/clima/glosario"); } catch (e) { c.innerHTML = `<div class="cl-vacio">${esc(e.message)}</div>`; return; }
+    try { g = await App.api("/clima/glosario"); } catch (e) { c.innerHTML = vacio("⚠️", esc(e.message)); return; }
     c.innerHTML = `
       <div class="cl-glo-intro"><h3>${esc(g.titulo || "Metodología")}</h3><p>${esc(g.intro || "")}</p></div>
       <div class="cl-glo">
@@ -418,7 +440,7 @@
   }
 
   // PESTAÑA 5 — RÉCORDS (series históricas con envolvente máx/mín) ------------
-  const VARREC = { precip: { et: "Precipitación", u: "mm" }, Tmax: { et: "T. máxima", u: "°C" }, Tmin: { et: "T. mínima", u: "°C" } };
+  const VARREC = { precip: { et: "Precipitación", u: "mm", c: "#2f7fc1" }, Tmax: { et: "T. máxima", u: "°C", c: "#e0562d" }, Tmin: { et: "T. mínima", u: "°C", c: "#2e8bc0" } };
 
   function oscuroTema() { return document.documentElement.getAttribute("data-tema") === "oscuro"; }
 
@@ -433,12 +455,13 @@
     ]);
     let traces = [...banda(e.min, e.max, 0.09)];
     if (mostrarPct) traces.push(...banda(e.p10, e.p90, 0.14), ...banda(e.p25, e.p75, 0.22));
-    traces.push({ type: "scatter", mode: "lines", x, y: e.p50, line: { width: 1.4, dash: "dot", color: faint }, connectgaps: false, hovertemplate: `mediana %{y} ${u}<extra></extra>`, showlegend: false });
-    traces.push({ type: "scatter", mode: "lines+markers", x, y: d.actual.valores, line: { width: 2.4, color: ink }, marker: { size: 3.4, color: ink }, connectgaps: false, hovertemplate: `%{x|%d %b}: <b>%{y} ${u}</b><extra>${d.anio}</extra>`, showlegend: false });
+    traces.push({ type: "scatter", mode: "lines", x, y: e.p50, line: { width: 1.3, dash: "dot", color: faint }, connectgaps: false, hovertemplate: `mediana %{y} ${u}<extra></extra>`, showlegend: false });
+    traces.push({ type: "scatter", mode: "lines+markers", x, y: d.actual.valores, line: { width: 2, color: ink }, marker: { size: 2.8, color: ink }, connectgaps: false, hovertemplate: `%{x|%d %b}: <b>%{y} ${u}</b><extra>${d.anio}</extra>`, showlegend: false });
+    const brdStar = oscuroTema() ? "#0B1322" : "#ffffff";     // borde de estrella = fondo del tema
     const rmx = d.records.max || [];
-    if (rmx.length) traces.push({ type: "scatter", mode: "markers", x: rmx.map(r => r.fecha), y: rmx.map(r => r.valor), marker: { symbol: "star", size: 13, color: "#c43c28", line: { color: "#fff", width: 1 } }, customdata: rmx.map(r => [r.anterior, r.anio_anterior]), hovertemplate: `¡Récord MÁX! %{y} ${u}<br>supera ${"%{customdata[0]}"} de ${"%{customdata[1]}"}<extra></extra>`, showlegend: false });
+    if (rmx.length) traces.push({ type: "scatter", mode: "markers", x: rmx.map(r => r.fecha), y: rmx.map(r => r.valor), marker: { symbol: "star", size: 12, color: "#c43c28", line: { color: brdStar, width: 1 } }, customdata: rmx.map(r => [r.anterior, r.anio_anterior]), hovertemplate: `¡Récord MÁX! %{y} ${u}<br>supera ${"%{customdata[0]}"} de ${"%{customdata[1]}"}<extra></extra>`, showlegend: false });
     const rmn = d.records.min || [];
-    if (rmn.length) traces.push({ type: "scatter", mode: "markers", x: rmn.map(r => r.fecha), y: rmn.map(r => r.valor), marker: { symbol: "star-triangle-down", size: 13, color: "#1b6fae", line: { color: "#fff", width: 1 } }, customdata: rmn.map(r => [r.anterior, r.anio_anterior]), hovertemplate: `¡Récord MÍN! %{y} ${u}<br>bajo ${"%{customdata[0]}"} de ${"%{customdata[1]}"}<extra></extra>`, showlegend: false });
+    if (rmn.length) traces.push({ type: "scatter", mode: "markers", x: rmn.map(r => r.fecha), y: rmn.map(r => r.valor), marker: { symbol: "star-triangle-down", size: 12, color: "#1b6fae", line: { color: brdStar, width: 1 } }, customdata: rmn.map(r => [r.anterior, r.anio_anterior]), hovertemplate: `¡Récord MÍN! %{y} ${u}<br>bajo ${"%{customdata[0]}"} de ${"%{customdata[1]}"}<extra></extra>`, showlegend: false });
     const layout = App.plotlyLayoutSerie("", {
       xaxis: { type: "date", tickformat: "%d %b", nticks: 12, hoverformat: "%d %b" },
       yaxis: { title: { text: u }, rangemode: d.es_precip ? "tozero" : "normal" },
@@ -449,12 +472,12 @@
 
   function kpisRecords(d) {
     const u = d.unidad, ext = d.resumen.extremo_max;
-    const k = (e, v) => `<div class="cl-kpi"><div class="v">${v}</div><div class="e">${e}</div></div>`;
+    const k = (e, v, c) => `<div class="cl-kpi" style="--kc:${c}"><div class="v">${v}</div><div class="e">${e}</div></div>`;
     return `<div class="cl-kpis" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
-      ${k("Récords máx " + d.anio, `<span style="color:#c43c28">${d.resumen.n_record_max}</span>`)}
-      ${k("Récords mín " + d.anio, d.es_precip ? "<small>n/a precip</small>" : `<span style="color:#1b6fae">${d.resumen.n_record_min}</span>`)}
-      ${k("Máx del año", ext ? `${num(ext.valor, 1)} <small>${u}</small>` : "—")}
-      ${k("Años de referencia", `${d.periodo.desde}–${d.periodo.hasta}`)}
+      ${k("Récords máx " + d.anio, `<span style="color:#c43c28">${d.resumen.n_record_max}</span>`, "#c43c28")}
+      ${k("Récords mín " + d.anio, d.es_precip ? "<small>n/a precip</small>" : `<span style="color:#1b6fae">${d.resumen.n_record_min}</span>`, "#1b6fae")}
+      ${k("Máx del año", ext ? `${num(ext.valor, 1)} <small>${u}</small>` : "—", d.es_precip ? COL.precip : COL.tmax)}
+      ${k("Años de referencia", `${d.periodo.desde}–${d.periodo.hasta}`, "var(--cyan)")}
     </div>`;
   }
 
@@ -462,6 +485,10 @@
     const rgb = d.es_precip ? "47,127,193" : "224,86,45";
     const ink = oscuroTema() ? "#e8edf6" : "#0f1b2d";
     const it = (sw, t) => `<span style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted,#5b6678)">${sw}<span>${t}</span></span>`;
+    // Sin histórico multianual: solo hay serie del año → no anunciar envolvente ni récords.
+    if (d.sin_historico)
+      return `<div style="display:flex;flex-wrap:wrap;gap:15px;align-items:center">${
+        it(`<span style="width:16px;height:0;border-top:2.4px solid ${ink}"></span>`, `${d.anio} observado`)}</div>`;
     let items = [
       it(`<span style="width:15px;height:10px;border-radius:2px;background:rgba(${rgb},.18);border:1px solid rgba(${rgb},.4)"></span>`, "máx–mín histórico"),
       it(`<span style="width:16px;height:0;border-top:2.4px solid ${ink}"></span>`, `${d.anio} observado`),
@@ -484,16 +511,16 @@
       <td>${num(r.anterior, 1)} ${u}</td>
       <td>${r.anio_anterior ?? "—"}</td></tr>`).join("");
     return `<div class="cl-card"><h3 class="cl-maptit">Récords de ${d.anio} (${recs.length})</h3>
-      <table class="cl-tabla"><thead><tr><th>Fecha</th><th style="text-align:left">Tipo</th><th>Valor</th><th>Récord previo</th><th>Año</th></tr></thead>
-      <tbody>${filas}</tbody></table></div>`;
+      <div class="cl-tabla-scroll"><table class="cl-tabla"><thead><tr><th>Fecha</th><th style="text-align:left">Tipo</th><th>Valor</th><th>Récord previo</th><th>Año</th></tr></thead>
+      <tbody>${filas}</tbody></table></div></div>`;
   }
 
   async function tabRecords(c) {
     inyectarCSS(); _alTema = null;
-    c.innerHTML = `<div class="cl-vacio">Cargando estaciones…</div>`;
+    c.innerHTML = cargando("Cargando estaciones…");
     let ests = [];
     try { ests = (await App.api("/clima/records_estaciones")).estaciones || []; } catch (e) {}
-    if (!ests.length) { c.innerHTML = `<div class="cl-vacio">No hay base de observaciones unificada disponible.</div>`; return; }
+    if (!ests.length) { c.innerHTML = vacio("📭", "No hay base de observaciones unificada disponible."); return; }
     const anioActual = new Date().getFullYear();
     // En el visor solo hay récords congelados de los últimos VISOR_RECORDS_ANIOS=10 años
     // (exportar_web.py; mantener ambos números iguales) → capar el input para no ofrecer
@@ -530,7 +557,7 @@
       const disp = ["precip", "Tmax", "Tmin"].filter(v => ests.some(e => mide(e, v)));
       if (disp.length && !disp.includes(estVar)) estVar = disp[0];
       varsBox.innerHTML = disp
-        .map(v => `<button class="cl-pill ${v === estVar ? "on" : ""}" data-v="${v}">${VARREC[v].et}</button>`).join("");
+        .map(v => `<button class="cl-pill ${v === estVar ? "on" : ""}" data-v="${v}" style="--pc:${VARREC[v].c}">${VARREC[v].et}</button>`).join("");
     }
     function pintarEstaciones() {
       // El selector SOLO ofrece estaciones que midan la variable activa; conserva la
@@ -544,18 +571,24 @@
     let ultimo = null;   // último payload pintado (redibujo al cambiar tema)
     async function cargar() {
       const cod = sel.value, anio = parseInt(anioIn.value) || anioActual;
-      tit.textContent = "Cargando…"; plot.innerHTML = `<div class="cl-vacio">Cargando…</div>`;
+      limpiarPlot(plot); tit.textContent = "Cargando…"; plot.innerHTML = cargando();
       kpis.innerHTML = ""; tabla.innerHTML = ""; ley.innerHTML = ""; pie.textContent = ""; ultimo = null;
       let d;
       try { d = await App.api(`/clima/records?codigo=${encodeURIComponent(cod)}&variable=${estVar}&anio=${anio}`); }
-      catch (e) { tit.textContent = "Error"; plot.innerHTML = `<div class="cl-vacio">${esc(e.message)}</div>`; return; }
-      if (d.error) { tit.textContent = "Sin datos"; plot.innerHTML = `<div class="cl-vacio">${esc(d.error)}</div>`; return; }
-      tit.textContent = `${VARREC[estVar].et} — ${esc(d.nombre)} (${esc(d.codigo)}) · ${d.anio} vs ${d.periodo.desde}–${d.periodo.hasta}`;
+      catch (e) { tit.textContent = "Error"; plot.innerHTML = vacio("⚠️", esc(e.message)); return; }
+      if (d.error) { tit.textContent = "Sin datos"; plot.innerHTML = vacio("📊", esc(d.error)); return; }
+      tit.textContent = d.sin_historico
+        ? `${VARREC[estVar].et} — ${esc(d.nombre)} (${esc(d.codigo)}) · serie ${d.anio}`
+        : `${VARREC[estVar].et} — ${esc(d.nombre)} (${esc(d.codigo)}) · ${d.anio} vs ${d.periodo.desde}–${d.periodo.hasta}`;
       ley.innerHTML = leyendaRecords(d);
       plot.innerHTML = ""; pintarRecords(plot, d, pct.checked);
       kpis.innerHTML = kpisRecords(d);
       tabla.innerHTML = tablaRecords(d);
-      pie.textContent = `Envolvente sobre ${d.n_anios_rango} años con datos; se exige ≥${d.umbral_n} años por día para declarar récord. Precip mayormente producto PISCO (ventana ${d.agregacion}); temperatura observada.`;
+      // Estación nueva sin años previos: no hay envolvente ni récords todavía; se explica
+      // en vez de dejar la pestaña con un error (antes toda estación de 2026 fallaba).
+      pie.textContent = d.sin_historico
+        ? `Estación nueva: solo hay datos desde ${d.periodo.desde}. Se muestra la serie observada del año; aún no hay envolvente histórica ni detección de récords (se necesitan varios años).`
+        : `Envolvente sobre ${d.n_anios_rango} años con datos; se exige ≥${d.umbral_n} años por día para declarar récord. Precip mayormente producto PISCO (ventana ${d.agregacion}); temperatura observada.`;
       ultimo = d;
     }
     sel.onchange = cargar;
@@ -577,10 +610,12 @@
     titulo: "Climatología", orden: 2.5,
     async render(vista) {
       vista.dataset.screenLabel = "Climatología";
+      vista.classList.add("vista-clima");
       E.tabs = App.vistaPestanas(vista, {
         kicker: "Normales 1991–2020 · grilla 0.05° de Ecuador",
         titulo: "Climatología",
         sub: "Climatologías grilladas de Ecuador (~5 km) corregidas con observaciones",
+        acento: "var(--cyan)",
         inicial: "mapas",
         pestanas: [
           { id: "mapas", etiqueta: "Mapas", render: tabMapas },
