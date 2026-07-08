@@ -371,21 +371,15 @@ table.tabla td.num, table.tabla th.num { text-align: right; font-family: var(--m
     box-shadow: 0 4px 14px rgba(44,104,222,.35), inset 0 1px 0 rgba(255,255,255,.25); }
   .hm-modbar h1, .hm-vista-cab h1 { font-size: 25px; font-weight: 800; letter-spacing: -.022em; }
   .hm-modbar .hm-vista-acc { padding-bottom: 4px; justify-content: center; }
-  /* PESTAÑAS: UNA sola fila deslizable de píldoras — TODAS alcanzables por swipe (touch pan-x),
-     con snap y degradado en bordes que indica que continúa. La activa = píldora llena de acento. */
+  /* PESTAÑAS (estilo TAB con subrayado, NO cápsulas): UNA sola fila que se DESLIZA horizontal.
+     SIN mask-image (rompe el scroll táctil en iOS Safari) y SIN snap/touch-action (estorban el
+     swipe). El scroll nativo con -webkit-overflow-scrolling:touch basta; la pestaña activa lleva
+     subrayado de acento (heredado de la base). Un borde inferior recorre toda la fila. */
   .hm-pestanas { display: flex; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden;
-    justify-content: flex-start; gap: 7px; border-bottom: 0; margin: 8px 0 14px;
-    padding: 3px 2px 8px; -webkit-overflow-scrolling: touch; touch-action: pan-x;
-    scroll-snap-type: x proximity; scrollbar-width: none; overscroll-behavior-x: contain;
-    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 12px, #000 calc(100% - 24px), transparent 100%);
-    mask-image: linear-gradient(to right, transparent 0, #000 12px, #000 calc(100% - 24px), transparent 100%); }
+    justify-content: flex-start; gap: 2px; margin: 8px 0 14px;
+    border-bottom: 1.5px solid var(--line); -webkit-overflow-scrolling: touch; scrollbar-width: none; }
   .hm-pestanas::-webkit-scrollbar { display: none; }
-  .hm-pestana { flex: 0 0 auto; white-space: nowrap; scroll-snap-align: center; margin: 0;
-    padding: 9px 16px; border: 1px solid var(--line-2); border-radius: 999px;
-    background: var(--surface-2); color: var(--muted); font-weight: 600; font-size: 13.5px; }
-  .hm-pestana.activa { background: var(--tab-acc, var(--blue)); border-color: var(--tab-acc, var(--blue));
-    color: #fff; box-shadow: 0 3px 12px rgba(44,104,222,.32); }
-  .hm-pestana[data-danger="1"].activa { background: var(--danger); border-color: var(--danger); color: #fff; }
+  .hm-pestana { flex: 0 0 auto; white-space: nowrap; font-size: 14px; padding: 10px 16px; }
 }
 
 /* ---------- v11: barra de controles compacta (componente de sistema) ---------- */
