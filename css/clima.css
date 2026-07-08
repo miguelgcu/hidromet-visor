@@ -67,7 +67,12 @@
   .cl-card{padding:13px}
   .cl-kpis{grid-template-columns:1fr 1fr;gap:8px}
   .cl-kpi .v{font-size:19px}
-  .cl-pill{padding:6px 11px 6px 10px}      /* objetivo táctil algo mayor */
+  .cl-pill{padding:6px 11px 6px 10px;flex:0 0 auto}      /* objetivo táctil algo mayor; no encoge */
+  /* las píldoras ya no se salen de pantalla: la fila se desliza (antes nowrap sin scroll) */
+  .cl-pills{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;
+    -webkit-mask-image:linear-gradient(to right,transparent 0,#000 16px,#000 calc(100% - 16px),transparent 100%);
+    mask-image:linear-gradient(to right,transparent 0,#000 16px,#000 calc(100% - 16px),transparent 100%)}
+  .cl-pills::-webkit-scrollbar{display:none}
   .cl-mes{min-width:28px;padding:6px}
   .cl-coords{gap:10px}
   .cl-campo input{width:120px}

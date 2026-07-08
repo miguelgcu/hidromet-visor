@@ -137,7 +137,10 @@
   // módulo Pronóstico. El resto (alertas de Advertencias, FFGS bajo Hidrología y
   // los mapas de cruce/FFR/crecida) TEMATIZA: claro = papel blanco + contorno negro;
   // oscuro = fondo del tema + contorno claro con halo oscuro.
-  const TIPOS_PAPEL_FIJO = new Set(["pronostico", "calibrado", "hidro", "heladas"]);
+  // Papel BLANCO fijo SOLO para pronóstico / calibrado / hidroestimadores (mapas de campo
+  // denso). El resto —heladas/calor, alertas, FFGS, cruce/FFR— TEMATIZA: en oscuro el mar
+  // fuera de Ecuador toma el fondo del tema, no blanco (pedido del usuario).
+  const TIPOS_PAPEL_FIJO = new Set(["pronostico", "calibrado", "hidro"]);
   const papelFijo = () => !!(E && TIPOS_PAPEL_FIJO.has(E.tipo));
   const temaOscuro = () => !!(App.tema && App.tema() === "oscuro");
 
@@ -373,7 +376,7 @@
         </a>${shpBtn}
         <div class="cargando mono">Cargando mapa…</div>
         <div class="ct-mapa-plot"></div>
-        <div class="ct-zoomhint mono">Ctrl + rueda para zoom</div>
+        <div class="ct-zoomhint mono">Pellizca o Ctrl + rueda para acercar</div>
       </div>`;
   }
 

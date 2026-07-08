@@ -100,6 +100,8 @@
   background: color-mix(in srgb, var(--surface) 86%, transparent); border: 1px solid var(--line-2);
   border-radius: 6px; padding: 3px 7px; opacity: 0; transition: opacity .16s; backdrop-filter: blur(3px); }
 .ct-lienzo:hover .ct-zoomhint { opacity: 1; }
+/* táctil (sin hover): mostrar el hint de zoom tenue para que se sepa que se puede pellizcar */
+@media (hover: none) { .ct-zoomhint { opacity: .6; } }
 
 /* leyenda discreta compartida (debajo de la grilla) */
 .ct-leyenda-carta { margin: -2px 0 14px; }

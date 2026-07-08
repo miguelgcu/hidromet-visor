@@ -622,6 +622,10 @@ const App = (() => {
       activa = id;
       vista.querySelectorAll(".hm-pestana").forEach(b =>
         b.classList.toggle("activa", b.dataset.pest === id));
+      // móvil: si las pestañas se desbordan, trae la activa a la vista (centrada) para que
+      // nunca quede oculta detrás del borde y se note que la fila se desliza.
+      const _act = vista.querySelector(".hm-pestana.activa");
+      if (_act) { try { _act.scrollIntoView({ inline: "center", block: "nearest" }); } catch (e) {} }
       cuerpo.innerHTML = `<div class="vacio"><div class="icono">⏳</div>Cargando…</div>`;
       try { await p.render(cuerpo); }
       catch (e) {
