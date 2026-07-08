@@ -481,6 +481,23 @@ const App = (() => {
     document.getElementById("btn-tema").onclick = () =>
       tema(tema() === "claro" ? "oscuro" : "claro");
     pintarNav();
+    // Drawer móvil: la hamburguesa abre/cierra el sidebar off-canvas; overlay, Escape
+    // y navegar a un módulo lo cierran. En desktop la hamburguesa está oculta por CSS.
+    (function menuMovil() {
+      const capa = document.getElementById("capa-app");
+      const btn = document.getElementById("btn-menu");
+      const ov = document.getElementById("overlay-nav");
+      if (!capa) return;
+      const cerrar = () => { capa.classList.remove("nav-abierto"); if (btn) btn.setAttribute("aria-expanded", "false"); };
+      if (btn) btn.addEventListener("click", () => {
+        const ab = capa.classList.toggle("nav-abierto");
+        btn.setAttribute("aria-expanded", ab ? "true" : "false");
+      });
+      if (ov) ov.addEventListener("click", cerrar);
+      const nav = document.getElementById("nav-principal");
+      if (nav) nav.addEventListener("click", e => { if (e.target.closest(".nav-item")) cerrar(); });
+      document.addEventListener("keydown", e => { if (e.key === "Escape") cerrar(); });
+    })();
     actualizarReloj();
     setInterval(actualizarReloj, 30000);
     mostrarUltima();
