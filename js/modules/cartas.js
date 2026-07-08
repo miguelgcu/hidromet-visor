@@ -1786,6 +1786,13 @@
           ? `<div style="margin:8px 0 10px;padding:9px 12px;border-radius:9px;font-size:12px;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-bd)">
                Eventos SNGR disponibles hasta <b>${esc(feed.max_fecha)}</b> — las fechas FFR posteriores figuran como «Sin datos SNGR» hasta que el feed se actualice${feed.actualizado ? ` (feed leído el ${esc(feed.actualizado)})` : ""}.</div>`
           : "";
+        // Aviso de MUESTRA INSUFICIENTE: con muy pocos eventos observados el POD/FAR no son
+        // una afirmación de habilidad (el histórico FFR archivado cubre poco tiempo).
+        const _nEv = ag.eventos || 0;
+        const bannerMuestra = (_nEv < 10)
+          ? `<div style="margin:8px 0 10px;padding:9px 12px;border-radius:9px;font-size:12px;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-bd)">
+               <b>Muestra insuficiente:</b> solo <b>${fmtNum(_nEv)}</b> evento(s) observado(s) en el histórico FFR disponible. El POD/FAR de abajo son indicativos, aún <b>no una métrica de desempeño consolidada</b> — se afinará al acumular temporada.</div>`
+          : "";
         const filas = serie.slice().reverse().map(f => {
           const aten = (f.estado === "sin_datos_eventos" || f.estado === "pendiente") ? ' style="opacity:.45"' : "";
           return `<tr${aten}><td>${esc(f.fecha)}</td>
@@ -1796,7 +1803,7 @@
         }).join("");
         serieHost.innerHTML = `
           <h3 class="ct-subtitulo" style="margin:16px 0 8px">Métricas por fecha del historial <span class="suave">(FFR histórico F1 · WRF 3 km ↔ eventos SNGR)</span></h3>
-          ${banner}
+          ${banner}${bannerMuestra}
           <div class="ct-stats" style="margin:0 0 10px">
             <div class="ct-stat"><div class="v ok">${ag.pod_pct != null ? fmtPct(ag.pod_pct) + "<small> %</small>" : "—"}</div><div class="k">POD global (Σcubiertos/Σeventos)</div></div>
             <div class="ct-stat"><div class="v">${ag.far_dia_pct != null ? fmtPct(ag.far_dia_pct) + "<small> %</small>" : "—"}</div><div class="k">FAR diaria (avisos sin evento / avisos)</div></div>
