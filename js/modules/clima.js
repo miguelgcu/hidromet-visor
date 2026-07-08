@@ -1,5 +1,5 @@
 /* ============================================================
-   HidroMet — Climatología (réplica de la metodología PISCO para Ecuador).
+   HidroMet — Climatología de Ecuador (grillas 1991–2020 calibradas con estaciones).
    Normales 1991–2020 grilladas a 0.05° (precip/Tmáx/Tmín/PET) corregidas con
    estaciones. Cuatro pestañas: Mapas · Por estación · Por coordenada · Metodología.
    Backend: /api/clima/* (app/modulos/clima/datos.py).
@@ -197,7 +197,7 @@
     return `<div class="cl-tabla-scroll"><table class="cl-tabla cl-tabla-obs">
       <thead><tr><th>Serie observada</th><th>Años</th><th title="Días con dato sobre el periodo">Compl.</th>
       <th>Récord máx (día)</th><th>Récord mín (día)</th></tr></thead><tbody>${filas}</tbody></table>
-      <p class="cl-nota" style="margin-top:6px">Serie diaria observada/PISCO de la estación: récords absolutos con su fecha
+      <p class="cl-nota" style="margin-top:6px">Serie histórica diaria de la estación: récords absolutos con su fecha
       y percentiles mensuales P10–P90 en la tabla. El detalle día a día está en la pestaña «Récords».</p></div>`;
   }
 
@@ -588,7 +588,7 @@
       // en vez de dejar la pestaña con un error (antes toda estación de 2026 fallaba).
       pie.textContent = d.sin_historico
         ? `Estación nueva: solo hay datos desde ${d.periodo.desde}. Se muestra la serie observada del año; aún no hay envolvente histórica ni detección de récords (se necesitan varios años).`
-        : `Envolvente sobre ${d.n_anios_rango} años con datos; se exige ≥${d.umbral_n} años por día para declarar récord. Precip mayormente producto PISCO (ventana ${d.agregacion}); temperatura observada.`;
+        : `Envolvente sobre ${d.n_anios_rango} años con datos; se exige ≥${d.umbral_n} años por día para declarar récord. Precipitación mayormente de la Climatología (ventana ${d.agregacion}); temperatura observada.`;
       ultimo = d;
     }
     sel.onchange = cargar;
