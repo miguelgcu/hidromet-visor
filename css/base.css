@@ -387,6 +387,7 @@ table.tabla td.num, table.tabla th.num { text-align: right; font-family: var(--m
   .hm-pestanas { display: flex; flex-wrap: nowrap; justify-content: flex-start; gap: 4px 6px;
     margin: 8px 0 14px; border-bottom: 1.5px solid var(--line); padding-bottom: 2px;
     overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; max-width: 100%;
+    touch-action: pan-x;   /* el dedo SIEMPRE desliza la fila (aunque toque un botón) */
     -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
     mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
   .hm-pestanas::-webkit-scrollbar { display: none; }

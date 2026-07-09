@@ -217,3 +217,12 @@
 .cl-rank-fila:hover{background:var(--surface-3)}
 .cl-rank-fila>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cl-rank-fila .v{margin-left:auto;flex:none;font:600 11.5px var(--mono);color:var(--ink)}
+
+/* ===== v14: menos pestañas — la estación vive en Explorar ===== */
+.cl-sutil{font-weight:500;color:var(--muted-2);font-size:11px}
+.cl-mini-sel{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.cl-mini-sel .cl-buscar{flex:0 1 240px;min-width:150px}
+.cl-mini-select{flex:1 1 260px;min-width:200px;border:1px solid var(--line);border-radius:var(--r-ctrl,8px);
+  padding:8px 11px;font:500 13px var(--fuente);background:var(--surface);color:var(--ink)}
+.cl-mini-grid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(280px,.8fr);gap:14px;align-items:start}
+@media(max-width:920px){.cl-mini-grid{grid-template-columns:1fr}}

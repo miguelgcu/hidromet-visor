@@ -772,6 +772,8 @@
       // 'Sin entrenamiento' (m.dash/m.sin_entrenar) = tramo pasado-sin-obs con el fallback
       // colapsado: UNA línea punteada gris SIN rating (aunque sea precip), en vez de ~26
       // líneas/barras idénticas superpuestas ("todos los modelos iguales / plano").
+      // v14: nombre CLARO para el usuario (el crudo "Sin entrenamiento" confundía).
+      if (m.sin_entrenar) m = { ...m, modelo: "Respaldo (sin obs para entrenar)" };
       const rtxt = m.sin_entrenar ? "" : ` (${num(m.rating, 1)})`;
       if (esPrecip && !m.dash) {
         traces.push({ type: "bar", x: fx(m.fechas), y: m.valores, name: `${m.modelo}${rtxt}`,
