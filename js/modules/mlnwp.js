@@ -688,6 +688,7 @@
       xaxis: geo.xaxis, yaxis: geo.yaxis, dragmode: "pan",
     });
     Plotly.newPlot(el, traces, layout, App.plotlyConfig({ scrollZoom: true })).then(() => {
+      if (App.pinchZoomMapa) App.pinchZoomMapa(el);   // v17: pinza = zoom del mapa
       if (opts.onClick) {
         el.on("plotly_click", ev => {
           const idx = ev.points && ev.points[0] && ev.points[0].pointNumber;

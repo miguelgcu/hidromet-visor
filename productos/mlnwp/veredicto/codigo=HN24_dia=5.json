@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"HN24","dias":5,"fecha":"2026-07-14","hoy":"2026-07-09","lluvia":{"llueve":false,"prob":14,"prob_fuerte":5,"q25":49.3,"q75":50.5,"texto":"NO"},"nombre":"Puca","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"HN24","dias":5,"fecha":"2026-07-14","hoy":"2026-07-09","lluvia":null,"nombre":"Puca","sin_datos":true,"tendencia":null,"tmax":null,"tmin":null}

@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"HN06","dias":5,"fecha":"2026-07-14","hoy":"2026-07-09","lluvia":{"llueve":false,"prob":24,"prob_fuerte":8,"q25":49.9,"q75":53.8,"texto":"NO"},"nombre":"Met. Chaune","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"HN06","dias":5,"fecha":"2026-07-14","hoy":"2026-07-09","lluvia":null,"nombre":"Met. Chaune","sin_datos":true,"tendencia":null,"tmax":null,"tmin":null}

@@ -384,7 +384,8 @@ table.tabla td.num, table.tabla th.num { text-align: right; font-family: var(--m
      desliza en horizontal y la activa se auto-centra (core.js). Máscara de desvanecido
      a la derecha como pista de "hay más". max-width evita el bug de las píldoras de
      clima (la cadena flex no dejaba encoger y desbordaba la página). */
-  .hm-pestanas { display: flex; flex-wrap: nowrap; justify-content: flex-start; gap: 4px 6px;
+  .hm-pestanas { display: flex; flex-wrap: nowrap; justify-content: safe center; gap: 4px 6px;
+    /* v17: CENTRADAS cuando caben ('safe' cae al inicio si desbordan → scroll sano) */
     margin: 8px 0 14px; border-bottom: 1.5px solid var(--line); padding-bottom: 2px;
     overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; max-width: 100%;
     touch-action: pan-x;   /* el dedo SIEMPRE desliza la fila (aunque toque un botón) */

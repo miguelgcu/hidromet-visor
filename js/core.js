@@ -557,6 +557,38 @@ const App = (() => {
     });
   }
 
+  /* v17: ZOOM DE DOS DEDOS en los mapas Plotly (pedido del dueño): la pinza hace zoom
+     DEL MAPA (no de la página) alrededor del centro del gesto; un dedo sigue
+     desplazando la página. Leaflet (SNGR/GEOGLOWS) ya lo trae nativo. Funciona
+     también sobre cartas staticPlot (relayout programático). */
+  function pinchZoomMapa(gd) {
+    if (!gd || gd._hmPinch) return;
+    if (!window.matchMedia || !window.matchMedia("(pointer: coarse)").matches) return;
+    gd._hmPinch = true;
+    let d0 = null, c0 = null, rx0 = null, ry0 = null;
+    const dist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    const ctr = t => [(t[0].clientX + t[1].clientX) / 2, (t[0].clientY + t[1].clientY) / 2];
+    gd.addEventListener("touchstart", e => {
+      if (e.touches.length !== 2 || !gd._fullLayout || !gd._fullLayout.xaxis) return;
+      e.preventDefault();
+      d0 = dist(e.touches); c0 = ctr(e.touches);
+      rx0 = (gd._fullLayout.xaxis.range || []).slice();
+      ry0 = (gd._fullLayout.yaxis.range || []).slice();
+    }, { passive: false });
+    gd.addEventListener("touchmove", e => {
+      if (e.touches.length !== 2 || d0 == null || !window.Plotly || rx0.length !== 2) return;
+      e.preventDefault();
+      const k = Math.min(8, Math.max(0.12, d0 / Math.max(20, dist(e.touches))));
+      const fl = gd._fullLayout, xa = fl.xaxis, ya = fl.yaxis, bb = gd.getBoundingClientRect();
+      const px = Math.min(1, Math.max(0, (c0[0] - bb.left - xa._offset) / xa._length));
+      const py = Math.min(1, Math.max(0, 1 - (c0[1] - bb.top - ya._offset) / ya._length));
+      const cx = rx0[0] + (rx0[1] - rx0[0]) * px, cy = ry0[0] + (ry0[1] - ry0[0]) * py;
+      Plotly.relayout(gd, { "xaxis.range": [cx - (cx - rx0[0]) * k, cx + (rx0[1] - cx) * k],
+                            "yaxis.range": [cy - (cy - ry0[0]) * k, cy + (ry0[1] - cy) * k] });
+    }, { passive: false });
+    gd.addEventListener("touchend", () => { d0 = null; }, { passive: true });
+  }
+
   async function iniciar() {
     await exigirAcceso();
     inyectarEstilosBloqueo();
@@ -564,6 +596,23 @@ const App = (() => {
     if (guardado) document.documentElement.dataset.tema = guardado;
     document.getElementById("btn-tema").onclick = () =>
       tema(tema() === "claro" ? "oscuro" : "claro");
+    // v17: CERRAR SESIÓN en el menú (solo visor con puerta de acceso): borra el
+    // acceso recordado y recarga → vuelve a la pantalla de login.
+    if (window.HIDROMET_VISOR) {
+      const bt = document.getElementById("btn-tema");
+      if (bt && !document.getElementById("btn-salir")) {
+        const bs = document.createElement("button");
+        bs.id = "btn-salir"; bs.className = "boton-fantasma"; bs.type = "button";
+        bs.title = "Salir y volver a la pantalla de acceso";
+        bs.textContent = "⏻ Cerrar sesión";
+        bs.style.marginTop = "6px";
+        bs.onclick = () => {
+          try { localStorage.removeItem("hm-acceso-v1"); sessionStorage.removeItem("hm-acceso-v1"); } catch (e) {}
+          location.reload();
+        };
+        bt.insertAdjacentElement("afterend", bs);
+      }
+    }
     pintarNav();
     // Drawer móvil: la hamburguesa abre/cierra el sidebar off-canvas; overlay, Escape
     // y navegar a un módulo lo cierran. En desktop la hamburguesa está oculta por CSS.
@@ -750,7 +799,7 @@ const App = (() => {
   }
 
   return { api, aviso, tarea, seguirTarea, modalTarea, tema, registrar, navegar, iniciar, el, fmtFecha, plotlyLayoutBase,
-           plotlyLayoutSerie, plotlyConfig, hayTareaActiva, cancelarTarea, cancelarTodas, panel, vistaPestanas, restaurador,
+           plotlyLayoutSerie, plotlyConfig, pinchZoomMapa, hayTareaActiva, cancelarTarea, cancelarTodas, panel, vistaPestanas, restaurador,
            rutaAProducto, hoyEC };
 })();
 

@@ -131,6 +131,7 @@
       yaxis: { visible: false, fixedrange: false, range: [-5.1, 1.6] },
     });
     Plotly.react(host, [heat, ...contorno(), ...trazaEstaciones(ce, d)], layout, App.plotlyConfig());
+    if (App.pinchZoomMapa) App.pinchZoomMapa(host);   // v17: pinza = zoom del mapa
     const ley = host.parentElement && host.parentElement.querySelector('[data-rol="leyenda"]');
     if (ley) ley.innerHTML = leyendaMapa(d, dec);
   }

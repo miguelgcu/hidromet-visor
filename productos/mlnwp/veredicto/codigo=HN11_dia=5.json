@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"HN11","dias":5,"fecha":"2026-07-14","hoy":"2026-07-09","lluvia":{"llueve":false,"prob":29,"prob_fuerte":7,"q25":52.3,"q75":54.8,"texto":"NO"},"nombre":"Cerradora","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"HN11","dias":5,"fecha":"2026-07-14","hoy":"2026-07-09","lluvia":null,"nombre":"Cerradora","sin_datos":true,"tendencia":null,"tmax":null,"tmin":null}

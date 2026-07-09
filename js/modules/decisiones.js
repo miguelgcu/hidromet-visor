@@ -200,6 +200,7 @@
       dragmode: "pan",
     });
     Plotly.newPlot(el, traces, layout, App.plotlyConfig({ scrollZoom: true })).then(() => {
+      if (App.pinchZoomMapa) App.pinchZoomMapa(el);   // v17: pinza = zoom del mapa
       el.on("plotly_click", ev => {
         const p = ev.points && ev.points[0];
         if (!p || p.curveNumber !== S.idxMark) return;
