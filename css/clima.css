@@ -185,12 +185,24 @@
 .cl-adv-badge.conf{background:var(--ok-bg);color:var(--ok)}
 .cl-adv-badge.no{background:var(--surface-3);color:var(--muted)}
 
-/* ===== v13 (rediseño 2026-07-09): pestaña Mapas = mapa | panel lateral =====
-   Escritorio: mapa a la izquierda y al lado estadísticas + ranking + climograma.
-   Móvil (<=920px): el panel pasa DEBAJO del mapa (pedido del dueño). */
-.cl-mapgrid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(300px,.7fr);gap:14px;align-items:start}
-.cl-lado{display:flex;flex-direction:column;gap:14px;min-width:0}
-@media(max-width:920px){.cl-mapgrid{grid-template-columns:1fr}}
+/* ===== v13.1 (rediseño 2026-07-09): pestaña Mapas en DISPOSICIÓN RECTANGULAR =====
+   Escritorio: mapa ANCHO a la izquierda; al lado estadísticas + ranking ESTIRADOS a la
+   altura del mapa; el climograma va DEBAJO a TODO el ancho — sin huecos.
+   Móvil (<=920px): todo apilado bajo el mapa. */
+/* v13.2: mapa ESTRECHO ajustado al aspecto de Ecuador (alto>ancho, sin mar muerto);
+   el espacio ganado es del panel de estadísticas/gráficas. */
+.cl-mapgrid{display:grid;grid-template-columns:minmax(300px,.9fr) minmax(320px,1.1fr);
+  grid-template-areas:"mapa lado" "mini mini";gap:14px;align-items:stretch}
+.cl-mapa-card{grid-area:mapa;min-width:0}
+.cl-lado{grid-area:lado;display:flex;flex-direction:column;gap:14px;min-width:0}
+/* estadísticas ABRAZAN su contenido; el ranking absorbe el alto restante (scroll interno)
+   → la columna lateral queda a la altura exacta del mapa, sin aire muerto */
+.cl-lado>.cl-card{display:flex;flex-direction:column;min-height:0}
+.cl-lado>.cl-card:first-child{flex:0 0 auto}
+.cl-lado>.cl-card:last-child{flex:1}
+.cl-lado .cl-rank{flex:1;overflow:auto;min-height:0}
+.cl-mini-card{grid-area:mini;min-width:0}
+@media(max-width:920px){.cl-mapgrid{grid-template-columns:1fr;grid-template-areas:"mapa" "lado" "mini"}}
 /* KPIs del campo */
 .cl-kpis-mapa{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .cl-kpi-m{background:var(--surface-2);border:1px solid var(--line-3);border-radius:10px;padding:9px 11px;min-width:0}

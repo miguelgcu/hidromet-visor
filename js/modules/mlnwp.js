@@ -808,13 +808,12 @@
       showlegend: false,   // única leyenda = la HTML (ml-serie-leyenda); evita leyenda doble
       yaxis: { title: { text: unidad, font: { size: 11 } }, rangemode: esPrecip ? "tozero" : "normal",
                ...(angosto ? { fixedrange: true } : {}) },
-      // Eje X: en escritorio TODAS las fechas (un tick por día, rotadas -45°); en angosto
-      // ticks AUTOMÁTICOS (~8) y ejes fijos — el popup por fecha da el detalle.
-      xaxis: angosto
-        ? { type: "date", tickformat: "%d/%m", nticks: 8, tickangle: -45,
-            tickfont: { size: 9 }, automargin: true, fixedrange: true }
-        : { type: "date", tickformat: "%d/%m", tickmode: "linear", dtick: 86400000,
-            tickangle: -45, tickfont: { size: 9 }, automargin: true },
+      // Eje X: TODAS las fechas (un tick por día, rotadas -45°) — el lienzo tiene ancho
+      // mínimo 680px en angosto (scroll), así que siguen legibles. En angosto los ejes
+      // van FIJOS: el gesto táctil desliza el contenedor y el tap abre el popup.
+      xaxis: { type: "date", tickformat: "%d/%m", tickmode: "linear", dtick: 86400000,
+               tickangle: -45, tickfont: { size: 9 }, automargin: true,
+               ...(angosto ? { fixedrange: true } : {}) },
     });
     // Distinción HISTORIA vs PRONÓSTICO: franja de fondo desde HOY hasta el final +
     // línea divisoria. F5: "hoy" se calcula en el CLIENTE (TZ Ecuador) — el visor
@@ -840,7 +839,12 @@
         text: "inicio pronóstico →", showarrow: false,
         font: { family: "IBM Plex Mono", size: 10, color: C.anot } }];
     }
-    Plotly.newPlot(el, traces, layout, App.plotlyConfig(angosto ? { displayModeBar: false } : {}));
+    Plotly.newPlot(el, traces, layout, App.plotlyConfig(angosto ? { displayModeBar: false } : {})).then(() => {
+      // v13: el scroll ARRANCA en el extremo derecho — lo más reciente + pronóstico
+      // siempre visibles al entrar (pedido del dueño); inocuo si no hay overflow.
+      const sc = el.closest(".ml-plot-scroll");
+      if (sc) sc.scrollLeft = sc.scrollWidth;
+    });
 
     const leyEl = document.getElementById("ml-serie-leyenda");
     if (leyEl) leyEl.innerHTML =
@@ -877,9 +881,12 @@
         }).join("");
         probsEl.innerHTML =
           `<div class="ml-pb-tit">Probabilidad de lluvia por umbral</div>
-           <table class="ml-pb-tabla"><thead><tr><th class="ml-pb-esq">Umbral</th>${cabFechas}</tr></thead>
-           <tbody>${filasU}</tbody></table>
+           <div class="ml-pb-wrap"><table class="ml-pb-tabla"><thead><tr><th class="ml-pb-esq">Umbral</th>${cabFechas}</tr></thead>
+           <tbody>${filasU}</tbody></table></div>
            <div class="ml-pb-nota">Mismo horizonte que la serie (histórico + pronóstico); la línea vertical marca el inicio del pronóstico. Probabilidad calibrada (promedio de clasificadores). Ej.: “≥25 mm = 30 %” = 30 % de probabilidad de que llueva más de 25 mm ese día.</div>`;
+        // v13: umbral FIJO (sticky) y el scroll de fechas arranca a la DERECHA (lo más reciente).
+        const w = probsEl.querySelector(".ml-pb-wrap");
+        if (w) w.scrollLeft = w.scrollWidth;
       } else {
         probsEl.innerHTML = "";
       }

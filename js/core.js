@@ -582,13 +582,18 @@ const App = (() => {
   // herramientas visible y limpia (sin logo ni botones de selección), exportación
   // PNG en alta resolución y responsive.
   function plotlyConfig(extra = {}) {
-    return Object.assign({
+    const base = {
       displayModeBar: true,
       displaylogo: false,
       responsive: true,
       modeBarButtonsToRemove: ["lasso2d", "select2d", "autoScale2d"],
       toImageButtonOptions: { format: "png", scale: 2 },
-    }, extra);
+    };
+    // v13 (pedido del dueño): en TÁCTIL los botones de la modebar de Plotly son
+    // minúsculos e inservibles — se ocultan en TODOS los gráficos; la navegación
+    // es por gestos (scroll/pinch) y popups por fecha.
+    if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) base.displayModeBar = false;
+    return Object.assign(base, extra);
   }
 
   /* ---------------- paneles reutilizables + pestañas ----------------

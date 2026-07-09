@@ -121,8 +121,9 @@
     // Encuadre ECUADOR CONTINENTAL: la grilla es continental, pero el contorno
     // provincial incluye Galápagos y el autorange alejaba el mapa hacia el oeste.
     // Rango fijo del render (bbox continental); los datos NO se filtran.
-    // Altura fluida: en móvil el mapa no debe ocupar 540px fijos.
-    const alto = Math.max(360, Math.min(540, Math.round((host.clientWidth || 700) * 0.95)));
+    // Altura ajustada al ASPECTO de Ecuador (lat 6.7° / lon 6.1° ≈ 1.1): el mapa
+    // estrecho queda ceñido al país, sin franjas de mar muertas (pedido del dueño).
+    const alto = Math.max(380, Math.min(640, Math.round((host.clientWidth || 520) * 1.08)));
     const layout = App.plotlyLayoutBase({
       height: alto, margin: { l: 6, r: 6, t: 6, b: 6 },
       xaxis: { visible: false, scaleanchor: "y", constrain: "domain", fixedrange: false,
@@ -280,14 +281,14 @@
           <label class="cl-chk"><input type="checkbox" data-rol="chk-est" ${E.mapEst ? "checked" : ""}> estaciones (valor)</label></div>
       </div>
       <div class="cl-mapgrid">
-        <div class="cl-card"><h3 class="cl-maptit" data-rol="tit">Cargando…</h3><div class="cl-plot cl-plot-mapa" data-rol="plot"></div>
+        <div class="cl-card cl-mapa-card"><h3 class="cl-maptit" data-rol="tit">Cargando…</h3><div class="cl-plot cl-plot-mapa" data-rol="plot"></div>
           <div class="ct-leyenda-carta cl-leyenda" data-rol="leyenda"></div>
-          <p class="cl-nota">Normales 1991–2020 (~5 km) construidas con CHIRPS satelital corregido con estaciones. Pasa el cursor para leer lat/lon y valor; los puntos son estaciones (clic → su climograma al lado).</p></div>
+          <p class="cl-nota">Normales 1991–2020 (~5 km) construidas con CHIRPS satelital corregido con estaciones. Pasa el cursor para leer lat/lon y valor; los puntos son estaciones (clic → su climograma abajo).</p></div>
         <div class="cl-lado">
           <div class="cl-card"><h3 class="cl-maptit">Estadísticas del campo</h3><div class="cl-kpis-mapa" data-rol="kpis">${cargando()}</div></div>
           <div class="cl-card"><h3 class="cl-maptit">Estaciones — extremos</h3><div class="cl-rank" data-rol="rank"><div class="cl-nota">Activa la capa de estaciones para el ranking.</div></div></div>
-          <div class="cl-card"><h3 class="cl-maptit" data-rol="mini-tit">Climograma</h3><div data-rol="mini"><p class="cl-nota">Toca una estación del mapa (o del ranking) para ver su climograma aquí, sin salir del mapa.</p></div></div>
         </div>
+        <div class="cl-card cl-mini-card"><h3 class="cl-maptit" data-rol="mini-tit">Climograma</h3><div data-rol="mini"><p class="cl-nota">Toca una estación del mapa (o del ranking) para ver su climograma aquí, a todo el ancho.</p></div></div>
       </div>
     </div>`;
     const plot = c.querySelector('[data-rol="plot"]'), tit = c.querySelector('[data-rol="tit"]');

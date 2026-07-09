@@ -303,13 +303,14 @@ html[data-tema="oscuro"] .ml-region-tabla td { border-top-color: var(--line-3); 
   .ml-nav-botones { flex-wrap: wrap; }
   /* barra de color del mapa no desborda en pantallas estrechas */
   .ml-colorbar .barra, .ml-colorbar .ticks { width: min(260px, 72vw); }
-  /* v12 (pedido del dueño): la serie CABE en el ancho del teléfono, sin zoom ni
-     scroll — el detalle por fecha se lee con el popup unificado al tocar (hovermode
-     "x unified" + ejes fijos, ver pintarSerie). Antes: min-width 680px + deslizar. */
-  .ml-serie-plot { height: 320px; }
+  /* v13 (pedido del dueño): serie ANCHA con scroll horizontal que ARRANCA en el
+     extremo DERECHO (lo más reciente + pronóstico siempre a la vista al entrar);
+     ejes fijos (el tacto desliza, no deforma) y popup unificado por fecha al tocar. */
+  .ml-serie-plot { height: 320px; min-width: 680px; }
   /* tablas anchas → scroll horizontal (no hay envoltorio en el HTML). La tabla
-     unificada .ml-uni queda FUERA: ya tiene su envoltorio con columna sticky. */
-  .ml-tabla-modelos:not(.ml-uni), .ml-region-tabla, .ml-top10, .ml-pb-tabla {
+     unificada .ml-uni y la de probabilidad .ml-pb-tabla quedan FUERA: ya tienen su
+     envoltorio con columna sticky. */
+  .ml-tabla-modelos:not(.ml-uni), .ml-region-tabla, .ml-top10 {
     display: block; overflow-x: auto; white-space: nowrap; }
 }
 
@@ -331,3 +332,15 @@ html[data-tema="oscuro"] .ml-region-tabla td { border-top-color: var(--line-3); 
 .ml-tabla-modelos.ml-uni thead tr:last-child th:nth-child(5),
 .ml-tabla-modelos.ml-uni thead tr:last-child th:nth-child(10) { border-left: 1px solid var(--line-3); }
 .ml-uni-idx { display: inline-block; min-width: 17px; color: var(--muted-2); font: 600 10.5px var(--mono); }
+
+/* ===== v13: tabla de probabilidad por umbral — umbral FIJO + fechas deslizables =====
+   El envoltorio .ml-pb-wrap da el scroll-X (arranca a la derecha, mlnwp.js) y la
+   columna del umbral queda sticky con fondo sólido sobre las celdas coloreadas. */
+.ml-pb-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+/* nowrap en TODAS las celdas: la tabla crece más allá del envoltorio y se desliza
+   (sin esto las ~30 columnas de fecha se aplastaban unas sobre otras). */
+.ml-pb-wrap .ml-pb-tabla { width: max-content; min-width: 100%; }
+.ml-pb-tabla th, .ml-pb-tabla td { white-space: nowrap; }
+.ml-pb-tabla th.ml-pb-u, .ml-pb-tabla th.ml-pb-esq {
+  position: sticky; left: 0; z-index: 2; background: var(--surface);
+  box-shadow: inset -1px 0 0 var(--line-2); }
