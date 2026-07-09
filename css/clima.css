@@ -226,3 +226,11 @@
   padding:8px 11px;font:500 13px var(--fuente);background:var(--surface);color:var(--ink)}
 .cl-mini-grid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(280px,.8fr);gap:14px;align-items:start}
 @media(max-width:920px){.cl-mini-grid{grid-template-columns:1fr}}
+
+/* ===== v15.1 (captura del dueño): ANTI-BLOWOUT de los grids de clima =====
+   Las celdas de grid tienen min-width:auto por defecto → un Plotly ancho (climograma)
+   forzaba el ancho de la tarjeta y arrastraba TODA la página en móvil. min-width:0
+   obliga a las celdas a ceñirse al viewport y Plotly (responsive) se ajusta. */
+.cl-mapgrid>*, .cl-mini-grid>*, .cl-grid2>* { min-width: 0; }
+.cl-plot, .cl-plot-mapa { max-width: 100%; }
+.cl-card { max-width: 100%; }

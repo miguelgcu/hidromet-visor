@@ -511,3 +511,13 @@ details.hm-mas[open] > .hm-mas-panel { position: absolute; right: 0; top: calc(1
 .hm-login-pie { margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(120,155,210,.14);
   font: 500 10px var(--mono); letter-spacing: .06em; color: #64748B; text-align: center; }
 @media (max-width: 480px) { .hm-login-caja { padding: 24px 20px 18px; } }
+
+/* ===== v15.1: tope GLOBAL anti-desborde horizontal en móvil =====
+   Ningún contenido puede arrastrar la página en horizontal: todo lo ancho vive en
+   envoltorios con scroll propio (.ml-pb-wrap, .ml-uni-wrap, .ml-plot-scroll, tablas).
+   Si algo se escapa (p.ej. un gráfico renderizado antes de ceñirse), se recorta aquí
+   en vez de romper el layout completo. */
+@media (max-width: 820px) {
+  #vista { overflow-x: hidden; }
+  #vista .hm-cuerpo, #vista > * { max-width: 100%; }
+}

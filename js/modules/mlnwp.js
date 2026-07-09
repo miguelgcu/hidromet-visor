@@ -764,7 +764,7 @@
     // los pasteles atenuados se fantasmagorizan sobre el fondo: piso de opacidad
     // 0.85 y grosor mínimo 2 conservando la atenuación relativa entre modelos.
     const leyenda = [];
-    for (const m of (d.modelos || []).slice(0, 8)) {
+    for (let m of (d.modelos || []).slice(0, 8)) {   // let: el respaldo se re-etiqueta abajo
       const color = m.color;
       const opBase = m.opacity ?? .7;
       const op = oscuro ? Math.max(.85, opBase) : opBase;
