@@ -303,10 +303,31 @@ html[data-tema="oscuro"] .ml-region-tabla td { border-top-color: var(--line-3); 
   .ml-nav-botones { flex-wrap: wrap; }
   /* barra de color del mapa no desborda en pantallas estrechas */
   .ml-colorbar .barra, .ml-colorbar .ticks { width: min(260px, 72vw); }
-  /* series: ancho mínimo + scroll horizontal para que ~60 puntos no se aplasten
-     (Plotly renderiza a este ancho y el usuario desplaza; el eje X queda legible) */
-  .ml-serie-plot { height: 320px; min-width: 680px; }
-  /* tablas anchas → scroll horizontal (no hay envoltorio en el HTML) */
-  .ml-tabla-modelos, .ml-region-tabla, .ml-top10, .ml-pb-tabla {
+  /* v12 (pedido del dueño): la serie CABE en el ancho del teléfono, sin zoom ni
+     scroll — el detalle por fecha se lee con el popup unificado al tocar (hovermode
+     "x unified" + ejes fijos, ver pintarSerie). Antes: min-width 680px + deslizar. */
+  .ml-serie-plot { height: 320px; }
+  /* tablas anchas → scroll horizontal (no hay envoltorio en el HTML). La tabla
+     unificada .ml-uni queda FUERA: ya tiene su envoltorio con columna sticky. */
+  .ml-tabla-modelos:not(.ml-uni), .ml-region-tabla, .ml-top10, .ml-pb-tabla {
     display: block; overflow-x: auto; white-space: nowrap; }
 }
+
+/* ===== v12: tabla ÚNICA de precip (detección + cuantificación por fila) =====
+   Modelo + calificación FIJOS a la izquierda; las métricas se deslizan en X
+   (escritorio y móvil — pedido del dueño 2026-07-09). */
+.ml-uni-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.ml-tabla-modelos.ml-uni { min-width: 780px; }
+.ml-tabla-modelos.ml-uni th.ml-uni-mod, .ml-tabla-modelos.ml-uni td.ml-uni-mod {
+  position: sticky; left: 0; z-index: 2; background: var(--surface);
+  box-shadow: inset -1px 0 0 var(--line-2); min-width: 170px; max-width: 230px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ml-tabla-modelos.ml-uni thead th { background: var(--surface); }
+.ml-uni-grp { text-align: center; font: 650 10px var(--mono); letter-spacing: .06em;
+  text-transform: uppercase; color: var(--muted); border-left: 1px solid var(--line-3); }
+.ml-tabla-modelos.ml-uni td:nth-child(2), .ml-tabla-modelos.ml-uni td:nth-child(6),
+.ml-tabla-modelos.ml-uni td:nth-child(11),
+.ml-tabla-modelos.ml-uni thead tr:last-child th:nth-child(1),
+.ml-tabla-modelos.ml-uni thead tr:last-child th:nth-child(5),
+.ml-tabla-modelos.ml-uni thead tr:last-child th:nth-child(10) { border-left: 1px solid var(--line-3); }
+.ml-uni-idx { display: inline-block; min-width: 17px; color: var(--muted-2); font: 600 10.5px var(--mono); }

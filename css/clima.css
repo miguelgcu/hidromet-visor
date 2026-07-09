@@ -54,6 +54,7 @@
 .cl-maptit{display:flex;align-items:center;gap:8px;font:650 13.5px var(--fuente);color:var(--ink);margin:0 0 10px}
 .cl-maptit::before{content:"";width:7px;height:7px;border-radius:2px;background:var(--cl-acc);flex:0 0 auto}
 .cl-plot{width:100%}
+.cl-leyenda{margin:10px 0 0}   /* leyenda horizontal bajo el mapa (componente ct-leyenda-*) */
 /* Lienzo de MAPA TEMÁTICO (--sea-*): claro = papel; oscuro = fondo del tema. */
 .cl-plot-mapa{background:linear-gradient(180deg,var(--sea-top),var(--sea-bottom));
   border-radius:10px;overflow:hidden}
@@ -67,13 +68,16 @@
   .cl-card{padding:13px}
   .cl-kpis{grid-template-columns:1fr 1fr;gap:8px}
   .cl-kpi .v{font-size:19px}
-  .cl-pill{padding:6px 11px 6px 10px;flex:0 0 auto}      /* objetivo táctil algo mayor; no encoge */
-  /* las píldoras ya no se salen de pantalla: la fila se desliza (antes nowrap sin scroll) */
-  .cl-pills{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;
-    -webkit-mask-image:linear-gradient(to right,transparent 0,#000 16px,#000 calc(100% - 16px),transparent 100%);
-    mask-image:linear-gradient(to right,transparent 0,#000 16px,#000 calc(100% - 16px),transparent 100%)}
-  .cl-pills::-webkit-scrollbar{display:none}
-  .cl-mes{min-width:28px;padding:6px}
+  .cl-pill{padding:6px 11px 6px 10px;flex:0 0 auto;min-height:34px}  /* objetivo táctil; no encoge */
+  /* v12 (captura del dueño): el scroll con máscara NO funcionaba — la cadena flex no
+     dejaba encoger a .cl-pills (min-width:auto) y las píldoras DESBORDABAN la tarjeta
+     arrastrando la página entera. Como en las pestañas del sistema: VARIAS FILAS,
+     todas visibles, sin depender del deslizamiento. */
+  .cl-toolbar{max-width:100%}
+  .cl-grupo{min-width:0;max-width:100%;flex-wrap:wrap}
+  .cl-pills{flex-wrap:wrap;overflow:visible;-webkit-mask-image:none;mask-image:none}
+  .cl-meses{flex-wrap:wrap}
+  .cl-mes{min-width:32px;padding:7px 6px}
   .cl-coords{gap:10px}
   .cl-campo input{width:120px}
 }
@@ -180,3 +184,24 @@
 .cl-adv-badge{margin-left:auto;font:600 11px var(--mono);border-radius:999px;padding:3px 11px;white-space:nowrap}
 .cl-adv-badge.conf{background:var(--ok-bg);color:var(--ok)}
 .cl-adv-badge.no{background:var(--surface-3);color:var(--muted)}
+
+/* ===== v13 (rediseño 2026-07-09): pestaña Mapas = mapa | panel lateral =====
+   Escritorio: mapa a la izquierda y al lado estadísticas + ranking + climograma.
+   Móvil (<=920px): el panel pasa DEBAJO del mapa (pedido del dueño). */
+.cl-mapgrid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(300px,.7fr);gap:14px;align-items:start}
+.cl-lado{display:flex;flex-direction:column;gap:14px;min-width:0}
+@media(max-width:920px){.cl-mapgrid{grid-template-columns:1fr}}
+/* KPIs del campo */
+.cl-kpis-mapa{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cl-kpi-m{background:var(--surface-2);border:1px solid var(--line-3);border-radius:10px;padding:9px 11px;min-width:0}
+.cl-kpi-m .k{font:600 9.5px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}
+.cl-kpi-m .v{font:650 17px var(--fuente);color:var(--ink);margin-top:2px}
+.cl-kpi-m .s{font:500 10.5px var(--mono);color:var(--muted-2)}
+/* ranking de estaciones */
+.cl-rank{display:flex;flex-direction:column;gap:2px}
+.cl-rank-cab{font:600 9.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin:6px 0 2px}
+.cl-rank-fila{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;cursor:pointer;
+  border:none;background:transparent;text-align:left;font:500 12px var(--fuente);color:var(--ink-2);min-height:34px}
+.cl-rank-fila:hover{background:var(--surface-3)}
+.cl-rank-fila>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cl-rank-fila .v{margin-left:auto;flex:none;font:600 11.5px var(--mono);color:var(--ink)}

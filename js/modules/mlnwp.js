@@ -489,23 +489,76 @@
       </table>`;
   }
 
+  // UNA SOLA tabla para precip (pedido del dueño 2026-07-09): detección Y cuantificación
+  // en la misma fila por modelo — la columna del MODELO queda FIJA (sticky) y las
+  // métricas se deslizan en X. Aplica a escritorio y móvil.
+  function tablaUnificadaHTML(dCua, dDet) {
+    const filtrarFam = S.familia && S.familia !== "Todos" && S.familia !== "Mejor desempeño";
+    const fil = ms => filtrarFam ? (ms || []).filter(m => m.familia === S.familia) : (ms || []);
+    const cua = fil(dCua.modelos), det = fil(dDet.modelos);
+    const dmap = new Map(det.map(m => [m.modelo, m]));
+    // Orden = el del bloque base (cuantificación, ya viene por calificación); los
+    // modelos solo-detección se anexan al final.
+    const orden = [...cua];
+    det.forEach(m => { if (!cua.some(x => x.modelo === m.modelo)) orden.push({ ...m, _soloDet: true }); });
+    const mejorDe = ms => { let bn = null, br = -Infinity;
+      ms.forEach(m => { if (m.califica && m.rating != null && m.rating > br) { br = m.rating; bn = m.modelo; } }); return bn; };
+    const bestCua = mejorDe(cua), bestDet = mejorDe(det);
+    const sinC = m => !m || !m.califica || m.rating == null;
+    const f2 = v => (v == null || Number.isNaN(v)) ? "—" : Number(v).toFixed(2);
+    const f1 = v => (v == null || Number.isNaN(v)) ? "—" : Number(v).toFixed(1);
+    const badge = (m, best) => sinC(m)
+      ? `<span style="color:var(--muted-2)">—</span>`
+      : (([bg, fg]) => `<span class="ml-calif-badge" style="background:${bg};color:${fg}">${num(m.rating, 1)}</span>${m.modelo === best ? " ★" : ""}`)(calColor(m.rating));
+    const filas = orden.map((base, i) => {
+      const mc = base._soloDet ? null : base;
+      const md = dmap.get(base.modelo) || (base._soloDet ? base : null);
+      const tipoFam = { Convencionales: "grillado", "No convencionales": "grillado",
+        ML: "calibrado", Postprocesamiento: "combinación" }[base.familia] || "crudo";
+      return `<tr>
+        <td class="ml-uni-mod"><span class="ml-uni-idx">${i + 1}</span><span class="ml-mod-punto" style="background:${esc(base.color)}"></span>${esc(base.modelo)}<span class="ml-mod-tipo"> · ${tipoFam}</span></td>
+        <td>${badge(md, bestDet)}</td>
+        <td class="num">${sinC(md) ? "—" : f2(md.pod)}</td>
+        <td class="num">${sinC(md) ? "—" : f2(md.far)}</td>
+        <td class="num">${sinC(md) ? "—" : f2(md.csi)}</td>
+        <td>${badge(mc, bestCua)}</td>
+        <td class="num">${sinC(mc) ? "—" : f1(mc.mae)}</td>
+        <td class="num">${sinC(mc) ? "—" : f1(mc.rmse)}</td>
+        <td class="num">${sinC(mc) ? "—" : sgn(mc.bias)}</td>
+        <td class="num">${sinC(mc) ? "—" : f2(mc.corr)}</td>
+        <td class="num">${(mc && mc.n) ?? (md && md.n) ?? "—"}</td>
+        <td>${pillConf((mc || md || {}).confianza)}</td>
+      </tr>`;
+    }).join("");
+    const ban = (ms, best, etq) => {
+      const mg = ms.find(m => m.modelo === best);
+      return mg ? `<div class="ml-mejor-banner"><span class="ml-mejor-estrella">★</span> Mejor en ${etq}:
+        <b>${esc(mg.modelo)}</b> — calif. ${num(mg.rating, 1)}/10 · <b>${mg.n}</b> fechas</div>` : "";
+    };
+    return `${ban(det, bestDet, "detección de eventos")}${ban(cua, bestCua, "cuantificación")}
+      <div class="ml-uni-wrap">
+      <table class="ml-tabla-modelos ml-uni">
+        <thead>
+          <tr><th class="ml-uni-mod" rowspan="2">Modelo</th>
+              <th colspan="4" class="ml-uni-grp">Detección · ¿llueve sí/no?</th>
+              <th colspan="4" class="ml-uni-grp">Cuantificación · ¿cuánto?</th>
+              <th colspan="3" class="ml-uni-grp">Muestra</th></tr>
+          <tr><th>Calif.</th><th class="der">POD</th><th class="der">FAR</th><th class="der">CSI</th>
+              <th>Calif.</th><th class="der">MAE</th><th class="der">RMSE</th><th class="der">Sesgo</th>
+              <th class="der">Corr</th><th class="der">Fechas</th><th>Conf.</th></tr>
+        </thead>
+        <tbody>${filas || `<tr><td colspan="12" class="suave" style="padding:14px">Sin modelos para esta estación.</td></tr>`}</tbody>
+      </table></div>
+      <div class="ml-pb-nota">Detección: POD acierto · FAR falsa alarma · CSI global. Cuantificación: MAE/RMSE error en mm · Sesgo · Corr. Desliza la tabla para ver todas las métricas; el modelo y su calificación quedan fijos.</div>`;
+  }
+
   // Tarjeta 'Clasificación de modelos'. d = bloque principal (cuantificación en
   // precip; continuo en temperaturas). dDet = bloque precip_det (POD/FAR/CSI) —
-  // solo en precip; el dueño exige ver la DETECCIÓN además de la cuantificación:
-  // detección ARRIBA, cuantificación DEBAJO, cada una con su propia calificación.
+  // solo en precip: UNA tabla unificada (detección + cuantificación por fila).
   function pintarDetalle(cont, d, dDet) {
     const nom = d.nombre || S.estacion;
     const dosSecciones = !!(dDet && (dDet.modelos || []).length);
-    const cuerpo = dosSecciones
-      ? `<div class="ml-clasif-sec">
-           <div class="ml-clasif-cab">Detección <span class="ml-sutil">· ¿acierta SI llueve o no? (POD acierto · FAR falsa alarma · CSI global)</span></div>
-           ${tablaClasifHTML(dDet)}
-         </div>
-         <div class="ml-clasif-sec">
-           <div class="ml-clasif-cab">Cuantificación <span class="ml-sutil">· ¿acierta CUÁNTO llueve? (MAE · RMSE · Sesgo · Corr)</span></div>
-           ${tablaClasifHTML(d)}
-         </div>`
-      : tablaClasifHTML(d);
+    const cuerpo = dosSecciones ? tablaUnificadaHTML(d, dDet) : tablaClasifHTML(d);
     cont.innerHTML = `
       <div class="ml-card">
         <h3 class="ml-titulo">Clasificación de modelos en ${esc(nom)}
@@ -672,6 +725,10 @@
 
     const el = document.getElementById("ml-plot-serie");
     if (!window.Plotly || !el) return;
+    // v12 (pedido del dueño): en pantallas angostas la serie CABE en el ancho (sin
+    // zoom/scroll); el detalle por fecha se lee con el popup unificado al TOCAR.
+    // Ejes fijos → el gesto táctil no deforma; ticks automáticos → legibles a 390px.
+    const angosto = (card.clientWidth || window.innerWidth || 999) < 560;
 
     const traces = [];
     const fx = arr => (arr || []).map(s => s);
@@ -731,9 +788,10 @@
       leyenda.push(`<span class="it"><span class="sw-caja" style="${swStyle}"></span>${esc(m.modelo)}${rtxt}</span>`);
     }
 
-    // Observado: línea punteada negra con marcadores cuadrados.
+    // Observado: línea punteada negra con marcadores cuadrados. En angosto SIN las
+    // etiquetas numéricas encima (se amontonan a 390px; el popup ya da el valor).
     if (d.observado && d.observado.fechas && d.observado.fechas.length) {
-      traces.push({ type: "scatter", mode: "lines+markers+text", x: d.observado.fechas, y: d.observado.valores,
+      traces.push({ type: "scatter", mode: angosto ? "lines+markers" : "lines+markers+text", x: d.observado.fechas, y: d.observado.valores,
         text: d.observado.valores.map(v => (v == null ? "" : (esPrecip && Number(v) === 0 ? "" : num(v, 1)))),
         textposition: "top center", textfont: { size: 9, color: C.obs }, cliponaxis: false,
         name: "Observado", line: { color: C.obs, width: 2.8 }, connectgaps: false,
@@ -748,11 +806,15 @@
       // tiempo aunque tengan distinta cantidad de fechas.
       barmode: "overlay",
       showlegend: false,   // única leyenda = la HTML (ml-serie-leyenda); evita leyenda doble
-      yaxis: { title: { text: unidad, font: { size: 11 } }, rangemode: esPrecip ? "tozero" : "normal" },
-      // Eje X: TODAS las fechas (un tick por día), no solo algunas. Rotadas -45° y fuente pequeña
-      // para que entre el periodo completo (lookback + pronóstico).
-      xaxis: { type: "date", tickformat: "%d/%m", tickmode: "linear", dtick: 86400000,
-               tickangle: -45, tickfont: { size: 9 }, automargin: true },
+      yaxis: { title: { text: unidad, font: { size: 11 } }, rangemode: esPrecip ? "tozero" : "normal",
+               ...(angosto ? { fixedrange: true } : {}) },
+      // Eje X: en escritorio TODAS las fechas (un tick por día, rotadas -45°); en angosto
+      // ticks AUTOMÁTICOS (~8) y ejes fijos — el popup por fecha da el detalle.
+      xaxis: angosto
+        ? { type: "date", tickformat: "%d/%m", nticks: 8, tickangle: -45,
+            tickfont: { size: 9 }, automargin: true, fixedrange: true }
+        : { type: "date", tickformat: "%d/%m", tickmode: "linear", dtick: 86400000,
+            tickangle: -45, tickfont: { size: 9 }, automargin: true },
     });
     // Distinción HISTORIA vs PRONÓSTICO: franja de fondo desde HOY hasta el final +
     // línea divisoria. F5: "hoy" se calcula en el CLIENTE (TZ Ecuador) — el visor
@@ -778,7 +840,7 @@
         text: "inicio pronóstico →", showarrow: false,
         font: { family: "IBM Plex Mono", size: 10, color: C.anot } }];
     }
-    Plotly.newPlot(el, traces, layout, App.plotlyConfig());
+    Plotly.newPlot(el, traces, layout, App.plotlyConfig(angosto ? { displayModeBar: false } : {}));
 
     const leyEl = document.getElementById("ml-serie-leyenda");
     if (leyEl) leyEl.innerHTML =

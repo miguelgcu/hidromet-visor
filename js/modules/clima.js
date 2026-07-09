@@ -85,31 +85,53 @@
     }];
   }
 
+  // Leyenda HORIZONTAL bajo el mapa — mismo componente visual que las cartas
+  // (ct-leyenda-*: barra de gradiente + ticks mono). Pedido del dueño 2026-07-09:
+  // la barra vertical de Plotly robaba media pantalla en móvil y desentonaba.
+  function leyendaMapa(d, dec) {
+    const cs = d.colorscale || [];
+    if (!cs.length || d.vmin == null || d.vmax == null) return "";
+    const stops = cs.map(p => `${p[1]} ${(p[0] * 100).toFixed(2)}%`).join(", ");
+    const rango = (d.vmax - d.vmin) || 1;
+    // Ticks "bonitos" (múltiplos de 1/2/2.5/5×10^k), posicionados por su valor real.
+    const crudo = rango / 6, pot = Math.pow(10, Math.floor(Math.log10(crudo)));
+    const paso = [1, 2, 2.5, 5, 10].map(m => m * pot).find(s => rango / s <= 7) || crudo;
+    let tk = "";
+    for (let v = Math.ceil(d.vmin / paso) * paso; v <= d.vmax + 1e-9; v += paso) {
+      const pos = ((v - d.vmin) / rango) * 100;
+      tk += `<span class="t" style="left:${pos.toFixed(2)}%">${esc(String(+v.toFixed(dec)))}</span>`;
+    }
+    return `<div class="ct-leyenda-cab"><span class="ct-leyenda-unidad mono">${esc(d.unidad || "")}</span>` +
+      `<span class="ct-leyenda-sub mono">normal 1991–2020</span></div>` +
+      `<div class="ct-leyenda-barra" style="background:linear-gradient(to right, ${stops})"></div>` +
+      `<div class="ct-leyenda-ticks">${tk}</div>`;
+  }
+
   // Mapa de una normal --------------------------------------------------------
   function pintarMapa(host, d, ce) {
     if (!window.Plotly || !host) return;
     if (!d || d.error) { limpiarPlot(host); host.innerHTML = vacio("🗺️", esc(d && d.error || "Sin datos")); return; }
     const dec = (d.variable === "tmax" || d.variable === "tmin") ? 1 : (d.variable === "aridez" ? 2 : 0);
-    // Tinta TEMÁTICA del colorbar: oscura sobre el papel claro, clara sobre el fondo oscuro.
-    const tinta = (App.tema && App.tema() === "oscuro") ? "#E8EDF6" : "#283550";
     const heat = {
       type: "heatmap", x: d.lon, y: d.lat, z: d.campo, colorscale: d.colorscale,
       zmin: d.vmin, zmax: d.vmax, zsmooth: "best", hoverongaps: false,
-      colorbar: { title: { text: d.unidad || "", side: "right", font: { size: 11, color: tinta } }, thickness: 14,
-        len: 0.92, outlinewidth: 0, ticks: "outside", ticklen: 3, tickcolor: tinta,
-        tickfont: { size: 10, color: tinta }, x: 1.012 },
+      showscale: false,   // v12: la escala vive en la leyenda horizontal bajo el mapa
       hovertemplate: `lat %{y:.2f}, lon %{x:.2f}<br><b>%{z:.${dec}f} ${esc(d.unidad || "")}</b><extra></extra>`,
     };
     // Encuadre ECUADOR CONTINENTAL: la grilla es continental, pero el contorno
     // provincial incluye Galápagos y el autorange alejaba el mapa hacia el oeste.
     // Rango fijo del render (bbox continental); los datos NO se filtran.
+    // Altura fluida: en móvil el mapa no debe ocupar 540px fijos.
+    const alto = Math.max(360, Math.min(540, Math.round((host.clientWidth || 700) * 0.95)));
     const layout = App.plotlyLayoutBase({
-      height: 540, margin: { l: 6, r: 6, t: 6, b: 6 },
+      height: alto, margin: { l: 6, r: 6, t: 6, b: 6 },
       xaxis: { visible: false, scaleanchor: "y", constrain: "domain", fixedrange: false,
         range: [-81.2, -75.1] },
       yaxis: { visible: false, fixedrange: false, range: [-5.1, 1.6] },
     });
     Plotly.react(host, [heat, ...contorno(), ...trazaEstaciones(ce, d)], layout, App.plotlyConfig());
+    const ley = host.parentElement && host.parentElement.querySelector('[data-rol="leyenda"]');
+    if (ley) ley.innerHTML = leyendaMapa(d, dec);
   }
 
   // Climograma (barras precip + líneas temp + PET + obs) ----------------------
@@ -257,11 +279,78 @@
         <div class="cl-grupo"><span>Capa</span>
           <label class="cl-chk"><input type="checkbox" data-rol="chk-est" ${E.mapEst ? "checked" : ""}> estaciones (valor)</label></div>
       </div>
-      <div class="cl-card"><h3 class="cl-maptit" data-rol="tit">Cargando…</h3><div class="cl-plot cl-plot-mapa" data-rol="plot"></div>
-        <p class="cl-nota">Normales 1991–2020 (~5 km) construidas con CHIRPS satelital corregido con estaciones. Pasa el cursor para leer lat/lon y valor; los puntos son estaciones (clic para abrir su ficha).</p></div>
+      <div class="cl-mapgrid">
+        <div class="cl-card"><h3 class="cl-maptit" data-rol="tit">Cargando…</h3><div class="cl-plot cl-plot-mapa" data-rol="plot"></div>
+          <div class="ct-leyenda-carta cl-leyenda" data-rol="leyenda"></div>
+          <p class="cl-nota">Normales 1991–2020 (~5 km) construidas con CHIRPS satelital corregido con estaciones. Pasa el cursor para leer lat/lon y valor; los puntos son estaciones (clic → su climograma al lado).</p></div>
+        <div class="cl-lado">
+          <div class="cl-card"><h3 class="cl-maptit">Estadísticas del campo</h3><div class="cl-kpis-mapa" data-rol="kpis">${cargando()}</div></div>
+          <div class="cl-card"><h3 class="cl-maptit">Estaciones — extremos</h3><div class="cl-rank" data-rol="rank"><div class="cl-nota">Activa la capa de estaciones para el ranking.</div></div></div>
+          <div class="cl-card"><h3 class="cl-maptit" data-rol="mini-tit">Climograma</h3><div data-rol="mini"><p class="cl-nota">Toca una estación del mapa (o del ranking) para ver su climograma aquí, sin salir del mapa.</p></div></div>
+        </div>
+      </div>
     </div>`;
     const plot = c.querySelector('[data-rol="plot"]'), tit = c.querySelector('[data-rol="tit"]');
     const meses = c.querySelector('[data-rol="meses"]'), chkEst = c.querySelector('[data-rol="chk-est"]');
+    const kpisEl = c.querySelector('[data-rol="kpis"]'), rankEl = c.querySelector('[data-rol="rank"]');
+    const miniEl = c.querySelector('[data-rol="mini"]'), miniTit = c.querySelector('[data-rol="mini-tit"]');
+    let miniUlt = null;   // {p, nom, cod} del último climograma lateral (redibujo al cambiar tema)
+
+    // KPIs del campo visible (media/máx/mín con su ubicación) — calculados del propio grid.
+    function pintarKpis(d) {
+      const dec = (d.variable === "tmax" || d.variable === "tmin") ? 1 : (d.variable === "aridez" ? 2 : 0);
+      let n = 0, suma = 0, vmax = -Infinity, vmin = Infinity, pmax = null, pmin = null;
+      (d.campo || []).forEach((fila, i) => (fila || []).forEach((v, j) => {
+        if (v == null || !isFinite(v)) return;
+        n++; suma += v;
+        if (v > vmax) { vmax = v; pmax = [d.lat[i], d.lon[j]]; }
+        if (v < vmin) { vmin = v; pmin = [d.lat[i], d.lon[j]]; }
+      }));
+      if (!n) { kpisEl.innerHTML = `<p class="cl-nota">Sin datos.</p>`; return; }
+      const u = d.unidad || "", f = v => `${(+v.toFixed(dec)).toLocaleString("es-EC")}`;
+      const geo = p => p ? `${Math.abs(p[0]).toFixed(1)}°${p[0] < 0 ? "S" : "N"} ${Math.abs(p[1]).toFixed(1)}°O` : "";
+      kpisEl.innerHTML = `
+        <div class="cl-kpi-m"><div class="k">Media del campo</div><div class="v">${f(suma / n)} <span class="s">${esc(u)}</span></div></div>
+        <div class="cl-kpi-m"><div class="k">Máximo</div><div class="v">${f(vmax)} <span class="s">${esc(u)}</span></div><div class="s">${geo(pmax)}</div></div>
+        <div class="cl-kpi-m"><div class="k">Mínimo</div><div class="v">${f(vmin)} <span class="s">${esc(u)}</span></div><div class="s">${geo(pmin)}</div></div>
+        <div class="cl-kpi-m"><div class="k">Celdas con dato</div><div class="v">${n.toLocaleString("es-EC")}</div><div class="s">~5 km</div></div>`;
+    }
+
+    // Ranking top/bottom de estaciones para la variable/escala actual (clic → climograma).
+    function pintarRank(ce, unidad) {
+      const pts = ((ce && ce.estaciones) || []).filter(e => e.valor != null && isFinite(e.valor));
+      if (!pts.length) { rankEl.innerHTML = `<div class="cl-nota">Activa la capa de estaciones para el ranking.</div>`; return; }
+      const orden = [...pts].sort((a, b) => b.valor - a.valor);
+      const fila = e => `<button class="cl-rank-fila" data-cod="${esc(String(e.codigo))}" data-nom="${esc(e.nombre || e.codigo)}">
+        <span>${esc(e.nombre || e.codigo)} <span style="color:var(--faint)">(${esc(String(e.codigo))})</span></span>
+        <span class="v">${(+Number(e.valor).toFixed(1)).toLocaleString("es-EC")} ${esc(unidad || "")}</span></button>`;
+      rankEl.innerHTML = `<div class="cl-rank-cab">Mayores</div>${orden.slice(0, 5).map(fila).join("")}
+        <div class="cl-rank-cab">Menores</div>${orden.slice(-5).reverse().map(fila).join("")}`;
+    }
+
+    // Climograma LATERAL de una estación (escritorio: junto al mapa; móvil: debajo).
+    async function miniFicha(cod, nom) {
+      miniTit.textContent = `Climograma — ${nom || cod}`;
+      miniEl.innerHTML = cargando();
+      let p;
+      try { p = await App.api(`/clima/estacion?codigo=${encodeURIComponent(cod)}`); }
+      catch (e) { miniEl.innerHTML = vacio("⚠️", esc(e.message)); return; }
+      if (p.error || p.fuera_dominio || !(p.vars && p.vars.precip && p.vars.precip.anual != null)) {
+        miniEl.innerHTML = `<p class="cl-nota">Sin climatología grillada aquí; abre la ficha completa para su serie observada.</p>
+          <button class="cl-btn" data-rol="ficha-full">Ficha completa →</button>`;
+      } else {
+        miniEl.innerHTML = `<div class="cl-plot" data-rol="mini-climo"></div>
+          <button class="cl-btn" data-rol="ficha-full" style="margin-top:8px">Ficha completa →</button>`;
+        pintarClimograma(miniEl.querySelector('[data-rol="mini-climo"]'), p);
+      }
+      miniUlt = { p, nom, cod };
+      const btn = miniEl.querySelector('[data-rol="ficha-full"]');
+      if (btn) btn.onclick = () => { E.estSel = String(cod); if (E.tabs) E.tabs.pintar("estacion"); };
+    }
+    rankEl.addEventListener("click", e => {
+      const b = e.target.closest(".cl-rank-fila"); if (!b) return;
+      miniFicha(b.dataset.cod, b.dataset.nom);
+    });
     async function dibujar() {
       const v = VARS.find(x => x.id === E.mapVar);
       if (v && v.soloAnual) E.mapEsc = "anual";
@@ -279,24 +368,25 @@
         try { d = await App.api(`/clima/mapa?variable=${E.mapVar}&escala=${E.mapEsc}`); E.mapaCache[key] = d; }
         catch (e) { limpiarPlot(plot); tit.textContent = "Error"; plot.innerHTML = vacio("⚠️", esc(e.message)); return; }
       }
-      let ce = null;
-      if (E.mapEst) {
-        ce = E.estCache[key];
-        if (!ce) {
-          try { ce = await App.api(`/clima/estaciones?mes=${E.mapEsc}&variable=${E.mapVar}`); E.estCache[key] = ce; }
-          catch (e) { ce = null; }
-        }
+      // Las estaciones se piden SIEMPRE (alimentan el ranking lateral); la capa del
+      // mapa solo las dibuja si el checkbox está activo.
+      let ce = E.estCache[key];
+      if (!ce) {
+        try { ce = await App.api(`/clima/estaciones?mes=${E.mapEsc}&variable=${E.mapVar}`); E.estCache[key] = ce; }
+        catch (e) { ce = null; }
       }
       tit.textContent = d.titulo || "";
-      pintarMapa(plot, d, ce);
-      // Clic en una estación → su ficha en la pestaña "Por estación".
+      pintarMapa(plot, d, E.mapEst ? ce : null);
+      pintarKpis(d);
+      pintarRank(ce, d.unidad);
+      // Clic en una estación → su climograma AL LADO del mapa (rediseño 2026-07-09);
+      // la ficha completa queda a un botón.
       if (typeof plot.on === "function" && !plot._clickEst) {
         plot._clickEst = true;
         plot.on("plotly_click", ev => {
           const pt = ev.points && ev.points[0];
           if (!pt || !pt.data || pt.data.meta !== "estaciones" || !pt.customdata) return;
-          E.estSel = String(pt.customdata[1]);
-          if (E.tabs) E.tabs.pintar("estacion");
+          miniFicha(String(pt.customdata[1]), pt.customdata[0]);
         });
       }
     }
@@ -312,7 +402,15 @@
       dibujar();
     };
     chkEst.onchange = () => { E.mapEst = chkEst.checked; dibujar(); };
-    _alTema = () => { if (c.isConnected) dibujar(); };
+    _alTema = () => {
+      if (!c.isConnected) return;
+      dibujar();
+      // el climograma lateral también se redibuja con los colores del tema nuevo
+      if (miniUlt) {
+        const host = miniEl.querySelector('[data-rol="mini-climo"]');
+        if (host) pintarClimograma(host, miniUlt.p);
+      }
+    };
     dibujar();
   }
 

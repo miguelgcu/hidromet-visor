@@ -82,7 +82,8 @@ const App = (() => {
     el.className = `aviso ${tipo}`;
     el.textContent = mensaje;
     caja.appendChild(el);
-    setTimeout(() => el.remove(), ms);
+    // v12: salida suave (la clase .saliendo anima opacidad/transform antes de remover)
+    setTimeout(() => { el.classList.add("saliendo"); setTimeout(() => el.remove(), 200); }, ms);
   }
 
   /* ---------------- tareas en background ---------------- */
@@ -294,6 +295,9 @@ const App = (() => {
     if (nuevo) {
       html.dataset.tema = nuevo;
       localStorage.setItem("hidromet-tema", nuevo);
+      // v12: theme-color sigue al tema (el chrome del navegador móvil deja de chocar)
+      const mc = document.querySelector('meta[name="theme-color"]');
+      if (mc) mc.content = nuevo === "oscuro" ? "#0B1322" : "#E9EDF3";
       api("/config", { method: "POST", body: { tema: nuevo } }).catch(() => {});
       document.dispatchEvent(new CustomEvent("temacambiado", { detail: nuevo }));
     }
@@ -488,11 +492,21 @@ const App = (() => {
       const btn = document.getElementById("btn-menu");
       const ov = document.getElementById("overlay-nav");
       if (!capa) return;
-      const cerrar = () => { capa.classList.remove("nav-abierto"); if (btn) btn.setAttribute("aria-expanded", "false"); };
-      if (btn) btn.addEventListener("click", () => {
-        const ab = capa.classList.toggle("nav-abierto");
-        btn.setAttribute("aria-expanded", ab ? "true" : "false");
-      });
+      // v12 a11y: aria-controls + devolución del foco al botón al cerrar y foco al nav
+      // al abrir (con visibility retrasada en CSS, el drawer cerrado no es tabulable).
+      const cerrar = () => {
+        if (!capa.classList.contains("nav-abierto")) return;
+        capa.classList.remove("nav-abierto");
+        if (btn) { btn.setAttribute("aria-expanded", "false"); try { btn.focus({ preventScroll: true }); } catch (e) {} }
+      };
+      if (btn) {
+        btn.setAttribute("aria-controls", "sidebar");
+        btn.addEventListener("click", () => {
+          const ab = capa.classList.toggle("nav-abierto");
+          btn.setAttribute("aria-expanded", ab ? "true" : "false");
+          if (ab) { const primero = document.querySelector("#nav-principal .nav-item"); if (primero) try { primero.focus({ preventScroll: true }); } catch (e) {} }
+        });
+      }
       if (ov) ov.addEventListener("click", cerrar);
       const nav = document.getElementById("nav-principal");
       if (nav) nav.addEventListener("click", e => { if (e.target.closest(".nav-item")) cerrar(); });
