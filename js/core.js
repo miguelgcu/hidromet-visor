@@ -432,6 +432,18 @@ const App = (() => {
       el.textContent = window.HIDROMET_VISOR ? "Visor en línea" : "Datos locales";
       return;
     }
+    // v15 — WATCHDOG DE VERSIÓN (visor): manifest.json se sondea con cache-bust (línea
+    // de arriba), así que detecta una publicación NUEVA aunque el index.html del usuario
+    // esté cacheado; al detectarla, recarga sola para servir SIEMPRE lo más reciente.
+    if (window.HIDROMET_VISOR && fecha) {
+      if (!window.__hmVersionVista) window.__hmVersionVista = String(fecha);
+      else if (window.__hmVersionVista !== String(fecha)) {
+        window.__hmVersionVista = String(fecha);
+        aviso("Hay una publicación nueva — actualizando el visor…", "info", 2400);
+        setTimeout(() => { try { location.reload(); } catch (e) {} }, 1500);
+        return;
+      }
+    }
     const m = String(fecha).replace("T", " ").match(/(\d{4})-(\d{2})-(\d{2})\D+(\d{2}):(\d{2})/);
     el.textContent = m ? `Datos al ${m[3]}/${m[2]} · ${m[4]}:${m[5]}` : ("Datos al " + String(fecha).slice(0, 16));
     // Semántica de FRESCURA: si los datos tienen >36 h, el punto del chip pasa a ámbar
@@ -478,7 +490,75 @@ const App = (() => {
     document.head.appendChild(st);
   }
 
+  /* ---------------- puerta de acceso del VISOR (v15, pedido del dueño) ----------------
+     SOLO en el visor publicado (HIDROMET_VISOR): overlay de usuario/contraseña antes de
+     arrancar la app. Verificación por hash SHA-256 (la credencial no viaja ni se guarda
+     en claro); "recordar dispositivo" persiste en localStorage, si no, solo la sesión.
+     NOTA honesta: en un sitio estático esto es una CORTINA de acceso (disuade el acceso
+     casual), no seguridad criptográfica de servidor. */
+  async function exigirAcceso() {
+    if (!window.HIDROMET_VISOR) return;
+    const LLAVE = "hm-acceso-v1";
+    if (localStorage.getItem(LLAVE) === "1" || sessionStorage.getItem(LLAVE) === "1") return;
+    const HASH = "191453084223bb19af625548019079b0b3a24cf079978383ec152fa456f7d952";
+    const sha = async t => {
+      const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t));
+      return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, "0")).join("");
+    };
+    const capa = document.getElementById("capa-app");
+    if (capa) capa.style.visibility = "hidden";
+    const div = document.createElement("div");
+    div.id = "hm-login";
+    div.innerHTML = `
+      <div class="hm-login-caja" role="dialog" aria-labelledby="hm-login-tit">
+        <div class="hm-login-marca">
+          <div class="hm-login-logo">HM</div>
+          <div class="hm-login-txt"><div class="hm-login-nombre">HidroMet</div>
+            <div class="hm-login-sub">ECUADOR · INAMHI</div></div>
+        </div>
+        <h1 id="hm-login-tit">Acceso al visor</h1>
+        <p class="hm-login-hint">Ingresa tus credenciales para ver los productos operativos.</p>
+        <form novalidate>
+          <label class="hm-login-campo">Usuario
+            <input name="u" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
+          <label class="hm-login-campo">Contraseña
+            <input name="p" type="password" autocomplete="current-password" required></label>
+          <label class="hm-login-rec"><input type="checkbox" name="r" checked> Recordarme en este dispositivo</label>
+          <button type="submit" class="hm-login-btn">Ingresar</button>
+          <div class="hm-login-err" hidden>Usuario o contraseña incorrectos.</div>
+        </form>
+        <div class="hm-login-pie">Sistema hidrometeorológico operativo · acceso restringido</div>
+      </div>`;
+    document.body.appendChild(div);
+    const form = div.querySelector("form"), err = div.querySelector(".hm-login-err");
+    const caja = div.querySelector(".hm-login-caja");
+    setTimeout(() => { try { form.u.focus(); } catch (e) {} }, 60);
+    // Enter SIEMPRE envía (algunos teclados móviles no disparan el submit implícito).
+    form.addEventListener("keydown", e => {
+      if (e.key === "Enter") { e.preventDefault(); form.requestSubmit ? form.requestSubmit() : form.querySelector("button[type=submit]").click(); }
+    });
+    await new Promise(listo => {
+      form.addEventListener("submit", async e => {
+        e.preventDefault();
+        err.hidden = true;
+        let ok = false;
+        try { ok = (await sha(form.u.value.trim())) === HASH && (await sha(form.p.value)) === HASH; }
+        catch (e2) { ok = false; }
+        if (!ok) {
+          err.hidden = false;
+          caja.classList.remove("shake"); void caja.offsetWidth; caja.classList.add("shake");
+          form.p.value = ""; form.p.focus();
+          return;
+        }
+        (form.r.checked ? localStorage : sessionStorage).setItem(LLAVE, "1");
+        div.classList.add("ok");
+        setTimeout(() => { div.remove(); if (capa) capa.style.visibility = ""; listo(); }, 420);
+      });
+    });
+  }
+
   async function iniciar() {
+    await exigirAcceso();
     inyectarEstilosBloqueo();
     const guardado = localStorage.getItem("hidromet-tema");
     if (guardado) document.documentElement.dataset.tema = guardado;
@@ -516,6 +596,9 @@ const App = (() => {
     setInterval(actualizarReloj, 30000);
     mostrarUltima();
     setInterval(mostrarUltima, 300000);
+    // v15: al VOLVER a la pestaña/navegador se re-chequea al instante la versión
+    // publicada (el caso típico del teléfono que reabre el visor de ayer).
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) mostrarUltima(); });
     window.addEventListener("hashchange", pintarVista);
     await pintarVista();
   }

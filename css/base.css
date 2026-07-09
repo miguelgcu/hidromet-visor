@@ -465,3 +465,49 @@ details.hm-mas[open] > .hm-mas-panel { position: absolute; right: 0; top: calc(1
     var(--surface-3) 40%, color-mix(in srgb, var(--surface-3) 55%, var(--surface)) 50%, var(--surface-3) 60%);
   background-size: 200% 100%; animation: hm-shimmer 1.4s linear infinite; }
 @keyframes hm-shimmer { to { background-position: -200% 0; } }
+
+/* ===== v15: PUERTA DE ACCESO del visor (overlay de login, pedido del dueño) ===== */
+#hm-login { position: fixed; inset: 0; z-index: 99999; display: flex; align-items: center;
+  justify-content: center; padding: 20px;
+  background: radial-gradient(1200px 800px at 20% -10%, #16335A 0%, #0B1B30 45%, #070F1C 100%); }
+#hm-login::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(700px 340px at 85% 110%, rgba(44,104,222,.18), transparent 70%); }
+#hm-login.ok { animation: hm-fade .4s ease-out reverse forwards; }
+.hm-login-caja { position: relative; width: min(400px, 94vw); background: rgba(13,24,43,.86);
+  border: 1px solid rgba(120,155,210,.22); border-radius: 18px; padding: 30px 30px 22px;
+  box-shadow: 0 30px 80px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.06);
+  backdrop-filter: blur(10px); animation: hm-pop .3s ease-out; }
+.hm-login-caja.shake { animation: hm-shake .4s ease-in-out; }
+@keyframes hm-shake { 0%,100% { transform: none; } 20%,60% { transform: translateX(-9px); } 40%,80% { transform: translateX(9px); } }
+.hm-login-marca { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.hm-login-logo { width: 46px; height: 46px; border-radius: 13px; flex: none;
+  background: linear-gradient(145deg, #2C68DE, #15356A); color: #fff; display: flex;
+  align-items: center; justify-content: center; font: 800 16px var(--mono);
+  letter-spacing: .5px; box-shadow: 0 6px 18px rgba(44,104,222,.4), inset 0 1px 0 rgba(255,255,255,.25); }
+.hm-login-nombre { font: 700 19px var(--fuente); color: #F3F6FB; letter-spacing: .2px; }
+.hm-login-sub { font: 600 9.5px var(--mono); letter-spacing: .24em; color: #8FA3C2; }
+#hm-login h1 { margin: 0 0 4px; font: 650 16px var(--fuente); color: #E8EDF6; }
+.hm-login-hint { margin: 0 0 18px; font-size: 12.5px; color: #9DAABF; }
+.hm-login-campo { display: block; font: 600 9.5px var(--mono); letter-spacing: .09em;
+  text-transform: uppercase; color: #8FA3C2; margin-bottom: 13px; }
+.hm-login-campo input { display: block; width: 100%; margin-top: 6px; padding: 11px 13px;
+  border: 1px solid rgba(120,155,210,.28); border-radius: 10px; background: rgba(8,16,30,.6);
+  color: #E8EDF6; font: 500 14px var(--fuente); transition: border-color .15s, box-shadow .15s; }
+.hm-login-campo input:focus { outline: none; border-color: #3D7BE8;
+  box-shadow: 0 0 0 3px rgba(61,123,232,.22); }
+.hm-login-rec { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #9DAABF;
+  margin: 2px 0 16px; cursor: pointer; }
+.hm-login-rec input { accent-color: #3D7BE8; width: 15px; height: 15px; }
+.hm-login-btn { width: 100%; padding: 12px; border: none; border-radius: 10px; cursor: pointer;
+  background: linear-gradient(145deg, #2C68DE, #1E57C8); color: #fff; font: 650 14px var(--fuente);
+  letter-spacing: .2px; box-shadow: 0 8px 22px rgba(44,104,222,.35);
+  transition: transform .12s, box-shadow .12s, filter .12s; }
+.hm-login-btn:hover { filter: brightness(1.07); }
+.hm-login-btn:active { transform: translateY(1px); box-shadow: 0 4px 12px rgba(44,104,222,.3); }
+.hm-login-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(61,123,232,.4); }
+.hm-login-err { margin-top: 12px; padding: 9px 12px; border-radius: 9px; font-size: 12.5px;
+  color: #FCA9A0; background: rgba(207,54,43,.14); border: 1px solid rgba(207,54,43,.35);
+  animation: hm-fade .2s ease-out; }
+.hm-login-pie { margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(120,155,210,.14);
+  font: 500 10px var(--mono); letter-spacing: .06em; color: #64748B; text-align: center; }
+@media (max-width: 480px) { .hm-login-caja { padding: 24px 20px 18px; } }
