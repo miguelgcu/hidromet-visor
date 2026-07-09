@@ -81,3 +81,12 @@
   .dec-kpi { padding: 10px 11px; }
   .dec-kpi .valor { font-size: 21px; }
 }
+
+/* ===== v16: chips de horizonte del veredicto (Mañana · +2..+5 días) ===== */
+.dec-dias { display: flex; gap: 6px; flex-wrap: wrap; margin: 2px 0 12px; }
+.dec-dia { border: 1px solid var(--line); background: var(--surface-2); color: var(--muted);
+  border-radius: 999px; padding: 6px 13px; font: 600 11.5px var(--mono); cursor: pointer;
+  min-height: 32px; transition: background .13s, border-color .13s, color .13s; }
+.dec-dia:hover { border-color: var(--blue); color: var(--ink); }
+.dec-dia.activo { background: var(--navy-700); border-color: var(--navy-700); color: #fff; }
+.dec-dia:focus-visible { outline: none; box-shadow: var(--focus-ring); }

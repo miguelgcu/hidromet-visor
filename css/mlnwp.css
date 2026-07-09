@@ -344,3 +344,12 @@ html[data-tema="oscuro"] .ml-region-tabla td { border-top-color: var(--line-3); 
 .ml-pb-tabla th.ml-pb-u, .ml-pb-tabla th.ml-pb-esq {
   position: sticky; left: 0; z-index: 2; background: var(--surface);
   box-shadow: inset -1px 0 0 var(--line-2); }
+
+/* ===== v16: el DEDO desliza el carril de la serie AUNQUE arrastre sobre el gráfico.
+   Plotly pone touch-action:none en su capa de arrastre y capturaba el gesto (el
+   usuario no podía navegar); pan-x/pan-y devuelve el gesto al navegador y el TAP
+   sigue llegando a Plotly (popup por fecha). ===== */
+.ml-plot-scroll .js-plotly-plot .draglayer,
+.ml-plot-scroll .js-plotly-plot .nsewdrag {
+  touch-action: pan-x pan-y !important;
+}

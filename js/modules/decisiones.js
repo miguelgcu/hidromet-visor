@@ -84,6 +84,8 @@
     ests: [],            // estaciones del contexto (codigo, nombre, lat, lon, region, dependencia)
     geojson: null,       // provincias (null = sin pedir, false = no disponible)
     cache: new Map(),    // codigo -> veredicto | false (sin producto / falló)
+    cacheDia: new Map(), // "codigo|dia" -> veredicto multi-día (v16)
+    dia: 1,              // horizonte del panel: 1=mañana .. 5 (v16, pedido del dueño)
     sel: "",             // estación seleccionada
     idxMark: -1,         // índice del trace de marcadores dentro del plot
   };
@@ -344,13 +346,25 @@
     }
     const mi = ++genPanel;
     cont.innerHTML = `<div class="ml-card">${cargando("Cargando veredicto y validación…")}</div>`;
-    // Veredicto: normalmente ya está en el cache del mapa; si no, se pide solo.
-    let v = S.cache.get(S.sel);
-    if (v === undefined) {
-      try { v = await App.api(`/mlnwp/veredicto?codigo=${encodeURIComponent(S.sel)}`); }
-      catch (e) { v = false; }
-      S.cache.set(S.sel, v);
-      refrescarMapa();
+    // Veredicto: para MAÑANA sale del cache del mapa; para +2..+5 días (v16) se pide
+    // su producto congelado propio (&dia=N) con cache aparte.
+    let v;
+    if (S.dia === 1) {
+      v = S.cache.get(S.sel);
+      if (v === undefined) {
+        try { v = await App.api(`/mlnwp/veredicto?codigo=${encodeURIComponent(S.sel)}`); }
+        catch (e) { v = false; }
+        S.cache.set(S.sel, v);
+        refrescarMapa();
+      }
+    } else {
+      const k = `${S.sel}|${S.dia}`;
+      v = S.cacheDia.get(k);
+      if (v === undefined) {
+        try { v = await App.api(`/mlnwp/veredicto?codigo=${encodeURIComponent(S.sel)}&dia=${S.dia}`); }
+        catch (e) { v = false; }
+        S.cacheDia.set(k, v);
+      }
     }
     // Validación de la decisión: MAE de temperatura (bloques tmax/tmin) +
     // detección de lluvia (bloque precip_det: POD/FAR/CSI). Cada bloque es
@@ -359,12 +373,22 @@
     const [vtx, vtn, vdet] = await Promise.all([val("tmax"), val("tmin"), val("precip_det")]);
     if (mi !== genPanel || !cont.isConnected) return;   // llegó una selección más nueva
     cont.innerHTML = tarjetaVeredictoHTML(v) + tarjetaValidacionHTML(v, vtx, vtn, vdet);
+    // v16: chips de horizonte (Mañana · +2 … +5 días) — recargan solo el panel.
+    cont.querySelectorAll("[data-dia]").forEach(b => b.onclick = () => {
+      const n = +b.dataset.dia;
+      if (n !== S.dia) { S.dia = n; pintarPanel(); }
+    });
   }
 
   function tarjetaVeredictoHTML(v) {
     const e = S.ests.find(x => String(x.codigo) === String(S.sel)) || {};
-    const cab = `<h3 class="ml-titulo">Veredicto para mañana
-      <span class="ml-sutil">· ${esc(e.nombre || S.sel)} (${esc(S.sel)}) · ${esc(e.region || "—")}</span></h3>`;
+    // v16: horizonte seleccionable (la decisión operativa cubre mañana a +5 días).
+    const chips = [1, 2, 3, 4, 5].map(n =>
+      `<button class="dec-dia ${S.dia === n ? "activo" : ""}" data-dia="${n}">${n === 1 ? "Mañana" : `+${n} días`}</button>`).join("");
+    const fTxt = (v && v.fecha) ? ` · ${v.fecha.slice(8, 10)}/${v.fecha.slice(5, 7)}` : "";
+    const cab = `<h3 class="ml-titulo">Veredicto ${S.dia === 1 ? "para mañana" : `a +${S.dia} días`}${fTxt}
+      <span class="ml-sutil">· ${esc(e.nombre || S.sel)} (${esc(S.sel)}) · ${esc(e.region || "—")}</span></h3>
+      <div class="dec-dias">${chips}</div>`;
     if (!v || v.sin_datos) {
       return `<div class="ml-card dec-verd">${cab}${vacio("Sin veredicto para esta estación (sin pronóstico vigente o producto no publicado).")}</div>`;
     }

@@ -763,7 +763,12 @@
     // Modelos (atenuados por calificación: opacity ya viene de /series). En OSCURO
     // los pasteles atenuados se fantasmagorizan sobre el fondo: piso de opacidad
     // 0.85 y grosor mínimo 2 conservando la atenuación relativa entre modelos.
+    // v16 (pedido del dueño): los 3 MEJORES modelos muestran sus VALORES como
+    // etiqueta en el presente y el futuro (fechas >= hoy); el pasado queda limpio
+    // (ahí las etiquetas son del observado).
     const leyenda = [];
+    const _hoyEt = (App.hoyEC ? App.hoyEC() : d.hoy);
+    let _conEtiqueta = 0;
     for (let m of (d.modelos || []).slice(0, 8)) {   // let: el respaldo se re-etiqueta abajo
       const color = m.color;
       const opBase = m.opacity ?? .7;
@@ -775,14 +780,31 @@
       // v14: nombre CLARO para el usuario (el crudo "Sin entrenamiento" confundía).
       if (m.sin_entrenar) m = { ...m, modelo: "Respaldo (sin obs para entrenar)" };
       const rtxt = m.sin_entrenar ? "" : ` (${num(m.rating, 1)})`;
+      // etiquetas de valor en fechas >= hoy, SOLO para los 3 mejores (d.modelos ya
+      // viene ordenado por calificación descendente).
+      const _etiquetar = !m.sin_entrenar && _hoyEt && _conEtiqueta < 3;
+      const _texto = _etiquetar
+        ? (m.fechas || []).map((f, i) => {
+            const v = m.valores[i];
+            if (v == null || f < _hoyEt) return "";
+            if (esPrecip && Number(v) === 0) return "";
+            return num(v, 1);
+          })
+        : null;
+      if (_etiquetar) _conEtiqueta++;
       if (esPrecip && !m.dash) {
         traces.push({ type: "bar", x: fx(m.fechas), y: m.valores, name: `${m.modelo}${rtxt}`,
-          marker: { color, opacity: op }, hovertemplate: `${esc(m.modelo)}: %{y} ${unidad}<extra></extra>` });
+          marker: { color, opacity: op },
+          ...(_texto ? { text: _texto, textposition: "outside", cliponaxis: false,
+            textfont: { size: 8.5, color }, constraintext: "none" } : {}),
+          hovertemplate: `${esc(m.modelo)}: %{y} ${unidad}<extra></extra>` });
       } else {
         // connectgaps:false + eje completo con null (series.py): un hueco de fechas
         // se ve como hueco, NO como diagonal fantasma (queja La Argelia 84270 03/07).
-        traces.push({ type: "scatter", mode: "lines", x: fx(m.fechas), y: m.valores, name: `${m.modelo}${rtxt}`,
+        traces.push({ type: "scatter", mode: _texto ? "lines+text" : "lines", x: fx(m.fechas), y: m.valores, name: `${m.modelo}${rtxt}`,
           line: { color, width: wLin, ...(m.dash ? { dash: m.dash } : {}) }, opacity: op, connectgaps: false,
+          ...(_texto ? { text: _texto, textposition: "top center", cliponaxis: false,
+            textfont: { size: 8.5, color } } : {}),
           hovertemplate: `${esc(m.modelo)}: %{y} ${unidad}<extra></extra>` });
       }
       const swStyle = m.dash ? `border-top:2px dotted ${esc(color)};height:0`
@@ -790,10 +812,10 @@
       leyenda.push(`<span class="it"><span class="sw-caja" style="${swStyle}"></span>${esc(m.modelo)}${rtxt}</span>`);
     }
 
-    // Observado: línea punteada negra con marcadores cuadrados. En angosto SIN las
-    // etiquetas numéricas encima (se amontonan a 390px; el popup ya da el valor).
+    // Observado: línea punteada negra con marcadores + etiquetas SIEMPRE (v16: el
+    // lienzo angosto es de 680px con scroll, caben; pedido del dueño).
     if (d.observado && d.observado.fechas && d.observado.fechas.length) {
-      traces.push({ type: "scatter", mode: angosto ? "lines+markers" : "lines+markers+text", x: d.observado.fechas, y: d.observado.valores,
+      traces.push({ type: "scatter", mode: "lines+markers+text", x: d.observado.fechas, y: d.observado.valores,
         text: d.observado.valores.map(v => (v == null ? "" : (esPrecip && Number(v) === 0 ? "" : num(v, 1)))),
         textposition: "top center", textfont: { size: 9, color: C.obs }, cliponaxis: false,
         name: "Observado", line: { color: C.obs, width: 2.8 }, connectgaps: false,
