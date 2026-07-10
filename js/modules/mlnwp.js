@@ -51,8 +51,9 @@
     if (r === null || r === undefined || Number.isNaN(r)) return (App.tema && App.tema() === "oscuro") ? ["#222F49", "#9DAABF"] : ["#F0F3F8", "#5A6678"];
     const t = Math.max(0, Math.min(1, (Number(r) - 1) / 9));
     const bg = RDYLGN[Math.min(RDYLGN.length - 1, Math.floor(t * RDYLGN.length))];
-    // texto blanco solo en el verde oscuro (notas altas); oscuro en el resto.
-    const fg = (Number(r) >= 7.5) ? "#fff" : "#1E1E1E";
+    // texto blanco solo en los extremos OSCUROS de la escala (rojo intenso y verde
+    // intenso); en los tonos medios (amarillos/verdes claros) el blanco no contrasta.
+    const fg = (bg === "#1A9850" || bg === "#D73027") ? "#fff" : "#1E1E1E";
     return [bg, fg];
   }
   const confClase = c => ({ Alta: "alta", Media: "media", Baja: "baja" }[c] || "sin");
@@ -716,6 +717,10 @@
     const C = oscuro
       ? { obs: "#E8EDF6", p50: "#6BB1EE", fan80: "rgba(120,165,225,.14)", fan50: "rgba(120,165,225,.30)", anot: "#9DAABF" }
       : { obs: "#0F1B2D", p50: "#0052A3", fan80: "rgba(27,58,107,.10)", fan50: "rgba(27,58,107,.24)", anot: "#5A6678" };
+    // Halo-contenedor de las etiquetas de valor (pedido del dueño): sombra apilada del
+    // color del lienzo → el número "flota" legible sobre banda/líneas en ambos temas.
+    C.halo = oscuro ? "0 0 3px #0E1930, 0 0 3px #0E1930, 0 0 4px #0E1930"
+                    : "0 0 3px #FFFFFF, 0 0 3px #FFFFFF, 0 0 4px #FFFFFF";
     const tit = `${esc(d.variable === "precip" ? "Precipitación 7-7" : (d.variable === "tmax" ? "T. máxima" : "T. mínima"))} — ${esc(d.nombre || "")} (${esc(d.codigo)})`;
     card.innerHTML = `
       <div class="ml-serie-tit">${tit}</div>
@@ -788,7 +793,7 @@
         ? (m.fechas || []).map((f, i) => {
             const v = m.valores[i];
             if (v == null || f < _hoyEt) return "";
-            if (esPrecip && Number(v) === 0) return "";
+            // 0 mm ES un dato (pedido del dueño): se etiqueta como cualquier valor.
             return num(v, 1);
           })
         : null;
@@ -797,7 +802,7 @@
         traces.push({ type: "bar", x: fx(m.fechas), y: m.valores, name: `${m.modelo}${rtxt}`,
           marker: { color, opacity: op },
           ...(_texto ? { text: _texto, textposition: "outside", cliponaxis: false,
-            textfont: { size: 8.5, color }, constraintext: "none" } : {}),
+            textfont: { size: 8.5, color, shadow: C.halo }, constraintext: "none" } : {}),
           hovertemplate: `${esc(m.modelo)}: %{y} ${unidad}<extra></extra>` });
       } else {
         // connectgaps:false + eje completo con null (series.py): un hueco de fechas
@@ -805,7 +810,7 @@
         traces.push({ type: "scatter", mode: _texto ? "lines+text" : "lines", x: fx(m.fechas), y: m.valores, name: `${m.modelo}${rtxt}`,
           line: { color, width: wLin, ...(m.dash ? { dash: m.dash } : {}) }, opacity: op, connectgaps: false,
           ...(_texto ? { text: _texto, textposition: "top center", cliponaxis: false,
-            textfont: { size: 8.5, color } } : {}),
+            textfont: { size: 8.5, color, shadow: C.halo } } : {}),
           hovertemplate: `${esc(m.modelo)}: %{y} ${unidad}<extra></extra>` });
       }
       const swStyle = m.dash ? `border-top:2px dotted ${esc(color)};height:0`
@@ -817,8 +822,9 @@
     // lienzo angosto es de 680px con scroll, caben; pedido del dueño).
     if (d.observado && d.observado.fechas && d.observado.fechas.length) {
       traces.push({ type: "scatter", mode: "lines+markers+text", x: d.observado.fechas, y: d.observado.valores,
-        text: d.observado.valores.map(v => (v == null ? "" : (esPrecip && Number(v) === 0 ? "" : num(v, 1)))),
-        textposition: "top center", textfont: { size: 9, color: C.obs }, cliponaxis: false,
+        // 0 mm observado ES un dato (pedido del dueño): se etiqueta igual que el resto.
+        text: d.observado.valores.map(v => (v == null ? "" : num(v, 1))),
+        textposition: "top center", textfont: { size: 9, color: C.obs, shadow: C.halo }, cliponaxis: false,
         name: "Observado", line: { color: C.obs, width: 2.8 }, connectgaps: false,
         marker: { color: C.obs, size: 8, symbol: "circle" },
         hovertemplate: `Observado: %{y} ${unidad}<extra></extra>` });
@@ -893,7 +899,7 @@
         const alfa = p => p < 20 ? 0.08 : p < 50 ? 0.20 : p < 75 ? 0.38 : 0.58;
         const celStyle = p => p == null
           ? "color:var(--faint)"
-          : `background:rgba(43,93,170,${alfa(p).toFixed(2)});color:${p >= 50 ? "#fff" : "var(--ink)"}`;
+          : `background:rgba(43,93,170,${alfa(p).toFixed(2)});color:${p >= 75 ? "#fff" : "var(--ink)"}`;
         const dd = f => `${f.slice(8, 10)}/${f.slice(5, 7)}`;
         const sep = i => i === iHoy ? " ml-pb-hoy" : "";   // borde que marca el inicio del pronóstico
         const cabFechas = idx.map(i => `<th class="ml-pb-f${sep(i)}">${dd(pu.fechas[i])}</th>`).join("");

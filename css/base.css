@@ -388,7 +388,13 @@ table.tabla td.num, table.tabla th.num { text-align: right; font-family: var(--m
     /* v17: CENTRADAS cuando caben ('safe' cae al inicio si desbordan → scroll sano) */
     margin: 8px 0 14px; border-bottom: 1.5px solid var(--line); padding-bottom: 2px;
     overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; max-width: 100%;
-    touch-action: pan-x;   /* el dedo SIEMPRE desliza la fila (aunque toque un botón) */
+    /* pan-x + pan-y: la fila desliza en horizontal Y deja pasar el scroll vertical
+       de la página (con pan-x solo, empezar el scroll sobre las pestañas no hacía nada) */
+    touch-action: pan-x pan-y; }
+  /* La máscara de "hay más a la derecha" SOLO cuando de verdad desborda
+     (core.js pone .desborda si scrollWidth > clientWidth); antes se aplicaba
+     siempre y la última pestaña se veía cortada aunque cupieran todas. */
+  .hm-pestanas.desborda {
     -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
     mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
   .hm-pestanas::-webkit-scrollbar { display: none; }
@@ -445,7 +451,17 @@ details.hm-mas[open] > .hm-mas-panel { position: absolute; right: 0; top: calc(1
   .sngr-zoom .zb, .gg-zoom button { width: 40px; height: 40px; }
   .ct-dl { width: 38px; height: 38px; }
   .ct-dl-shp { line-height: 38px; }
+  /* chips densos (meses/píldoras/días de veredicto): target táctil decente */
+  .cl-mes, .cl-pill, .dec-dia { min-height: 40px; }
 }
+
+/* ===== v18: el dedo sobre CUALQUIER gráfico Plotly debe poder desplazar la página.
+   Plotly pone touch-action:none en su capa de arrastre; esto lo neutraliza en TODOS
+   los módulos (antes solo las series ML-NWP lo tenían y el resto "atascaba" el scroll).
+   El pinch-zoom de los mapas no depende de esto (pinchZoomMapa escucha touchstart
+   con preventDefault propio para el gesto de dos dedos). ===== */
+#vista .js-plotly-plot .draglayer,
+#vista .js-plotly-plot .nsewdrag { touch-action: pan-x pan-y !important; }
 
 /* ===== v12: micro-animaciones (150-250ms, ease-out). Las anula el bloque global
    de prefers-reduced-motion de arriba. ===== */
@@ -468,8 +484,8 @@ details.hm-mas[open] > .hm-mas-panel { position: absolute; right: 0; top: calc(1
 @keyframes hm-shimmer { to { background-position: -200% 0; } }
 
 /* ===== v15: PUERTA DE ACCESO del visor (overlay de login, pedido del dueño) ===== */
-#hm-login { position: fixed; inset: 0; z-index: 99999; display: flex; align-items: center;
-  justify-content: center; padding: 20px;
+#hm-login { position: fixed; inset: 0; z-index: 99999; display: flex; align-items: safe center;
+  justify-content: center; padding: 20px; overflow-y: auto;   /* apaisado: la caja (~480px) debe poder scrollear */
   background: radial-gradient(1200px 800px at 20% -10%, #16335A 0%, #0B1B30 45%, #070F1C 100%); }
 #hm-login::before { content: ""; position: absolute; inset: 0; pointer-events: none;
   background: radial-gradient(700px 340px at 85% 110%, rgba(44,104,222,.18), transparent 70%); }

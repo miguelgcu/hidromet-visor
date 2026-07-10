@@ -145,8 +145,8 @@ html[data-tema="oscuro"] .gg-tabla td .pt { border-color: rgba(255,255,255,.3); 
   .gg-map { min-height: 320px; }
   .gg-plot { min-height: 300px; }
   .gg-hidro, .gg-detalle { padding: 12px; }
-  /* zoom cómodo al tacto */
-  .gg-zoom button { width: 34px; height: 34px; }
+  /* zoom cómodo al tacto (40px = no revertir el target de base.css) */
+  .gg-zoom button { width: 40px; height: 40px; }
   .gg-btn { padding: 8px 13px; }
   /* leyenda del mapa envuelve sin desbordar */
   .gg-leyenda { gap: 7px 12px; }

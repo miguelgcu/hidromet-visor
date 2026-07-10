@@ -678,6 +678,9 @@
       const cab = document.getElementById("cabecera-vista");
       if (cab) cab.style.display = "";
       const p = App.panel("cartas:purgar"); if (p) p();
+      // El alSalir de la pestaña GEOGLOWS solo corre al CAMBIAR de pestaña; al cambiar
+      // de MÓDULO hay que limpiarla aquí (mapa Leaflet + listener temacambiado).
+      const g = App.panel("geoglows:purgar"); if (g) g();
     },
   });
 

@@ -177,7 +177,7 @@
 .ct-puntaje-headline.pg-bajo { background: var(--danger-bg); border-color: var(--danger-bd); }
 .ct-puntaje-headline.pg-bajo .pg-num { color: var(--danger); }
 
-/* ============== ADVERTENCIAS OFICIALES ============== */
+/* ============== paneles de validación (subtítulos, stats, mapas de detalle) ============== */
 .ct-buscador { display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
   background: var(--surface); border: 1px solid var(--line); border-radius: 11px;
   padding: 13px 15px; margin-bottom: 14px; box-shadow: var(--shadow-card); }
@@ -190,27 +190,7 @@
 .ct-subtitulo { margin: 0 0 12px; font-size: 14px; font-weight: 650; color: var(--ink); }
 .ct-subtitulo .suave { font-weight: 500; color: var(--muted-2); font-size: 12px; }
 
-.ct-adv-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 13px; margin-bottom: 16px; }
-
-/* tarjeta de advertencia */
-.ct-adv { background: var(--surface); border: 1px solid var(--line); border-radius: 13px;
-  overflow: hidden; box-shadow: var(--shadow-card); cursor: pointer; transition: border-color .14s, box-shadow .14s; }
-.ct-adv:hover { border-color: var(--blue-100); }
-.ct-adv.activa { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(47,107,224,.16); }
-.ct-adv-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 11px 13px 8px; }
-.ct-adv-cab .no { font: 700 13.5px var(--fuente); color: var(--ink); }
-.ct-adv-var { font: 600 10px var(--mono); letter-spacing: .03em; padding: 2px 8px; border-radius: 999px; border: 1px solid transparent; }
-.ct-adv-var.rr { color: var(--blue);   background: var(--blue-50);   border-color: var(--blue-100); }
-.ct-adv-var.tx { color: var(--danger); background: var(--danger-bg); border-color: var(--danger-bd); }
-.ct-adv-var.tn { color: var(--warn);   background: var(--warn-bg);   border-color: var(--warn-bd); }
-.ct-adv-mapa { position: relative; aspect-ratio: 4 / 3;
-  background: linear-gradient(180deg, var(--sea-top), var(--sea-bottom)); }
-.ct-adv-mapa img { width: 100%; height: 100%; object-fit: contain; display: block; }
-.ct-adv-pie { display: flex; flex-wrap: wrap; gap: 6px; padding: 9px 13px 12px; }
-.ct-adv-chip { font: 600 10px var(--mono); letter-spacing: .02em; color: var(--ink-2);
-  background: var(--surface-3); border: 1px solid var(--line-2); padding: 3px 8px; border-radius: 7px; }
-
-/* panel de detalle de la advertencia */
+/* panel de detalle (cabecera/stats; .ct-det-mapa lo usa el FFR del programa) */
 .ct-det-cab { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
 .ct-det-cab h3 { margin: 0; font-size: 16px; font-weight: 650; }
 .ct-det-cab .meta { font-size: 12.5px; color: var(--muted-2); }
@@ -257,7 +237,6 @@
 /* ---------- responsive (área de trabajo estrecha) ---------- */
 @media (max-width: 980px) {
   .ct-grid, .ct-det-cuerpo { grid-template-columns: 1fr; }
-  .ct-adv-grid { grid-template-columns: repeat(2, 1fr); }
   .ct-desenlaces, .ct-stats { grid-template-columns: repeat(2, 1fr); }
 }
 
@@ -273,10 +252,10 @@
   .ct-inst-nav, .ct-derecha { flex-wrap: wrap; }
   /* el buscador de advertencias deja de forzar 280px */
   .ct-buscador label { min-width: 0; flex: 1 1 100%; }
-  /* controles de instante cómodos al tacto */
-  .ct-nav { width: 36px; height: 36px; }
+  /* controles de instante cómodos al tacto (40px = no revertir el target de base.css) */
+  .ct-nav { width: 40px; height: 40px; }
   /* grillas de cartas → 1 columna; desenlaces/stats → 2 */
-  .ct-grid, .ct-grid.cuencas, .ct-adv-grid { grid-template-columns: 1fr; }
+  .ct-grid, .ct-grid.cuencas { grid-template-columns: 1fr; }
   .ct-desenlaces, .ct-stats { grid-template-columns: repeat(2, 1fr); }
   /* paneles y tarjetas con menos padding */
   .ct-panel { padding: 14px; }

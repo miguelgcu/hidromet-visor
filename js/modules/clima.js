@@ -19,6 +19,9 @@
   function limpiarPlot(host) {
     try { if (window.Plotly && host && host.classList && host.classList.contains("js-plotly-plot")) Plotly.purge(host); }
     catch (e) {}
+    // El purge elimina los handlers plotly_click pero los flags _clickEst/_clickRank
+    // persisten en el nodo → sin esto, tras un error transitorio el clic quedaba muerto.
+    if (host) { delete host._clickEst; delete host._clickRank; }
   }
 
   // c = color representativo de la variable (≈ su paleta en el mapa); alimenta el
@@ -744,9 +747,10 @@
       try { d = await App.api(`/clima/records?codigo=${encodeURIComponent(cod)}&variable=${estVar}&anio=${anio}`); }
       catch (e) { tit.textContent = "Error"; plot.innerHTML = vacio("⚠️", esc(e.message)); return; }
       if (d.error) { tit.textContent = "Sin datos"; plot.innerHTML = vacio("📊", esc(d.error)); return; }
+      // textContent: sin esc() (escaparía doble y mostraría entidades literales).
       tit.textContent = d.sin_historico
-        ? `${VARREC[estVar].et} — ${esc(d.nombre)} (${esc(d.codigo)}) · serie ${d.anio}`
-        : `${VARREC[estVar].et} — ${esc(d.nombre)} (${esc(d.codigo)}) · ${d.anio} vs ${d.periodo.desde}–${d.periodo.hasta}`;
+        ? `${VARREC[estVar].et} — ${d.nombre} (${d.codigo}) · serie ${d.anio}`
+        : `${VARREC[estVar].et} — ${d.nombre} (${d.codigo}) · ${d.anio} vs ${d.periodo.desde}–${d.periodo.hasta}`;
       ley.innerHTML = leyendaRecords(d);
       plot.innerHTML = ""; pintarRecords(plot, d, pct.checked);
       kpis.innerHTML = kpisRecords(d);
@@ -775,6 +779,12 @@
 
   App.registrar("clima", {
     titulo: "Climatología", orden: 2.5,
+    // Al salir del módulo: purgar TODOS los Plotly vivos (mapa, ranking, climogramas,
+    // récords) — cada instancia deja listeners de window si no se purga.
+    alDejar() {
+      if (!window.Plotly) return;
+      document.querySelectorAll("#vista .js-plotly-plot").forEach(el => { try { Plotly.purge(el); } catch (e) { /* ya purgado */ } });
+    },
     async render(vista) {
       vista.dataset.screenLabel = "Climatología";
       vista.classList.add("vista-clima");

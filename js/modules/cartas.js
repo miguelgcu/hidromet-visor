@@ -8,9 +8,6 @@
    · /cartas/alertas_programa     → desenlaces (5 lecturas) de la validación
    · /cartas/alertas_programa/fechas + /validacion.png
    · /cartas/umbrales_fijos       → editor Fijos/ZPH (GET/POST)
-   · /cartas/advertencias/resumen → tarjetas + buscador
-   · /cartas/advertencias/detalle → panel de detalle
-   · /cartas/advertencias/cruce.png → mini-mapa y mapa del polígono
    · /cartas/actualizar           → tarea de regeneración (botón oscuro)
    Las cartas NO se dibujan a mano: son <img src="/api/cartas/carta.png?...">.
    ============================================================ */
@@ -28,8 +25,8 @@
     .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&");
 
   /* ---------- TIPOS (orden EXACTO del diseño) ----------
-     id  = id del tipo en /cartas/productos (advertencias y alertas mapeados).
-     cuerpo: "alertas" | "advertencias" | "grid". */
+     id  = id del tipo en /cartas/productos (alertas mapeado).
+     cuerpo: "alertas" | "grid". */
   const TIPOS = [
     { id: "pronostico",   etiqueta: "Pronóstico",            cuerpo: "grid" },
     { id: "calibrado",    etiqueta: "Calibrado",             cuerpo: "grid" },
@@ -37,7 +34,6 @@
     { id: "alertas",      etiqueta: "⚠ Alertas", danger: true, cuerpo: "alertas" },
     { id: "heladas",      etiqueta: "Heladas / Calor",       cuerpo: "grid" },
     { id: "ffgs",         etiqueta: "FFGS",                  cuerpo: "grid" },
-    { id: "advertencias", etiqueta: "Advertencias oficiales", cuerpo: "advertencias" },
   ];
 
   /* ---------- ETIQUETAS HUMANAS (centralizado) ----------
@@ -760,8 +756,12 @@
                     tick_labels: d.tick_labels, tickvals: d.tickvals, vmin: d.vmin, vmax: d.vmax };
     // Zoom con rueda SOLO con Ctrl: sin Ctrl, el evento no llega a Plotly (lo paramos
     // en captura) y la PÁGINA hace scroll normal; con Ctrl, Plotly recibe la rueda y hace zoom.
-    plot.addEventListener("wheel", (e) => { if (!e.ctrlKey && !e.metaKey) e.stopPropagation(); },
-      { capture: true, passive: true });
+    // Flag anti-duplicado: el re-montaje por cambio de tema reusa el MISMO nodo.
+    if (!plot._wheelHook) {
+      plot._wheelHook = true;
+      plot.addEventListener("wheel", (e) => { if (!e.ctrlKey && !e.metaKey) e.stopPropagation(); },
+        { capture: true, passive: true });
+    }
 
     // Leyenda: POR CARTA si la figura tiene su propio hueco (FFGS: cada producto su
     // escala); si no, una COMPARTIDA para toda la grilla (mismo producto × fuentes).
@@ -775,10 +775,12 @@
     }
   }
 
-  // Purga las instancias Plotly de cartas (Plotly engancha listeners de window).
+  // Purga TODAS las instancias Plotly vivas de la vista (no solo .ct-mapa-plot:
+  // también series, cruces, crecidas, FFR y mini-mapas — Plotly engancha listeners
+  // de window por instancia y sin purge se acumulan al navegar).
   function purgarCartas() {
     if (!window.Plotly) return;
-    document.querySelectorAll(".ct-mapa-plot").forEach(el => { try { Plotly.purge(el); } catch (e) { /* ya purgado */ } });
+    document.querySelectorAll("#vista .js-plotly-plot").forEach(el => { try { Plotly.purge(el); } catch (e) { /* ya purgado */ } });
   }
 
   /* ============================================================
@@ -1580,174 +1582,6 @@
     };
   }
 
-  /* ============================================================
-     CUERPO B — ADVERTENCIAS OFICIALES
-     ============================================================ */
-  const advVarClase = (v) => ({ RR: "rr", TX: "tx", TN: "tn", TMIN: "tn", TMAX: "tx" }[String(v).toUpperCase()] || "rr");
-  const advVarEt = (v) => ({ RR: "RR · Precipitación", TX: "TX · T. máxima", TN: "TN · T. mínima",
-    TMIN: "TN · T. mínima", TMAX: "TX · T. máxima" }[String(v).toUpperCase()] || String(v));
-
-  // Panel de VALIDACIÓN AGREGADA de las advertencias oficiales — datos que el backend
-  // ya calcula en /advertencias/resumen y que antes NO se pintaban: 5 lecturas (acierto /
-  // no alertado / insuficiente / sobredimensionada) + día crítico + totales de cobertura.
-  function panelValidacionOficial(r) {
-    const t = r.totales || {}, L = r.lecturas || {};
-    const cel = (k, et, tono) => {
-      const o = L[k] || {};
-      const pct = o.pct != null ? fmtPct(o.pct) + " %" : "—";
-      const n = o.n != null ? fmtNum(o.n) + " pts" : "—";
-      return `<div class="ct-des ${tono}"><div class="pct mono">${pct}</div><div class="et">${esc(et)}<br><span>${n}</span></div></div>`;
-    };
-    const dc = L.dia_critico || {};
-    const dcPct = dc.pct != null ? fmtPct(dc.pct) + " %" : "—";
-    const cuerpo = !L.total_puntos
-      ? `<div class="vacio" style="padding:18px"><span class="suave">El motor aún no ha cruzado puntos estación-día de las advertencias oficiales.</span></div>`
-      : `<div class="ct-desenlaces">${cel("acierto", "Acierto", "ok")}${cel("no_alertado", "No alertado", "danger")}${cel("insuficiente", "Insuficiente", "warn")}${cel("sobredimensionada", "Sobredimensionada", "warn")}<div class="ct-des"><div class="pct mono">${dcPct}</div><div class="et">Día crítico<br><span>${fmtNum(dc.acertadas || 0)}/${fmtNum(dc.evaluadas || 0)}</span></div></div></div>`;
-    return `
-      <div class="ct-panel">
-        <div class="ct-panel-cab">
-          <h3>Validación de las advertencias oficiales</h3>
-          <span class="suave">${fmtNum(t.n || 0)} advertencias · cobertura media ${fmtPct(t.eventos_prom)} % eventos · ${fmtPct(t.area_prom)} % área</span>
-        </div>
-        ${cuerpo}
-        <div class="ct-serie" data-rol="serie-oficial"></div>
-        <p class="ct-nota">Cruce de nivel emitido vs. observado (estación + hidroestimador 7-7) sobre los puntos dentro de cada polígono advertido. «Correcto sin alerta» no es derivable de las oficiales (solo se validan puntos dentro de los polígonos).</p>
-      </div>`;
-  }
-
-  // §serie oficial: GRÁFICO TEMPORAL del acierto (% eventos cubiertos) de cada
-  // advertencia oficial, por variable — "cómo van las oficiales en el tiempo".
-  function graficarSerieOficial(r) {
-    const div = document.querySelector('[data-rol="serie-oficial"]');
-    const s = ((r && r.serie_oficial) || []).filter(x => x.eventos_pct != null);
-    if (!div || !s.length || !window.Plotly) { if (div) div.innerHTML = ""; return; }
-    const oscuro = !!(App.tema && App.tema() === "oscuro");
-    const COLV = { RR: "#3D7BE8", TX: "#E07A3F", TN: "#2AAFBE" };
-    const ETV = { RR: "Lluvia", TX: "T. máxima", TN: "T. mínima" };
-    const vars = [...new Set(s.map(x => x.variable))];
-    const trazas = vars.map(v => {
-      const ss = s.filter(x => x.variable === v);
-      return { type: "scatter", mode: "markers", name: ETV[v] || v,
-        x: ss.map(x => x.fecha), y: ss.map(x => x.eventos_pct), customdata: ss.map(x => x.no),
-        marker: { size: 9, color: COLV[v] || "#888", line: { width: 1, color: (App.tema && App.tema() === "oscuro") ? "rgba(20,31,56,.6)" : "rgba(255,255,255,.5)" } },
-        hovertemplate: `N.º %{customdata} · %{x}<br>%{y:.0f}% eventos cubiertos<extra>${esc(ETV[v] || v)}</extra>` };
-    });
-    const tinta = oscuro ? "#9DAABF" : "#58667A", rejilla = oscuro ? "rgba(223,230,247,.10)" : "rgba(70,89,122,.12)";
-    Plotly.react(div, trazas, {
-      height: 240, margin: { l: 42, r: 12, t: 28, b: 40 }, paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
-      title: { text: "Acierto de advertencias oficiales en el tiempo (% eventos cubiertos)", font: { size: 12, color: tinta } },
-      showlegend: true, legend: { orientation: "h", y: -0.22, font: { size: 10, color: tinta } },
-      xaxis: { type: "date", tickfont: { size: 9, color: tinta }, showgrid: false },
-      yaxis: { range: [0, 100], ticksuffix: "%", tickfont: { size: 9, color: tinta }, gridcolor: rejilla, zeroline: false },
-      font: { color: tinta },
-    }, { displayModeBar: false, responsive: true });
-  }
-
-  async function cuerpoAdvertencias(cont) {
-    cont.innerHTML = `<div class="vacio"><div class="icono">⏳</div>Cargando advertencias…</div>`;
-    let r;
-    try { r = await App.api("/cartas/advertencias/resumen"); }
-    catch (e) {
-      cont.innerHTML = `<div class="vacio"><div class="icono">⚠️</div>
-        <strong>No se pudieron cargar las advertencias</strong><span>${esc(e.message)}</span></div>`;
-      return;
-    }
-    E.adv.resumen = r;
-    const lista = (r.advertencias || []).slice();        // {No, Variable, puntos, con_obs, eventos_pct, area_cumple_pct, area_falla_pct, misses}
-    if (!lista.length) {
-      cont.innerHTML = `<div class="vacio"><div class="icono">📋</div>
-        <strong>Sin advertencias validadas</strong><span>El motor aún no ha cruzado advertencias oficiales contra lo observado.</span></div>`;
-      return;
-    }
-    // selección por defecto = última (mayor No).
-    lista.sort((a, b) => a.No - b.No);
-    // §dinámico: filtro por variable (RR/TX/TN); el día global (D1/D2) va en E.adv.dia.
-    const vf = E.adv.varFiltro || "";
-    const listaF = vf ? lista.filter(a => String(a.Variable).toUpperCase() === vf) : lista;
-    if (E.adv.sel == null || !listaF.some(a => a.No === E.adv.sel)) E.adv.sel = listaF.length ? listaF[listaF.length - 1].No : null;
-    const ultimas = listaF.slice(-8);
-
-    const periodo = r.fechas_programa ? `programa ${esc(r.fechas_programa.desde)} → ${esc(r.fechas_programa.hasta)}`
-      : `${(r.totales && r.totales.n) || lista.length} en el histórico`;
-    const optsBuscar = listaF.slice().reverse().map(adv =>
-      `<option value="${adv.No}" ${adv.No === E.adv.sel ? "selected" : ""}>N.º ${adv.No} · ${esc(adv.Variable)} · ${fmtNum(adv.puntos)} pts · ${fmtPct(adv.eventos_pct)} % eventos</option>`).join("");
-
-    const tarjetas = ultimas.map(adv => tarjetaAdvertencia(adv)).join("");
-
-    cont.innerHTML = `
-      <div class="ct-buscador">
-        <label><span class="et">Variable</span>
-          <div class="segmentado" data-rol="adv-var" style="--seg-color:var(--blue)">
-            <button class="${!vf ? "activo" : ""}" data-v="">Todas</button>
-            <button class="${vf === "RR" ? "activo" : ""}" data-v="RR">Lluvia</button>
-            <button class="${vf === "TX" ? "activo" : ""}" data-v="TX">T. máx</button>
-            <button class="${vf === "TN" ? "activo" : ""}" data-v="TN">T. mín</button>
-          </div></label>
-        <label><span class="et">Buscar</span><select data-rol="buscar">${optsBuscar}</select></label>
-        <label><span class="et">Día</span>
-          <div class="segmentado" data-rol="adv-dia-g" style="--seg-color:var(--blue)">
-            <button class="${(E.adv.dia || "D1") === "D1" ? "activo" : ""}" data-d="D1">D1</button>
-            <button class="${E.adv.dia === "D2" ? "activo" : ""}" data-d="D2">D2</button>
-          </div></label>
-        <span class="conteo">${fmtNum(listaF.length)} de ${fmtNum((r.totales && r.totales.n) || lista.length)} · ${periodo}</span>
-      </div>
-      ${panelValidacionOficial(r)}
-      <div data-rol="adv-chirps"></div>
-      <h3 class="ct-subtitulo">Últimas 8 advertencias oficiales <span class="suave">(clic para ver su validación abajo)</span></h3>
-      <div class="ct-adv-grid" data-rol="cards">${tarjetas}</div>
-      <div class="ct-panel" id="ct-adv-detalle"><div class="vacio"><div class="icono">⏳</div>Cargando detalle…</div></div>
-      ${htmlCrecidasOficial(r)}`;
-
-    cont.querySelector('[data-rol="buscar"]').onchange = (e) => { E.adv.sel = +e.target.value; refrescarAdvSeleccion(cont); };
-    cont.querySelectorAll(".ct-adv").forEach(c =>
-      c.onclick = () => { E.adv.sel = +c.dataset.no; refrescarAdvSeleccion(cont); });
-    cont.querySelectorAll('[data-rol="adv-var"] button').forEach(b =>
-      b.onclick = () => { E.adv.varFiltro = b.dataset.v; E.adv.sel = null; cuerpoAdvertencias(cont); });
-    cont.querySelectorAll('[data-rol="adv-dia-g"] button').forEach(b =>
-      b.onclick = () => { E.adv.dia = b.dataset.d; cuerpoAdvertencias(cont); });
-
-    cargarDetalleAdv();
-    graficarSerieOficial(r);
-    pintarMapasTarjetas(cont);
-    cargarAdvChirps(cont);
-  }
-
-  // Validación de advertencias con CHIRPS CORREGIDO (insumo ADICIONAL): mide la lluvia
-  // observada (CHIRPS corregido con estaciones) sobre TODA la zona advertida, no solo en
-  // las pocas estaciones dentro. Se calcula al vuelo (/clima/advertencias, ~7 s, cacheado);
-  // si el insumo no está disponible, la sección se omite en silencio.
-  async function cargarAdvChirps(cont) {
-    const host = cont.querySelector('[data-rol="adv-chirps"]');
-    if (!host) return;
-    host.innerHTML = `<div class="tarjeta" style="padding:12px 16px;margin:12px 0"><span class="suave" style="font-size:12px">Midiendo la lluvia observada (Climatología) sobre cada zona advertida…</span></div>`;
-    let r;
-    try { r = await App.api("/clima/advertencias"); } catch (e) { host.innerHTML = ""; return; }
-    if (!r || !r.disponible || !(r.advertencias || []).length) { host.innerHTML = ""; return; }
-    const s = r.resumen;
-    const bg = ok => ok ? "background:var(--ok-bg);color:var(--ok)" : "background:var(--surface-3);color:var(--muted)";
-    const pill = (ok, t) => `<span style="margin-left:auto;font:600 11px var(--mono,monospace);border-radius:999px;padding:3px 10px;white-space:nowrap;${bg(ok)}">${esc(t)}</span>`;
-    const filas = r.advertencias.map(a => {
-      const dias = a.dias.map(d =>
-        `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:6px 0;border-top:1px solid var(--line-3)">
-          <span style="font:600 12px var(--mono);color:var(--muted);min-width:130px">${esc(d.dia)} · ${esc(d.fecha)}</span>
-          <span style="font-size:12px;flex:1;min-width:210px"><b>${fmtNum(d.max)} mm</b> máx · ${fmtNum(d.media)} mm medio · ${Math.round(d.frac_umbral * 100)} % del área ≥ ${s.umbral_mm} mm</span>
-          ${pill(d.confirma, d.confirma ? "Confirmada" : "Sin lluvia")}</div>`).join("");
-      return `<div style="padding:8px 0;border-top:1px solid var(--line)">
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="font-size:13px">Advertencia N.º ${a.no}</b>
-        ${pill(a.confirma, a.confirma ? "✓ Confirmada" : "✗ No confirmada")}</div>${dias}</div>`;
-    }).join("");
-    host.innerHTML = `<div class="tarjeta" style="padding:14px 16px;margin:12px 0">
-      <h3 style="margin:0 0 4px;font-size:14px">Validación con <b>Climatología</b> <span class="suave" style="font-weight:400">· insumo adicional</span></h3>
-      <p class="suave" style="margin:0 0 10px;font-size:12px">Precipitación observada (climatología grillada corregida con estaciones) sobre <b>toda la zona advertida</b>, no solo en las estaciones dentro de ella. Confirma si ≥ ${s.frac_confirma_pct} % del área superó ${s.umbral_mm} mm.</p>
-      <div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:4px">
-        <span><b style="font:700 18px var(--mono,monospace)">${fmtNum(s.n_advertencias)}</b> <span class="suave" style="font-size:11px">advertencias</span></span>
-        <span><b style="font:700 18px var(--mono,monospace)">${fmtNum(s.confirmados)}/${fmtNum(s.n_dias)}</b> <span class="suave" style="font-size:11px">días confirmados</span></span>
-        <span><b style="font:700 18px var(--mono,monospace)">${fmtPct(s.confirmados_pct)} %</b> <span class="suave" style="font-size:11px">confirmación</span></span>
-      </div>
-      ${filas}
-    </div>`;
-  }
-
   /* ---- Zonas de riesgo de crecida (FFR): consenso de modelos → polígonos
      bufferados, exportables en formato oficial. El buffer se elige aquí. ---- */
   // Producto FFR del PROGRAMA (riesgo de crecida pronosticado). Va en la pestaña
@@ -1782,28 +1616,6 @@
         <div class="ct-ffr-serie" data-rol="ffr-serie"></div>
         <p class="ct-nota">El polígono encierra las microcuencas en riesgo. Se valida cruzándolo con los
           <b>desbordamientos/crecidas</b> observados de esa fecha (eventos de río dentro de la zona).</p>
-      </div>`;
-  }
-
-  // Validación de las ZONAS DE CRECIDA OFICIALES (Zonas_riesgo_crecidas.shp por variable,
-  // emitidos por el pronosticador) cruzadas vs desbordamientos/crecidas observados. Va en
-  // "Advertencias oficiales" (resumen.crecidas = validate_flood_zones de los shapes oficiales).
-  function htmlCrecidasOficial(r) {
-    const cr = (r && r.crecidas) || {};
-    const hay = !!(cr.eventos_periodo || cr.alertas_con_zonas);
-    const cuerpo = hay
-      ? `<div class="ct-stats" style="margin-top:8px">
-          <div class="ct-stat"><div class="v">${fmtNum(cr.alertas_con_zonas || 0)}</div><div class="k">Advertencias con zona de crecida</div></div>
-          <div class="ct-stat"><div class="v">${fmtNum(cr.eventos_periodo || 0)}</div><div class="k">Desbordes/crecidas en el periodo</div></div>
-          <div class="ct-stat"><div class="v ok">${cr.cubiertos_pct != null ? fmtPct(cr.cubiertos_pct) + " %" : fmtNum(cr.cubiertos || 0)}</div><div class="k">Cubiertos (${fmtNum(cr.cubiertos || 0)})</div></div>
-          <div class="ct-stat"><div class="v danger">${fmtNum(cr.no_cubiertos || 0)}</div><div class="k">No cubiertos</div></div>
-        </div>`
-      : `<p class="ct-nota" style="margin-top:8px">Aún sin cruce de zonas de crecida (se computa al validar las advertencias oficiales contra los desbordamientos/crecidas observados).</p>`;
-    return `
-      <div class="ct-panel">
-        <div class="ct-panel-cab"><h3>Validación de zonas de crecida oficiales</h3>
-          <span class="suave">Shapes <b>Zonas_riesgo_crecidas.shp</b> emitidos × desbordamientos/crecidas observados</span></div>
-        ${cuerpo}
       </div>`;
   }
 
@@ -1938,234 +1750,6 @@
     if (App.pinchZoomMapa) App.pinchZoomMapa(div);   // v17: pinza = zoom del mapa
   }
 
-  function tarjetaAdvertencia(adv) {
-    return `
-      <div class="ct-adv ${adv.No === E.adv.sel ? "activa" : ""}" data-no="${adv.No}">
-        <div class="ct-adv-cab">
-          <span class="no">N.º ${adv.No}</span>
-          <span class="ct-adv-var ${advVarClase(adv.Variable)}">${esc(String(adv.Variable).toUpperCase())}</span>
-        </div>
-        <div class="ct-adv-mapa">
-          <div class="ct-adv-plot" style="width:100%;height:176px"
-               data-no="${adv.No}" data-var="${esc(adv.Variable)}" data-dia="${esc(E.adv.dia || "D1")}"></div>
-        </div>
-        <div class="ct-adv-pie">
-          <span class="ct-adv-chip">${fmtNum(adv.puntos)} pts</span>
-          <span class="ct-adv-chip">${fmtPct(adv.eventos_pct)} ev%</span>
-          <span class="ct-adv-chip">${fmtPct(adv.area_cumple_pct)} ár%</span>
-          <span class="ct-adv-chip">${fmtNum(adv.misses)} miss</span>
-        </div>
-      </div>`;
-  }
-
-  function refrescarAdvSeleccion(cont) {
-    E.adv.dia = null;   // al cambiar de advertencia, vuelve al primer día disponible
-    cont.querySelectorAll(".ct-adv").forEach(c =>
-      c.classList.toggle("activa", +c.dataset.no === E.adv.sel));
-    const sel = cont.querySelector('[data-rol="buscar"]');
-    if (sel) sel.value = String(E.adv.sel);
-    cargarDetalleAdv();
-  }
-
-  // Veredicto a partir de eventos_pct (cobertura) — escala del diseño.
-  function veredicto(ev) {
-    if (ev == null) return { txt: "Sin datos", clase: "warn", final: "warn" };
-    if (ev >= 40) return { txt: "Bueno", clase: "ok", final: "ok" };
-    if (ev >= 20) return { txt: "Aceptable", clase: "warn", final: "warn" };
-    return { txt: "Mejorable", clase: "danger", final: "danger" };
-  }
-
-  // ── Mapa de cruce INTERACTIVO (Plotly) — sustituye al cruce.png estático ──────
-  // Polígono OFICIAL (envolvente única = "solo el más grande") + estaciones por las
-  // 5 lecturas (mismos colores/símbolos que el motor), con zoom/pan/hover.
-  const CRUCE_SIMBOLO = { acierto: "circle", no_alertado: "x", insuficiente: "triangle-up",
-                          sobredimensionada: "triangle-down", correcto_sin_alerta: "square" };
-  const CRUCE_NIVEL = ["Sin alerta", "Medio", "Alto", "Muy alto"];
-
-  function trazasCruce(datos, mini) {
-    const traces = trazasOutline("x", "y", null, mini ? 0.8 : 2.0, mini ? 1.8 : 3.4);   // grande: 2.0/3.4; mini de tarjeta queda
-    const rgba = (h, a) => { const c = _hexRgb(h); return `rgba(${c[0]},${c[1]},${c[2]},${a})`; };
-    const nm = datos.niveles_meta || {};
-    // Polígonos POR NIVEL (Medio→Alto→Muy alto): cada uno con SU color (relleno tenue +
-    // borde sólido) → se distingue cada polígono por su nivel de riesgo.
-    for (const blk of (datos.niveles || [])) {
-      const meta = nm[String(blk.nivel)] || { color: "#2563eb", etq: "N" + blk.nivel };
-      const xs = [], ys = [];
-      for (const an of (blk.anillos || [])) {
-        for (const [lo, la] of an) { xs.push(lo); ys.push(la); }
-        xs.push(null); ys.push(null);
-      }
-      if (!xs.length) continue;
-      traces.push({ type: "scatter", mode: "lines", x: xs, y: ys, fill: "toself",
-        fillcolor: rgba(meta.color, mini ? 0.12 : 0.16), line: { color: meta.color, width: mini ? 1.4 : 2.4 },
-        name: `Polígono ${meta.etq}`, hoverinfo: "skip", showlegend: !mini, xaxis: "x", yaxis: "y" });
-    }
-    const L = datos.lecturas || { orden: [], color: {}, etiqueta: {} };
-    for (const lect of L.orden) {
-      const pts = (datos.estaciones || []).filter(e => e.lectura === lect);
-      if (!pts.length) continue;
-      traces.push({ type: "scatter", mode: "markers",
-        x: pts.map(p => p.lon), y: pts.map(p => p.lat),
-        name: `${L.etiqueta[lect] || lect} (${pts.length})`,
-        marker: { size: mini ? 6.5 : 10, color: L.color[lect] || "#64748b", symbol: CRUCE_SIMBOLO[lect] || "circle",
-                  line: { width: mini ? 0.8 : 1.4, color: "#fff" } },
-        customdata: pts.map(p => [CRUCE_NIVEL[p.nivel_emitido] || p.nivel_emitido,
-                                  CRUCE_NIVEL[p.nivel_observado] || p.nivel_observado, p.codigo || ""]),
-        hovertemplate: `<b>%{customdata[2]}</b><br>Emitido: %{customdata[0]} · Observado: %{customdata[1]}`
-                       + `<extra>${esc(L.etiqueta[lect] || lect)}</extra>`,
-        showlegend: !mini, xaxis: "x", yaxis: "y" });
-    }
-    return traces;
-  }
-
-  async function renderCruceMapa(div, params, mini) {
-    if (!div) return;
-    await asegurarGeoCartas();
-    let datos;
-    try { datos = await App.api("/cartas/advertencias/cruce_datos?" + qs(params)); }
-    catch (e) { div.innerHTML = `<div class="vacio" style="padding:24px">Mapa no disponible</div>`; return; }
-    if (!div.isConnected) return;
-    if (!datos || datos.error) {
-      div.innerHTML = `<div class="vacio" style="padding:24px">${esc((datos && datos.error) || "Mapa no disponible")}</div>`; return; }
-    const ext = datos.bbox || [-81.2, -75, -5.2, 1.6];
-    const layout = App.plotlyLayoutBase({
-      showlegend: !mini,
-      // tinta TEMÁTICA (el lienzo de cruce sigue el tema; el PNG exportado fuerza papel)
-      legend: { orientation: "h", x: 0, y: -0.03, xanchor: "left", yanchor: "top", font: { size: 10.5, color: temaOscuro() ? "#E8EDF6" : "#283550" } },
-      margin: mini ? { l: 0, r: 0, t: 0, b: 0 } : { l: 0, r: 0, t: 0, b: 48 },
-      xaxis: { range: [ext[0], ext[1]], visible: false, fixedrange: mini },
-      yaxis: { range: [ext[2], ext[3]], scaleanchor: "x", scaleratio: 1, visible: false, fixedrange: mini },
-      dragmode: mini ? false : "pan",
-    });
-    Plotly.newPlot(div, trazasCruce(datos, mini), layout,
-      App.plotlyConfig({ scrollZoom: !mini && !TOUCH_COARSE, staticPlot: TOUCH_COARSE, displayModeBar: false, doubleClick: mini ? false : "reset" }));
-    if (App.pinchZoomMapa && !mini) App.pinchZoomMapa(div);   // v17: pinza = zoom del mapa
-  }
-
-  // Pinta los mini-mapas de las tarjetas en SECUENCIA (yield entre cada uno para no
-  // congelar el hilo con 8 Plotly de golpe).
-  async function pintarMapasTarjetas(cont) {
-    for (const div of cont.querySelectorAll(".ct-adv-plot")) {
-      if (!div.isConnected) continue;
-      await renderCruceMapa(div, { no: div.dataset.no, variable: div.dataset.var, dia: div.dataset.dia || "D1" }, true);
-      await new Promise(r => requestAnimationFrame(r));
-    }
-  }
-
-  async function cargarDetalleAdv() {
-    const panel = document.getElementById("ct-adv-detalle");
-    if (!panel) return;
-    const no = E.adv.sel;
-    const meta = (E.adv.resumen.advertencias || []).find(a => a.No === no) || {};
-    const variable = meta.Variable;
-    let det;
-    try { det = await App.api("/cartas/advertencias/detalle?" + qs({ no, variable })); }
-    catch (e) { panel.innerHTML = `<div class="vacio"><span class="suave">Detalle no disponible: ${esc(e.message)}</span></div>`; return; }
-    if (!document.getElementById("ct-adv-detalle")) return;
-
-    const ev = meta.eventos_pct, area = meta.area_cumple_pct;
-    const puntos = meta.puntos != null ? meta.puntos : (det.puntos || []).length;
-    const misses = meta.misses != null ? meta.misses : (det.misses || []).length;
-    const ver = veredicto(ev);
-    const dias = [...new Set((det.puntos || []).map(p => p.Dia).filter(Boolean))].sort();
-    const dia = (E.adv.dia && dias.includes(E.adv.dia)) ? E.adv.dia : (dias[0] || "D1");
-    const navDia = dias.length > 1
-      ? `<div class="segmentado" data-rol="advdia" style="--seg-color:var(--blue)">${dias.map(dd =>
-          `<button class="${dd === dia ? "activo" : ""}" data-dia="${esc(dd)}">${esc(dd)}</button>`).join("")}</div>`
-      : "";
-
-    panel.innerHTML = `
-      <div class="ct-det-cab">
-        <h3>Advertencia N.º ${esc(no)}</h3>
-        <span class="ct-adv-var ${advVarClase(variable)}">${esc(advVarEt(variable))}</span>
-        <span class="meta">validada contra observado · ventana 24 h · ${fmtNum(puntos)} puntos estación-día</span>
-        ${navDia ? `<span class="ct-det-dia" style="margin-left:auto;display:flex;align-items:center;gap:6px"><span class="et">Día</span>${navDia}</span>` : ""}
-      </div>
-      <p class="ct-det-intro">Cruce real del polígono emitido contra lo observado (datos de validación oficiales).</p>
-      <div class="ct-stats">
-        <div class="ct-stat"><div class="v ok">${fmtPct(ev)}<small> %</small></div><div class="k">Eventos cubiertos</div></div>
-        <div class="ct-stat"><div class="v warn">${fmtPct(area)}<small> %</small></div><div class="k">Cumple área</div></div>
-        <div class="ct-stat"><div class="v">${fmtNum(puntos)}</div><div class="k">Puntos con obs.</div></div>
-        <div class="ct-stat"><div class="v danger">${fmtNum(misses)}</div><div class="k">Fuera del polígono</div></div>
-        <div class="ct-stat"><div class="ct-veredicto ${ver.clase}">${esc(ver.txt)}</div><div class="k" style="margin-top:8px">Veredicto</div></div>
-      </div>
-      <div class="ct-det-cuerpo">
-        <figure class="ct-det-mapa" style="position:relative">
-          <a class="ct-dl ct-dl-jpg" role="button" tabindex="0" data-dlimg="1" data-nombre="advertencia_${esc(no)}_${esc(String(variable))}_${esc(dia)}"
-             title="Descargar mapa (imagen)" aria-label="Descargar mapa de la advertencia">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
-          </a>
-          <div data-rol="cruce-plot" style="width:100%;height:460px"></div></figure>
-        <div class="ct-lecturas">
-          <div class="micro">Cinco lecturas ejecutivas</div>
-          <div class="ct-lectura"><span class="n">1</span><div class="tx"><b>Cobertura.</b> ${fmtPct(ev)} % de los eventos observados cayeron dentro del polígono.</div></div>
-          <div class="ct-lectura"><span class="n">2</span><div class="tx"><b>Área.</b> El ${fmtPct(area)} % del polígono coincidió con zonas que reportaron el evento.</div></div>
-          <div class="ct-lectura"><span class="n">3</span><div class="tx"><b>Muestra.</b> ${fmtNum(puntos)} puntos estación-día con observación disponible.</div></div>
-          <div class="ct-lectura miss"><span class="n">4</span><div class="tx"><b>Fugas.</b> ${fmtNum(misses)} eventos quedaron fuera del polígono advertido.</div></div>
-          <div class="ct-lectura final ${ver.final === "ok" ? "ok" : ""}"><span class="n">!</span><div class="tx"><b>Veredicto: ${esc(ver.txt.toLowerCase())}.</b> Cobertura ${fmtPct(ev)} % de los eventos; ${ev != null && ev < 40 ? "margen para ajustar el área del polígono." : "buen cierre del polígono advertido."}</div></div>
-        </div>
-      </div>
-      ${String(variable).toUpperCase() === "RR" ? `<div class="ct-panel" style="margin-top:14px">
-        <div class="ct-panel-cab"><h3>Validación de la zona de crecida (oficial)</h3>
-          <span class="suave">Zona <b>Zonas_riesgo_crecidas.shp</b> × desbordes/crecidas observados del periodo</span></div>
-        <figure class="ct-det-mapa" style="position:relative">
-          <a class="ct-dl ct-dl-jpg" role="button" tabindex="0" data-dlimg="1" data-nombre="advertencia_${esc(no)}_crecida_${esc(dia)}"
-             title="Descargar mapa (imagen)" aria-label="Descargar mapa de la zona de crecida">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
-          </a>
-          <div data-rol="crecida-plot" style="width:100%;height:380px"></div></figure>
-      </div>` : ""}`;
-    panel.querySelectorAll('[data-rol="advdia"] button').forEach(b =>
-      b.onclick = () => { E.adv.dia = b.dataset.dia; cargarDetalleAdv(); });
-    renderCruceMapa(panel.querySelector('[data-rol="cruce-plot"]'), { no, variable, dia }, false);
-    if (String(variable).toUpperCase() === "RR")
-      renderCrecidaMapa(panel.querySelector('[data-rol="crecida-plot"]'), no, variable);
-  }
-
-  // Mapa de validación de la ZONA DE CRECIDA oficial: polígono emitido + desbordes/
-  // crecidas observados, marcados cubierto (dentro, verde) / no cubierto (fuera, rojo).
-  async function renderCrecidaMapa(div, no, variable) {
-    if (!div) return;
-    await asegurarGeoCartas();
-    let d;
-    try { d = await App.api("/cartas/advertencias/crecida_datos?" + qs({ no, variable })); }
-    catch (e) { div.innerHTML = `<div class="vacio" style="padding:20px">Validación no disponible</div>`; return; }
-    if (!div.isConnected) return;
-    if (!d || !d.hay_zona) {
-      div.innerHTML = `<div class="vacio" style="padding:22px">Esta advertencia no tiene zona de crecida emitida (Zonas_riesgo_crecidas.shp).</div>`;
-      return;
-    }
-    const rgba = (h, a) => { const c = _hexRgb(h); return `rgba(${c[0]},${c[1]},${c[2]},${a})`; };
-    const ext = d.bbox || [-81.2, -75, -5.2, 1.6];
-    const traces = trazasOutline("x", "y", null, 2.0, 3.4);   // spec mapa grande: 2.0/3.4
-    const xs = [], ys = [];
-    for (const an of (d.anillos || [])) { for (const [lo, la] of an) { xs.push(lo); ys.push(la); } xs.push(null); ys.push(null); }
-    if (xs.length) traces.push({ type: "scatter", mode: "lines", x: xs, y: ys, fill: "toself",
-      fillcolor: rgba("#009AF2", 0.14), line: { color: "#009AF2", width: 2.4 }, name: "Zona de crecida",
-      hoverinfo: "skip", showlegend: true, xaxis: "x", yaxis: "y" });
-    for (const [key, color, etq, sym] of [[true, "#15803d", "Cubierto", "circle"], [false, "#b91c1c", "No cubierto", "x"]]) {
-      const pts = (d.eventos || []).filter(e => e.cubierto === key);
-      if (!pts.length) continue;
-      traces.push({ type: "scatter", mode: "markers", x: pts.map(p => p.lon), y: pts.map(p => p.lat),
-        name: `${etq} (${pts.length})`,
-        marker: { size: 9, color, symbol: sym, line: { width: 1.3, color: "#fff" } },
-        customdata: pts.map(p => [p.tipo || "", p.fecha || ""]),
-        hovertemplate: `<b>%{customdata[0]}</b><br>%{customdata[1]}<extra>${etq}</extra>`,
-        showlegend: true, xaxis: "x", yaxis: "y" });
-    }
-    const layout = App.plotlyLayoutBase({
-      showlegend: true,
-      // tinta TEMÁTICA (el lienzo de crecida sigue el tema; el PNG exportado fuerza papel)
-      legend: { orientation: "h", x: 0, y: -0.03, xanchor: "left", font: { size: 10.5, color: temaOscuro() ? "#E8EDF6" : "#283550" } },
-      margin: { l: 0, r: 0, t: 0, b: 46 },
-      xaxis: { range: [ext[0], ext[1]], visible: false, fixedrange: false },
-      yaxis: { range: [ext[2], ext[3]], scaleanchor: "x", scaleratio: 1, visible: false, fixedrange: false },
-      dragmode: "pan",
-    });
-    Plotly.newPlot(div, traces, layout, App.plotlyConfig({ scrollZoom: !TOUCH_COARSE, staticPlot: TOUCH_COARSE, displayModeBar: false, doubleClick: "reset" }));
-    if (App.pinchZoomMapa) App.pinchZoomMapa(div);   // v17: pinza = zoom del mapa
-  }
-
   /* ============================================================
      Render del cuerpo según el tipo activo
      ============================================================ */
@@ -2179,7 +1763,6 @@
     purgarCartas();                       // libera los mapas Plotly del render anterior
     const def = TIPOS.find(t => t.id === E.tipo) || TIPOS[0];
 
-    if (def.cuerpo === "advertencias") { cuerpoAdvertencias(cont); return; }
     if (def.cuerpo === "alertas") {
       cont.innerHTML = cuerpoAlertas();
       conectarAlertas(cont);
@@ -2234,8 +1817,7 @@
       E = { tipo: "pronostico", productos: { tipos: [] }, grid: {},
             capas: { grilla: true, galapagos: true, estaciones: false },
             alerta: { varId: "alerta_lluvia", modo: "fija", inst: null,
-                      opts: Object.fromEntries(TOGGLES.map(t => [t.id, t.on])), fechasEmitidas: [] },
-            adv: { sel: null, resumen: null, dia: null, varFiltro: "" } };
+                      opts: Object.fromEntries(TOGGLES.map(t => [t.id, t.on])), fechasEmitidas: [] } };
     }
     if (!(E.productos.tipos || []).length || E._stale) {
       try {
@@ -2256,9 +1838,6 @@
   async function panelAlertas(cont) {
     await asegurarEstado(); purgarCartas(); E.tipo = "alertas";
     cont.innerHTML = cuerpoAlertas(); conectarAlertas(cont); montarMapasCarta(cont); cargarFechas();
-  }
-  async function panelAdvertencias(cont) {
-    await asegurarEstado(); purgarCartas(); E.tipo = "advertencias"; cuerpoAdvertencias(cont);
   }
   async function panelFFGS(cont) {
     await asegurarEstado(); purgarCartas(); E.tipo = "ffgs";
@@ -2304,7 +1883,7 @@
     if (b.dataset.busy) return;
     b.dataset.busy = "1"; b.style.opacity = ".45";
     try {
-      // IMAGEN del mapa: advertencias (data-dlimg) siempre, y las cartas (data-jpg) cuando
+      // IMAGEN del mapa: FFR (data-dlimg) siempre, y las cartas (data-jpg) cuando
       // estamos en el VISOR en línea (sin backend que renderice la carta formal).
       if (b.dataset.dlimg || (b.dataset.jpg && window.HIDROMET_VISOR)) {
         await descargarImagenMapa(b);
@@ -2346,8 +1925,8 @@
   // dispara <a download>): manda el PNG al servidor, que lo guarda en Descargas.
   async function descargarImagenMapa(b) {
     const cont = b.closest(".ct-lienzo") || b.closest("figure") || b.parentElement;
-    const plot = cont && (cont.querySelector(".ct-mapa-plot") || cont.querySelector('[data-rol="cruce-plot"]')
-      || cont.querySelector('[data-rol="ffr-plot"]') || cont.querySelector('[data-rol="crecida-plot"]')
+    const plot = cont && (cont.querySelector(".ct-mapa-plot")
+      || cont.querySelector('[data-rol="ffr-plot"]')
       || cont.querySelector(".js-plotly-plot"));
     if (!plot || !window.Plotly) throw new Error("El mapa aún no está listo");
     const nombre = String(b.dataset.nombre || "carta").replace(/[^\w\-]+/g, "_").slice(0, 60) || "carta";
@@ -2355,7 +1934,7 @@
     const w = Math.max(1000, Math.round((bb.width || 520) * 2));
     const h = Math.max(680, Math.round((bb.height || 360) * 2));
     // Carta de pronóstico/alerta (tiene datos guardados) → imagen FORMAL con título + leyenda.
-    // Advertencias/FFR ya llevan su leyenda dentro de la figura → se capturan tal cual.
+    // Los mapas FFR ya llevan su leyenda dentro de la figura → se capturan tal cual.
     const dataUrl = plot._carta
       ? await _imagenCartaFormal(plot, w, h)
       : await _imagenMapaBlanco(plot, w, h);
@@ -2413,7 +1992,7 @@
     return async () => { for (const [i, prev] of revertir) await window.Plotly.restyle(plot, prev, [i]); };
   }
 
-  // PNG (dataURL) de un mapa de Advertencias/FFR (leyenda ya incluida en la figura):
+  // PNG (dataURL) de un mapa FFR (leyenda ya incluida en la figura):
   // se captura tal cual pero con papel blanco y tinta fija, revertidos después.
   async function _imagenMapaBlanco(plot, w, h) {
     const prev = _fondoPrevio(plot);
@@ -2612,7 +2191,11 @@
     alDejar: _alDejarCartas,
   });
 
-  // MENÚ "Advertencias": Advertencias (alertas del programa) · Advertencias oficiales.
+  // MENÚ "Advertencias": SOLO las advertencias del programa (panel único, sin
+  // barra de pestañas). Se mantiene App.vistaPestanas con una única pestaña para
+  // conservar la cabecera (kicker/título/sub/acciones) idéntica a los demás
+  // módulos y el controlador vp (recargar tras Actualizar / cambio de tema);
+  // la barra .hm-pestanas se oculta porque con una sola pestaña no aporta.
   App.registrar("advertencias", {
     titulo: "Advertencias", orden: 4,
     async render(vista) {
@@ -2620,13 +2203,14 @@
       await asegurarEstado();
       vp = App.vistaPestanas(vista, {
         kicker: "Alertas y advertencias", titulo: "Advertencias",
-        sub: "Alertas por consenso con validación de desempeño · advertencias oficiales",
+        sub: "Alertas por consenso con validación de desempeño",
         accionesHTML: ACC_ACTUALIZAR, inicial: "alertas",
         pestanas: [
           { id: "alertas", etiqueta: "Advertencias", danger: true, render: panelAlertas, alSalir: purgarCartas },
-          { id: "advertencias", etiqueta: "Advertencias oficiales", render: panelAdvertencias, alSalir: purgarCartas },
         ],
       });
+      const fila = vista.querySelector(".hm-pestanas");
+      if (fila) fila.style.display = "none";
       _wireActualizar(vista);
     },
     alDejar: _alDejarCartas,
@@ -2641,13 +2225,12 @@
       <header><span>Actualizar cartas y alertas</span>
         <button class="boton chico" data-rol="cerrar">Cerrar</button></header>
       <div class="cuerpo">
-        <div class="suave" style="font-size:12.5px;margin-bottom:12px">Descarga los últimos pronósticos y rehace cartas, alertas y advertencias.</div>
+        <div class="suave" style="font-size:12.5px;margin-bottom:12px">Descarga los últimos pronósticos y rehace cartas y alertas.</div>
         <label class="campo" style="margin-bottom:12px"><span>Alcance</span>
           <select data-rol="alcance">
-            <option value="cartas">Todo cartas (pronóstico + alertas + advertencias)</option>
+            <option value="cartas">Todo cartas (pronóstico + alertas)</option>
             <option value="modelos">Solo pronóstico</option>
             <option value="alertas">Solo alertas</option>
-            <option value="advertencias">Solo advertencias</option>
           </select></label>
         <div class="micro" style="margin-bottom:6px">Modelos</div>
         <div class="segmentado" data-rol="modelos" style="--seg-color:var(--blue)">

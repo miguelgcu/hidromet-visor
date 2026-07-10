@@ -365,7 +365,7 @@
     catch (e) { App.aviso(e.message, "error"); return; }
     const secs = (g.secciones || []).map(s =>
       `<div class="gloss-sec"><b>${esc(s.titulo)}</b><div class="gg-sub">${esc(s.texto)}</div></div>`).join("");
-    App.aviso(`<div style="max-width:62ch"><b>${esc(g.titulo)}</b><div class="gg-sub" style="margin:6px 0">${esc(g.intro)}</div>${secs}</div>`, "info", 16000);
+    App.aviso(`<div style="max-width:62ch"><b>${esc(g.titulo)}</b><div class="gg-sub" style="margin:6px 0">${esc(g.intro)}</div>${secs}</div>`, "info", 16000, { html: true });
   }
 
   /* ---------------- ciclo de vida ---------------- */
@@ -405,6 +405,8 @@
     if (_onTema) { document.removeEventListener("temacambiado", _onTema); _onTema = null; }
     if (estado) estado.epoca = -1;
     if (estado && estado.mapa) { try { estado.mapa.remove(); } catch (e) {} estado.mapa = null; }
+    // También los Plotly propios (hidrograma/retrospectiva) — dejan listeners de window.
+    if (window.Plotly) document.querySelectorAll("#vista .js-plotly-plot").forEach(el => { try { Plotly.purge(el); } catch (e) { /* ya purgado */ } });
   }
 
   App.panel("geoglows", render);

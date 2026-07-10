@@ -205,7 +205,7 @@ html[data-tema="oscuro"] .sngr-leyenda-mapa i.rio-men { border-top-color: #37557
   .sngr-mapa-cab { gap: 8px; }
   .sngr-mapa-controles { gap: 6px; }
   .sngr-zoom { margin-left: 0; }
-  .sngr-zoom .zb { width: 34px; height: 34px; }
+  .sngr-zoom .zb { width: 40px; height: 40px; }   /* no revertir el target táctil de base.css */
   /* tarjetas con menos padding y tabla con scroll horizontal */
   .sngr-mapa-tarjeta, .sngr-tabla-tarjeta { padding: 12px; }
   .sngr-tabla-scroll { overflow-x: auto; }

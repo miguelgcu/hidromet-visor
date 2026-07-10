@@ -75,12 +75,14 @@ const App = (() => {
   }
 
   /* ---------------- avisos (toasts) ---------------- */
-  function aviso(mensaje, tipo = "info", ms = 4200) {
+  function aviso(mensaje, tipo = "info", ms = 4200, opts = {}) {
     const caja = document.getElementById("avisos");
     if (!caja) return;
     const el = document.createElement("div");
     el.className = `aviso ${tipo}`;
-    el.textContent = mensaje;
+    // opts.html: SOLO para contenido interno ya escapado (p. ej. glosarios de la API
+    // propia); el default sigue siendo textContent (seguro para mensajes de error).
+    if (opts.html) el.innerHTML = mensaje; else el.textContent = mensaje;
     caja.appendChild(el);
     // v12: salida suave (la clase .saliendo anima opacidad/transform antes de remover)
     setTimeout(() => { el.classList.add("saliendo"); setTimeout(() => el.remove(), 200); }, ms);
@@ -788,6 +790,19 @@ const App = (() => {
     }
     vista.querySelectorAll(".hm-pestana").forEach(b =>
       (b.onclick = () => { if (b.dataset.pest !== activa) pintar(b.dataset.pest); }));
+    // Máscara "hay más →" SOLO si la fila realmente desborda (si caben todas, la
+    // última pestaña se veía cortada por la máscara fija). Se re-evalúa al rotar/resize.
+    const fila = vista.querySelector(".hm-pestanas");
+    if (fila) {
+      const evaluar = () => fila.classList.toggle("desborda", fila.scrollWidth > fila.clientWidth + 1);
+      evaluar();
+      if (window.ResizeObserver) {
+        const ro = new ResizeObserver(evaluar);
+        ro.observe(fila);
+      } else {
+        window.addEventListener("resize", evaluar);
+      }
+    }
     pintar(activa);
     return { pintar, activa: () => activa, acciones: () => vista.querySelector(".hm-vista-acc") };
   }
