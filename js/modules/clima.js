@@ -287,96 +287,25 @@
       <div class="cl-mapgrid">
         <div class="cl-card cl-mapa-card"><h3 class="cl-maptit" data-rol="tit">Cargando…</h3><div class="cl-plot cl-plot-mapa" data-rol="plot"></div>
           <div class="ct-leyenda-carta cl-leyenda" data-rol="leyenda"></div>
-          <p class="cl-nota">Normales 1991–2020 (~5 km) construidas con CHIRPS satelital corregido con estaciones. Pasa el cursor para leer lat/lon y valor; los puntos son estaciones (clic → su climograma abajo).</p></div>
-        <div class="cl-lado">
-          <div class="cl-card"><h3 class="cl-maptit">Estadísticas del campo</h3><div class="cl-kpis-mapa" data-rol="kpis">${cargando()}</div></div>
-          <div class="cl-card"><h3 class="cl-maptit">Extremos por estación <span class="cl-sutil">· toca una barra</span></h3><div class="cl-plot" data-rol="rank"></div></div>
-        </div>
-        <div class="cl-card cl-mini-card"><h3 class="cl-maptit" data-rol="mini-tit">Estación</h3>
+          <p class="cl-nota">Normales 1991–2020 (~5 km) construidas con CHIRPS satelital corregido con estaciones. Pasa el cursor para leer lat/lon y valor; los puntos son estaciones (clic → su ficha al lado).</p></div>
+        <div class="cl-card cl-est-card"><h3 class="cl-maptit" data-rol="mini-tit">Ficha de estación</h3>
           <div class="cl-mini-sel">
             <input class="cl-buscar" data-rol="mini-buscar" type="search" placeholder="Buscar por nombre, código o región…" autocomplete="off">
             <select data-rol="mini-est" class="cl-mini-select"></select>
           </div>
-          <div data-rol="mini"><p class="cl-nota">Elige una estación (buscador, mapa o barras de extremos) para ver aquí su climograma y su ficha completa.</p></div></div>
+          <div class="cl-est-cuerpo" data-rol="mini">${vacio("📍", "Toca una estación en el mapa (o búscala aquí) para ver su climograma, sus normales mensuales y su serie observada.")}</div></div>
       </div>
     </div>`;
     const plot = c.querySelector('[data-rol="plot"]'), tit = c.querySelector('[data-rol="tit"]');
     const meses = c.querySelector('[data-rol="meses"]'), chkEst = c.querySelector('[data-rol="chk-est"]');
-    const kpisEl = c.querySelector('[data-rol="kpis"]'), rankEl = c.querySelector('[data-rol="rank"]');
     const miniEl = c.querySelector('[data-rol="mini"]'), miniTit = c.querySelector('[data-rol="mini-tit"]');
     let miniUlt = null;   // {p, nom, cod} del último climograma lateral (redibujo al cambiar tema)
 
-    // KPIs del campo visible (media/máx/mín con su ubicación) — calculados del propio grid.
-    function pintarKpis(d) {
-      const dec = (d.variable === "tmax" || d.variable === "tmin") ? 1 : (d.variable === "aridez" ? 2 : 0);
-      let n = 0, suma = 0, vmax = -Infinity, vmin = Infinity, pmax = null, pmin = null;
-      (d.campo || []).forEach((fila, i) => (fila || []).forEach((v, j) => {
-        if (v == null || !isFinite(v)) return;
-        n++; suma += v;
-        if (v > vmax) { vmax = v; pmax = [d.lat[i], d.lon[j]]; }
-        if (v < vmin) { vmin = v; pmin = [d.lat[i], d.lon[j]]; }
-      }));
-      if (!n) { kpisEl.innerHTML = `<p class="cl-nota">Sin datos.</p>`; return; }
-      const u = d.unidad || "", f = v => `${(+v.toFixed(dec)).toLocaleString("es-EC")}`;
-      const geo = p => p ? `${Math.abs(p[0]).toFixed(1)}°${p[0] < 0 ? "S" : "N"} ${Math.abs(p[1]).toFixed(1)}°O` : "";
-      // Dato de IMPACTO (pedido del dueño): el contraste del país — para temp el rango
-      // en °C entre el punto más cálido y el más frío; para el resto la razón máx/mín.
-      const esTemp = d.variable === "tmax" || d.variable === "tmin";
-      const contraste = esTemp
-        ? `${f(vmax - vmin)} <span class="s">°C de rango</span>`
-        : (vmin > 0 ? `${(vmax / vmin).toFixed(1)}<span class="s">× máx/mín</span>` : `${f(vmax - vmin)} <span class="s">${esc(u)} de rango</span>`);
-      kpisEl.innerHTML = `
-        <div class="cl-kpi-m"><div class="k">Media del campo</div><div class="v">${f(suma / n)} <span class="s">${esc(u)}</span></div></div>
-        <div class="cl-kpi-m"><div class="k">Máximo</div><div class="v">${f(vmax)} <span class="s">${esc(u)}</span></div><div class="s">${geo(pmax)}</div></div>
-        <div class="cl-kpi-m"><div class="k">Mínimo</div><div class="v">${f(vmin)} <span class="s">${esc(u)}</span></div><div class="s">${geo(pmin)}</div></div>
-        <div class="cl-kpi-m"><div class="k">Contraste</div><div class="v">${contraste}</div><div class="s">entre extremos del país</div></div>`;
-    }
-
-    // Extremos por estación como GRÁFICO de barras horizontales (pedido del dueño:
-    // gráficos de impacto, no listas de texto). Top-5 y bottom-5, coloreados con la
-    // MISMA paleta del mapa (lectura inmediata); tocar una barra abre su ficha.
-    function pintarRank(ce, d) {
-      const pts = ((ce && ce.estaciones) || []).filter(e => e.valor != null && isFinite(e.valor));
-      if (!pts.length || !window.Plotly) { rankEl.innerHTML = `<div class="cl-nota">Sin estaciones con dato para esta variable.</div>`; return; }
-      const orden = [...pts].sort((a, b) => b.valor - a.valor);
-      const sel = [...orden.slice(0, 5), ...orden.slice(-5)].filter((e, i, arr) => arr.findIndex(x => x.codigo === e.codigo) === i);
-      sel.reverse();   // barras horizontales: el mayor arriba
-      const oscuro = App.tema && App.tema() === "oscuro";
-      const txt = oscuro ? "#c6d0e0" : "#46597A";
-      const dec = (d.variable === "tmax" || d.variable === "tmin") ? 1 : 0;
-      const tr = {
-        type: "bar", orientation: "h",
-        y: sel.map(e => e.nombre || String(e.codigo)),
-        x: sel.map(e => e.valor),
-        text: sel.map(e => `${(+Number(e.valor).toFixed(dec)).toLocaleString("es-EC")}`),
-        textposition: "outside", cliponaxis: false,
-        textfont: { family: "IBM Plex Mono, monospace", size: 10, color: txt },
-        marker: { color: sel.map(e => e.valor), colorscale: d.colorscale, cmin: d.vmin, cmax: d.vmax,
-                  line: { color: oscuro ? "rgba(255,255,255,.25)" : "rgba(15,27,45,.25)", width: 1 } },
-        customdata: sel.map(e => [e.nombre || e.codigo, String(e.codigo)]),
-        hovertemplate: `<b>%{customdata[0]}</b> (%{customdata[1]})<br>%{x} ${esc(d.unidad || "")} · toca → ficha<extra></extra>`,
-      };
-      const layout = App.plotlyLayoutBase({
-        height: Math.max(300, sel.length * 30 + 40), margin: { l: 4, r: 34, t: 4, b: 22 },
-        xaxis: { tickfont: { size: 9, color: txt }, showgrid: true, zeroline: false, fixedrange: true },
-        yaxis: { tickfont: { size: 10.5, color: txt }, automargin: true, fixedrange: true },
-        showlegend: false, bargap: .28,
-      });
-      Plotly.react(rankEl, [tr], layout, App.plotlyConfig({ displayModeBar: false })).then(() => {
-        if (!rankEl._clickRank && typeof rankEl.on === "function") {
-          rankEl._clickRank = true;
-          rankEl.on("plotly_click", ev => {
-            const pt = ev.points && ev.points[0];
-            if (pt && pt.customdata) miniFicha(pt.customdata[1], pt.customdata[0]);
-          });
-        }
-      });
-    }
-
-    // FICHA COMPLETA de la estación, inline (v14: reemplaza a la pestaña "Por estación"):
-    // climograma + tarjeta de normales/récords lado a lado (móvil: apilados).
+    // FICHA COMPLETA de la estación en el LATERAL del mapa (v16, pedido del dueño:
+    // los KPIs de campo y el ranking top/bottom eran irrelevantes — el lateral es
+    // ahora la ficha: climograma + normales mensuales + serie observada, apilados).
     async function miniFicha(cod, nom) {
-      miniTit.textContent = `Estación — ${nom || cod}`;
+      miniTit.textContent = `Ficha — ${nom || cod}`;
       const selEst = c.querySelector('[data-rol="mini-est"]');
       if (selEst && selEst.value !== String(cod)) selEst.value = String(cod);
       miniEl.innerHTML = cargando();
@@ -385,9 +314,10 @@
       catch (e) { miniEl.innerHTML = vacio("⚠️", esc(e.message)); return; }
       const ficha = tarjetaPunto(p, `${nom || cod} (${cod})`);
       if (p.error || p.fuera_dominio || !(p.vars && p.vars.precip && p.vars.precip.anual != null)) {
-        miniEl.innerHTML = `<div class="cl-mini-grid"><div><p class="cl-nota">Sin climatología grillada aquí (fuera del dominio continental); la ficha muestra su serie observada.</p></div><div>${ficha}</div></div>`;
+        // La propia tarjeta explica el fuera-de-dominio y trae la serie observada.
+        miniEl.innerHTML = `<div class="cl-ficha-pila">${ficha}</div>`;
       } else {
-        miniEl.innerHTML = `<div class="cl-mini-grid"><div class="cl-plot" data-rol="mini-climo"></div><div>${ficha}</div></div>`;
+        miniEl.innerHTML = `<div class="cl-ficha-pila"><div class="cl-plot" data-rol="mini-climo"></div>${ficha}</div>`;
         pintarClimograma(miniEl.querySelector('[data-rol="mini-climo"]'), p);
       }
       miniUlt = { p, nom, cod };
@@ -407,7 +337,7 @@
         }
         return `<option value="" disabled selected>Elige una estación…</option>` +
           [...grupos.keys()].sort((a, b) => a.localeCompare(b, "es")).map(rg =>
-            `<optgroup label="${esc(rg)}">${grupos.get(rg).map(e =>
+            `<optgroup label="${esc(App.redEtiqueta(rg))}">${grupos.get(rg).map(e =>
               `<option value="${esc(String(e.codigo))}">${esc(e.nombre || e.codigo)} (${esc(String(e.codigo))})</option>`).join("")}</optgroup>`).join("");
       };
       selEst.innerHTML = opciones(ests);
@@ -440,19 +370,19 @@
         try { d = await App.api(`/clima/mapa?variable=${E.mapVar}&escala=${E.mapEsc}`); E.mapaCache[key] = d; }
         catch (e) { limpiarPlot(plot); tit.textContent = "Error"; plot.innerHTML = vacio("⚠️", esc(e.message)); return; }
       }
-      // Las estaciones se piden SIEMPRE (alimentan el ranking lateral); la capa del
-      // mapa solo las dibuja si el checkbox está activo.
-      let ce = E.estCache[key];
-      if (!ce) {
-        try { ce = await App.api(`/clima/estaciones?mes=${E.mapEsc}&variable=${E.mapVar}`); E.estCache[key] = ce; }
-        catch (e) { ce = null; }
+      // Capa de estaciones (valor muestreado): solo se pide si el checkbox está activo
+      // (v16: ya no alimenta ningún ranking lateral).
+      let ce = null;
+      if (E.mapEst) {
+        ce = E.estCache[key];
+        if (!ce) {
+          try { ce = await App.api(`/clima/estaciones?mes=${E.mapEsc}&variable=${E.mapVar}`); E.estCache[key] = ce; }
+          catch (e) { ce = null; }
+        }
       }
       tit.textContent = d.titulo || "";
-      pintarMapa(plot, d, E.mapEst ? ce : null);
-      pintarKpis(d);
-      pintarRank(ce, d);
-      // Clic en una estación → su climograma AL LADO del mapa (rediseño 2026-07-09);
-      // la ficha completa queda a un botón.
+      pintarMapa(plot, d, ce);
+      // Clic en una estación → su ficha completa AL LADO del mapa (v16).
       if (typeof plot.on === "function" && !plot._clickEst) {
         plot._clickEst = true;
         plot.on("plotly_click", ev => {
@@ -503,7 +433,7 @@
         grupos.get(rg).push(e);
       }
       return [...grupos.keys()].sort((a, b) => a.localeCompare(b, "es")).map(rg =>
-        `<optgroup label="${esc(rg)}">${grupos.get(rg).map(e =>
+        `<optgroup label="${esc(App.redEtiqueta(rg))}">${grupos.get(rg).map(e =>
           `<option value="${esc(e.codigo)}">${esc(e.nombre || e.codigo)} (${esc(e.codigo)})${e.fuera_dominio ? " · sin climatología grillada" : ""}</option>`).join("")}</optgroup>`).join("");
     };
     c.innerHTML = `<div class="cl-wrap">
@@ -735,7 +665,7 @@
       const previa = sel.value;
       const validas = ests.filter(e => mide(e, estVar));
       sel.innerHTML = validas.map(e =>
-        `<option value="${esc(e.codigo)}">${esc(e.nombre || e.codigo)} (${esc(e.codigo)})${e.region ? " · " + esc(e.region) : ""}</option>`).join("");
+        `<option value="${esc(e.codigo)}">${esc(e.nombre || e.codigo)} (${esc(e.codigo)})${e.region ? " · " + esc(App.redEtiqueta(e.region)) : ""}</option>`).join("");
       if (validas.some(e => String(e.codigo) === String(previa))) sel.value = previa;
     }
     let ultimo = null;   // último payload pintado (redibujo al cambiar tema)

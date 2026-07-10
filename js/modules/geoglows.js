@@ -24,6 +24,19 @@
   const primerValor = s => { if (!s) return null;
     for (const v of s) if (v != null && isFinite(v)) return v; return null; };
   const encuadrar = m => m && m.fitBounds(LIMITES_EC, { padding: [8, 8] });
+  // Dispositivo táctil (móvil/tablet): activa el área táctil ampliada y el bottom-sheet.
+  const TOUCH = !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
+
+  // Métricas clave del pronóstico (compartidas por la tarjeta de detalle y el sheet).
+  function metricasDe(r) {
+    const f = r.forecast || {};
+    const actual = primerValor(f.high_res) != null ? primerValor(f.high_res) : primerValor(f.med);
+    const rets = r.retornos || [];
+    let cercano = null;
+    if (r.pico != null && rets.length)
+      cercano = rets.reduce((a, b) => Math.abs(b.caudal - r.pico) < Math.abs(a.caudal - r.pico) ? b : a);
+    return { actual, cercano };
+  }
 
   let estado, epocaGlobal = 0, _onTema = null;
   function crear() {
@@ -94,7 +107,44 @@
           <div class="gg-empty"><span>Selecciona un río para ver sus detalles: métricas del
             pronóstico, umbrales de crecida y contexto histórico.</span></div>
         </section>
+        <div class="gg-sheet" data-rol="sheet" hidden></div>
       </div>`;
+  }
+
+  /* ---------------- bottom-sheet táctil (P15): valores del río al tap ---------------- */
+  function abrirSheet(html) {
+    const s = document.querySelector('[data-rol="sheet"]');
+    if (!s) return;
+    s.innerHTML = html; s.hidden = false;
+    const x = s.querySelector('[data-rol="sheet-cerrar"]');
+    if (x) x.onclick = () => { s.hidden = true; };
+    const v = s.querySelector('[data-rol="sheet-ver"]');
+    if (v) v.onclick = () => {
+      s.hidden = true;
+      const d = document.querySelector(".gg-hidro");
+      if (d) d.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+  }
+  function sheetCabHTML(nombre) {
+    return `<div class="gg-sheet-head"><span class="gg-sheet-nom">${esc(nombre)}</span>
+      <button class="gg-sheet-x" data-rol="sheet-cerrar" aria-label="Cerrar">✕</button></div>`;
+  }
+  function sheetHTML(r, nombre) {
+    const na = r.nivel_alerta || {};
+    const m = metricasDe(r);
+    return `
+      <div class="gg-sheet-head">
+        <span class="gg-sheet-nom">${esc(nombre || ("Tramo " + r.river_id))}</span>
+        <span class="gg-chip" style="--c:${colorNivel(na)}">${esc(na.etiqueta || "—")}</span>
+        <button class="gg-sheet-x" data-rol="sheet-cerrar" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="gg-sheet-stats">
+        <div><span class="lbl">Caudal actual</span><span class="val">${fmt1(m.actual)}</span><span class="u">m³/s</span></div>
+        <div><span class="lbl">Pico 15 días</span><span class="val">${fmt1(r.pico)}</span><span class="u">m³/s</span></div>
+        <div><span class="lbl">RP cercano</span><span class="val">${m.cercano ? "RP " + m.cercano.anios : "—"}</span>
+          <span class="u">${m.cercano ? "umbral " + fmt(m.cercano.caudal) + " m³/s" : "sin umbrales"}</span></div>
+      </div>
+      <button class="gg-btn primario gg-sheet-ver" data-rol="sheet-ver">Ver hidrograma y detalle ↓</button>`;
   }
 
   function leyendaHTML() {
@@ -145,10 +195,38 @@
     estado.tiles = L.tileLayer(urlTiles(), { subdomains: "abcd", maxZoom: 19, crossOrigin: true }).addTo(map);
     map.createPane("pRios").style.zIndex = 370;
     estado.lienzoRios = L.canvas({ padding: 0.5, pane: "pRios" });
-    // Clic libre = consulta por lat/lon (on-demand, requiere backend). En el visor (sin backend)
-    // solo se navegan los tramos vigilados con river_id congelado → se omite el clic libre.
+    // Clic libre = consulta por lat/lon (on-demand, requiere backend). En el visor (sin
+    // backend) solo se navegan los tramos vigilados con river_id congelado: el tap/clic
+    // sobre el mapa selecciona el río VIGILADO más cercano (P15: antes el tap sobre la
+    // red de ríos no hacía nada en móvil).
     if (!window.HIDROMET_VISOR) map.on("click", (e) => consultarPunto(e.latlng.lat, e.latlng.lng));
+    else map.on("click", (e) => {
+      const it = itemCercano(e.latlng, TOUCH ? 36 : 22);
+      if (it && it.river_id) seleccionarItem(it);
+    });
     cargarRios();
+  }
+
+  // Río vigilado más cercano al punto (en PÍXELES de pantalla, no grados) — área
+  // táctil generosa e independiente del nivel de zoom.
+  function itemCercano(latlng, maxPx) {
+    if (!estado.mapa) return null;
+    const p0 = estado.mapa.latLngToContainerPoint(latlng);
+    let mejor = null, dm = Infinity;
+    for (const it of (estado.items || [])) {
+      if (typeof it.lat !== "number" || typeof it.lon !== "number") continue;
+      const p = estado.mapa.latLngToContainerPoint([it.lat, it.lon]);
+      const d = Math.hypot(p.x - p0.x, p.y - p0.y);
+      if (d < dm) { dm = d; mejor = it; }
+    }
+    return dm <= maxPx ? mejor : null;
+  }
+
+  function seleccionarItem(it) {
+    document.querySelectorAll(".gg-rio").forEach(x =>
+      x.classList.toggle("activo", estado.items[+x.dataset.i] === it));
+    if (it.river_id) cargarHidrograma(it.river_id, it.nombre, it.lat, it.lon);
+    else if (!window.HIDROMET_VISOR) consultarPunto(it.lat, it.lon);
   }
 
   async function cargarRios() {
@@ -171,21 +249,26 @@
     // TÁCTIL: marcador MÁS GRANDE (objetivo cómodo al dedo) y SIN tooltip sticky. En iOS el
     // tooltip roba el primer toque (muestra el globo en vez de accionar) → el usuario sentía que
     // "no pasa nada". Sin tooltip, el primer tap va directo a cargar el hidrograma.
-    const _touch = !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
     const grupo = L.layerGroup();
     for (const it of items) {
       if (typeof it.lat !== "number" || typeof it.lon !== "number") continue;
       // Aro del marcador temático: negro sobre teselas claras, claro sobre las oscuras.
       const m = L.circleMarker([it.lat, it.lon], {
-        radius: _touch ? 11 : 8, color: (App.tema && App.tema() === "oscuro") ? "#E8EDF6" : "#000000",
+        radius: TOUCH ? 11 : 8, color: (App.tema && App.tema() === "oscuro") ? "#E8EDF6" : "#000000",
         weight: 1.5, fillColor: colorNivel(it.nivel_alerta), fillOpacity: 0.95, bubblingMouseEvents: false });
       const na = it.nivel_alerta ? it.nivel_alerta.etiqueta : "sin pronóstico (pulsa Actualizar)";
-      if (!_touch) m.bindTooltip(`<b>${esc(it.nombre)}</b><br>${esc(na)}`, { direction: "top", sticky: true });
-      const _sel = (e) => { if (e) L.DomEvent.stopPropagation(e);
-        if (it.river_id) cargarHidrograma(it.river_id, it.nombre, it.lat, it.lon);
-        else if (!window.HIDROMET_VISOR) consultarPunto(it.lat, it.lon); };
+      if (!TOUCH) m.bindTooltip(`<b>${esc(it.nombre)}</b><br>${esc(na)}`, { direction: "top", sticky: true });
+      const _sel = (e) => { if (e) L.DomEvent.stopPropagation(e); seleccionarItem(it); };
       m.on("click", _sel);           // ratón + tap normalizado por Leaflet
       grupo.addLayer(m);
+      if (TOUCH) {
+        // P15: ÁREA TÁCTIL ampliada — aro invisible de 24 px de radio con el mismo
+        // handler; el dedo ya no necesita acertar a los 11 px visibles.
+        const buf = L.circleMarker([it.lat, it.lon], { radius: 24, stroke: false,
+          fillColor: "#000", fillOpacity: 0, bubblingMouseEvents: false });
+        buf.on("click", _sel);
+        grupo.addLayer(buf);
+      }
     }
     grupo.addTo(estado.mapa);
     estado.marcadores = grupo;
@@ -206,17 +289,32 @@
     if (badge) badge.innerHTML = ""; if (retro) retro.innerHTML = "";
     if (plot) plot.innerHTML = `<div class="gg-empty"><span class="spin"></span><span>Consultando GEOGLOWS… (la primera vez de un tramo puede tardar)</span></div>`;
     if (tit) tit.textContent = nombre ? `Hidrograma — ${nombre}` : "Hidrograma";
+    // Móvil (P15): feedback INMEDIATO al tap — el sheet aparece cargando, sin que el
+    // usuario tenga que descubrir que el detalle se pintó fuera de pantalla.
+    if (TOUCH) abrirSheet(sheetCabHTML(nombre || "Consultando río…") +
+      `<div class="gg-sub" style="padding:2px 2px 6px"><span class="spin"></span> Consultando GEOGLOWS…</div>`);
     const q = riverId ? ("river_id=" + encodeURIComponent(riverId)) : (`lat=${lat}&lon=${lon}`);
     let r;
     try { r = await App.api("/geoglows/hidrograma?" + q); }
-    catch (e) { if (plot) plot.innerHTML = `<div class="gg-empty"><span>${esc(e.message)}</span></div>`; return; }
+    catch (e) {
+      if (plot) plot.innerHTML = `<div class="gg-empty"><span>${esc(e.message)}</span></div>`;
+      if (TOUCH) abrirSheet(sheetCabHTML(nombre || "Río") +
+        `<div class="gg-sub" style="padding:2px 2px 6px">${esc(e.message)}</div>`);
+      return;
+    }
     if (!vigente(E)) return;
-    if (r.error) { if (plot) plot.innerHTML = `<div class="gg-empty"><span>${esc(r.error)}</span></div>`; return; }
+    if (r.error) {
+      if (plot) plot.innerHTML = `<div class="gg-empty"><span>${esc(r.error)}</span></div>`;
+      if (TOUCH) abrirSheet(sheetCabHTML(nombre || "Río") +
+        `<div class="gg-sub" style="padding:2px 2px 6px">${esc(r.error)}</div>`);
+      return;
+    }
     estado.selRid = r.river_id;
     if (tit) tit.textContent = `Hidrograma — ${nombre || ("tramo " + r.river_id)}`;
     pintarHidrograma(plot, r);
     pintarBadge(badge, r);
     pintarDetalle(r, nombre);
+    if (TOUCH) abrirSheet(sheetHTML(r, nombre));   // valores del río en el bottom-sheet
     const vr = document.querySelector('[data-rol="ver-retro"]');
     if (vr) vr.onclick = () => cargarRetro(r.river_id);
   }
@@ -226,15 +324,11 @@
     const det = document.querySelector('[data-rol="detalle"]');
     if (!det) return;
     const na = r.nivel_alerta || {};
-    const f = r.forecast || {};
     // "Caudal actual" = primer valor del pronóstico (alta resolución si existe; si no, mediana).
-    const actual = primerValor(f.high_res) != null ? primerValor(f.high_res) : primerValor(f.med);
+    const { actual, cercano } = metricasDe(r);
     estado.detActual = actual;   // lo usa cargarRetro para el % vs. media histórica del mes
     const rets = r.retornos || [];
     const pico = r.pico;
-    let cercano = null;
-    if (pico != null && rets.length)
-      cercano = rets.reduce((a, b) => Math.abs(b.caudal - pico) < Math.abs(a.caudal - pico) ? b : a);
     const filas = rets.map(rp => {
       const sup = pico != null && pico >= rp.caudal;
       return `<tr${sup ? ` class="sup" style="--c:${rp.color}"` : ""}>

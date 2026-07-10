@@ -61,7 +61,18 @@
 /* v11 compacta: etiqueta AL LADO del control, botones al final (149px → ~56px) */
 .sngr-filtros.compacta label { display: flex; align-items: center; gap: 7px; }
 .sngr-filtros.compacta .tit { margin-bottom: 0; }
-.sngr-filtros.compacta .boton.chico { padding: 7px 12px; font-size: 12px; }
+.sngr-filtros.compacta .boton.chico { padding: 7px 12px; font-size: 12px; white-space: nowrap; }
+/* v14 (P13): UNA SOLA fila en escritorio — los selects ENCOGEN (flex + min-width:0)
+   en vez de envolver; el wrap queda solo para pantallas medianas/móvil. */
+.sngr-filtros.compacta { flex-wrap: nowrap; }
+.sngr-filtros.compacta label { flex: 1 1 0; min-width: 0; }
+.sngr-filtros.compacta label > select { flex: 1 1 auto; width: 100%; min-width: 0; }
+.sngr-filtros.compacta label > input[type="date"] { flex: 1 1 auto; width: 100%; min-width: 108px; }
+.sngr-filtros.compacta .empuje { display: none; }
+@media (max-width: 900px) {
+  .sngr-filtros.compacta { flex-wrap: wrap; }
+  .sngr-filtros.compacta label { flex: 1 1 180px; }
+}
 
 /* ---------- grid mapa (1.5fr) + tabla (1fr) ---------- */
 .sngr-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 14px; align-items: start; }
@@ -196,11 +207,13 @@ html[data-tema="oscuro"] .sngr-leyenda-mapa i.rio-men { border-top-color: #37557
   .sngr-cabecera { gap: 12px; }
   .sngr-cabecera h1 { font-size: 19px; }
   .sngr-acciones { flex-wrap: wrap; }
-  /* filtros a columna: cada campo/control a ancho completo (modo no compacto) */
+  /* filtros a columna: cada campo/control a ancho completo */
   .sngr-filtros { padding: 11px 12px; gap: 10px; }
   .sngr-filtros:not(.compacta) label { width: 100%; }
   .sngr-filtros:not(.compacta) select,
   .sngr-filtros:not(.compacta) input[type="date"] { width: 100%; }
+  .sngr-filtros.compacta label { flex: 1 1 100%; }
+  .sngr-filtros.compacta label > input[type="date"] { width: 100%; }
   /* controles del mapa: envuelven y son cómodos al tacto */
   .sngr-mapa-cab { gap: 8px; }
   .sngr-mapa-controles { gap: 6px; }

@@ -185,38 +185,20 @@
 .cl-adv-badge.conf{background:var(--ok-bg);color:var(--ok)}
 .cl-adv-badge.no{background:var(--surface-3);color:var(--muted)}
 
-/* ===== v13.1 (rediseño 2026-07-09): pestaña Mapas en DISPOSICIÓN RECTANGULAR =====
-   Escritorio: mapa ANCHO a la izquierda; al lado estadísticas + ranking ESTIRADOS a la
-   altura del mapa; el climograma va DEBAJO a TODO el ancho — sin huecos.
-   Móvil (<=920px): todo apilado bajo el mapa. */
-/* v13.2: mapa ESTRECHO ajustado al aspecto de Ecuador (alto>ancho, sin mar muerto);
-   el espacio ganado es del panel de estadísticas/gráficas. */
-.cl-mapgrid{display:grid;grid-template-columns:minmax(300px,.9fr) minmax(320px,1.1fr);
-  grid-template-areas:"mapa lado" "mini mini";gap:14px;align-items:stretch}
+/* ===== v16 (pedido del dueño 2026-07-10): el LATERAL de Explorar es la FICHA DE
+   ESTACIÓN (selector + climograma + normales + serie observada). Los KPIs de campo
+   y el ranking top/bottom se retiraron (irrelevantes). Escritorio: mapa | ficha,
+   composición rectangular limpia; móvil (<=920px): ficha apilada bajo el mapa. */
+.cl-mapgrid{display:grid;grid-template-columns:minmax(320px,1.05fr) minmax(340px,.95fr);
+  grid-template-areas:"mapa lado";gap:14px;align-items:start}
 .cl-mapa-card{grid-area:mapa;min-width:0}
-.cl-lado{grid-area:lado;display:flex;flex-direction:column;gap:14px;min-width:0}
-/* estadísticas ABRAZAN su contenido; el ranking absorbe el alto restante (scroll interno)
-   → la columna lateral queda a la altura exacta del mapa, sin aire muerto */
-.cl-lado>.cl-card{display:flex;flex-direction:column;min-height:0}
-.cl-lado>.cl-card:first-child{flex:0 0 auto}
-.cl-lado>.cl-card:last-child{flex:1}
-.cl-lado .cl-rank{flex:1;overflow:auto;min-height:0}
-.cl-mini-card{grid-area:mini;min-width:0}
-@media(max-width:920px){.cl-mapgrid{grid-template-columns:1fr;grid-template-areas:"mapa" "lado" "mini"}}
-/* KPIs del campo */
-.cl-kpis-mapa{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.cl-kpi-m{background:var(--surface-2);border:1px solid var(--line-3);border-radius:10px;padding:9px 11px;min-width:0}
-.cl-kpi-m .k{font:600 9.5px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}
-.cl-kpi-m .v{font:650 17px var(--fuente);color:var(--ink);margin-top:2px}
-.cl-kpi-m .s{font:500 10.5px var(--mono);color:var(--muted-2)}
-/* ranking de estaciones */
-.cl-rank{display:flex;flex-direction:column;gap:2px}
-.cl-rank-cab{font:600 9.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin:6px 0 2px}
-.cl-rank-fila{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;cursor:pointer;
-  border:none;background:transparent;text-align:left;font:500 12px var(--fuente);color:var(--ink-2);min-height:34px}
-.cl-rank-fila:hover{background:var(--surface-3)}
-.cl-rank-fila>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cl-rank-fila .v{margin-left:auto;flex:none;font:600 11.5px var(--mono);color:var(--ink)}
+.cl-est-card{grid-area:lado;min-width:0}
+.cl-est-cuerpo{min-width:0}
+/* pila vertical del contenido de la ficha (climograma arriba, tarjeta de datos abajo) */
+.cl-ficha-pila{display:flex;flex-direction:column;gap:12px;min-width:0}
+/* la tarjeta interior se FUNDE con la tarjeta lateral (sin caja dentro de caja) */
+.cl-est-cuerpo .cl-card{padding:0;border:none;box-shadow:none;background:transparent}
+@media(max-width:920px){.cl-mapgrid{grid-template-columns:1fr;grid-template-areas:"mapa" "lado"}}
 
 /* ===== v14: menos pestañas — la estación vive en Explorar ===== */
 .cl-sutil{font-weight:500;color:var(--muted-2);font-size:11px}
@@ -224,13 +206,11 @@
 .cl-mini-sel .cl-buscar{flex:0 1 240px;min-width:150px}
 .cl-mini-select{flex:1 1 260px;min-width:200px;border:1px solid var(--line);border-radius:var(--r-ctrl,8px);
   padding:8px 11px;font:500 13px var(--fuente);background:var(--surface);color:var(--ink)}
-.cl-mini-grid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(280px,.8fr);gap:14px;align-items:start}
-@media(max-width:920px){.cl-mini-grid{grid-template-columns:1fr}}
 
 /* ===== v15.1 (captura del dueño): ANTI-BLOWOUT de los grids de clima =====
    Las celdas de grid tienen min-width:auto por defecto → un Plotly ancho (climograma)
    forzaba el ancho de la tarjeta y arrastraba TODA la página en móvil. min-width:0
    obliga a las celdas a ceñirse al viewport y Plotly (responsive) se ajusta. */
-.cl-mapgrid>*, .cl-mini-grid>*, .cl-grid2>* { min-width: 0; }
+.cl-mapgrid>*, .cl-ficha-pila>*, .cl-grid2>* { min-width: 0; }
 .cl-plot, .cl-plot-mapa { max-width: 100%; }
 .cl-card { max-width: 100%; }

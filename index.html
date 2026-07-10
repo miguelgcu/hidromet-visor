@@ -4,22 +4,34 @@
 <meta charset="utf-8">
 <title>HidroMet Ecuador</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0B1322">
 <link rel="icon" href="favicon.png">
+<script>window.HIDROMET_VISOR = true;  /* MODO VISOR: la UI lee productos publicados, sin backend.
+   Se fija en <head> para que el guard pre-paint de abajo lo vea de forma SÍNCRONA. */</script>
 <script>try{document.documentElement.dataset.tema=localStorage.getItem("hidromet-tema")||"oscuro"}catch(e){document.documentElement.dataset.tema="oscuro"}</script>
+<script>
+/* P19 — guard SÍNCRONO pre-paint: sin sesión, la app queda oculta ANTES del primer
+   pintado (cero parpadeo, también con caché fría). P22 — sidebar colapsada pre-paint. */
+(function(){var h=document.documentElement;
+try{if(window.HIDROMET_VISOR&&localStorage.getItem("hm-acceso-v1")!=="1"&&sessionStorage.getItem("hm-acceso-v1")!=="1")h.classList.add("hm-prelogin");}
+catch(e){if(window.HIDROMET_VISOR)h.classList.add("hm-prelogin");}
+try{if(localStorage.getItem("hm-sidebar")==="min")h.classList.add("hm-sb-min");}catch(e){}})();
+</script>
+<style>html.hm-prelogin #capa-app{visibility:hidden}</style>
 <link rel="stylesheet" href="lib/leaflet/leaflet.css">
 <link rel="stylesheet" href="lib/leaflet/MarkerCluster.css">
 <link rel="stylesheet" href="lib/leaflet/MarkerCluster.Default.css">
-<link rel="stylesheet" href="css/fonts.css?v=1783655353">
-<link rel="stylesheet" href="css/base.css?v=1783655353">
-<link rel="stylesheet" href="css/inicio.css?v=1783655353">
-<link rel="stylesheet" href="css/mlnwp.css?v=1783655353">
-<link rel="stylesheet" href="css/cartas.css?v=1783655353">
-<link rel="stylesheet" href="css/sngr.css?v=1783655353">
-<link rel="stylesheet" href="css/geoglows.css?v=1783655353">
-<link rel="stylesheet" href="css/datos.css?v=1783655353">
-<link rel="stylesheet" href="css/configuracion.css?v=1783655353">
-<link rel="stylesheet" href="css/clima.css?v=1783655353">
-<link rel="stylesheet" href="css/decisiones.css?v=1783655353">
+<link rel="stylesheet" href="css/fonts.css?v=1783666155">
+<link rel="stylesheet" href="css/base.css?v=1783666155">
+<link rel="stylesheet" href="css/inicio.css?v=1783666155">
+<link rel="stylesheet" href="css/mlnwp.css?v=1783666155">
+<link rel="stylesheet" href="css/cartas.css?v=1783666155">
+<link rel="stylesheet" href="css/sngr.css?v=1783666155">
+<link rel="stylesheet" href="css/geoglows.css?v=1783666155">
+<link rel="stylesheet" href="css/datos.css?v=1783666155">
+<link rel="stylesheet" href="css/configuracion.css?v=1783666155">
+<link rel="stylesheet" href="css/clima.css?v=1783666155">
+<link rel="stylesheet" href="css/decisiones.css?v=1783666155">
 </head>
 <body>
 <div id="capa-app">
@@ -28,7 +40,7 @@
       <div class="marca-logo">HM</div>
       <div class="marca-texto">
         <span class="marca-nombre">HidroMet</span>
-        <span class="marca-sub">Ecuador · INAMHI</span>
+        <span class="marca-sub">Ecuador · Operativo</span>
       </div>
     </div>
     <nav id="nav-principal"></nav>
@@ -67,15 +79,14 @@
 <script src="lib/leaflet/leaflet.js"></script>
 <script src="lib/leaflet/leaflet.markercluster.js"></script>
 <script src="lib/plotly/plotly.min.js"></script>
-<script>window.HIDROMET_VISOR = true;  /* MODO VISOR: la UI lee productos publicados, sin backend */</script>
-<script src="js/core.js?v=1783655353"></script>
-<script src="js/modules/mlnwp.js?v=1783655353"></script>
-<script src="js/modules/cartas.js?v=1783655353"></script>
-<script src="js/modules/sngr.js?v=1783655353"></script>
-<script src="js/modules/geoglows.js?v=1783655353"></script>
-<script src="js/modules/clima.js?v=1783655353"></script>
-<script src="js/modules/glosario.js?v=1783655353"></script>
-<script src="js/modules/decisiones.js?v=1783655353"></script>
+<script src="js/core.js?v=1783666155"></script>
+<script src="js/modules/mlnwp.js?v=1783666155"></script>
+<script src="js/modules/cartas.js?v=1783666155"></script>
+<script src="js/modules/sngr.js?v=1783666155"></script>
+<script src="js/modules/geoglows.js?v=1783666155"></script>
+<script src="js/modules/clima.js?v=1783666155"></script>
+<script src="js/modules/glosario.js?v=1783666155"></script>
+<script src="js/modules/decisiones.js?v=1783666155"></script>
 <script>App.iniciar();</script>
 </body>
 </html>

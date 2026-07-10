@@ -321,6 +321,14 @@ const App = (() => {
     return "inicio";
   }
 
+  // P23: esqueleto de carga compartido — sustituye el "⏳ Cargando…" textual mientras
+  // el módulo/pestaña renderiza (shimmer .hm-skel ya existente en base.css).
+  const HTML_CARGA = `<div class="hm-skel-carga" role="status" aria-label="Cargando…">
+      <div class="hm-skel hm-skel-tit"></div>
+      <div class="hm-skel hm-skel-barra"></div>
+      <div class="hm-skel-fila"><div class="hm-skel hm-skel-panel"></div><div class="hm-skel hm-skel-panel chico"></div></div>
+    </div>`;
+
   async function pintarVista() {
     const def0 = _moduloDefecto();
     const id = (location.hash || ("#/" + def0)).replace("#/", "") || def0;
@@ -339,7 +347,7 @@ const App = (() => {
     const acciones = document.getElementById("acciones-vista");
     acciones.innerHTML = "";
     const vista = document.getElementById("vista");
-    vista.innerHTML = `<div class="vacio"><div class="icono">⏳</div>Cargando…</div>`;
+    vista.innerHTML = HTML_CARGA;
     try {
       await def.render(vista, acciones);
     } catch (e) {
@@ -403,13 +411,14 @@ const App = (() => {
       });
   }
 
-  // Reloj del topbar (rediseño v9): "mar 17 jun · 14:30".
+  // Reloj del topbar (rediseño v9): "mar 17 jun · 14:30:05".
+  // P23: reloj VIVO con segundos (tabular-nums en CSS → no baila el ancho).
   function actualizarReloj() {
     const el = document.getElementById("topbar-reloj");
     if (!el) return;
     const d = new Date();
     const fecha = d.toLocaleDateString("es-EC", { weekday: "short", day: "numeric", month: "short" });
-    const hora = d.toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit", hour12: false });
+    const hora = d.toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
     el.textContent = `${fecha} · ${hora}`;
   }
 
@@ -499,9 +508,16 @@ const App = (() => {
      NOTA honesta: en un sitio estático esto es una CORTINA de acceso (disuade el acceso
      casual), no seguridad criptográfica de servidor. */
   async function exigirAcceso() {
-    if (!window.HIDROMET_VISOR) return;
+    const raiz = document.documentElement;
+    if (!window.HIDROMET_VISOR) { raiz.classList.remove("hm-prelogin"); return; }
     const LLAVE = "hm-acceso-v1";
-    if (localStorage.getItem(LLAVE) === "1" || sessionStorage.getItem(LLAVE) === "1") return;
+    if (localStorage.getItem(LLAVE) === "1" || sessionStorage.getItem(LLAVE) === "1") {
+      raiz.classList.remove("hm-prelogin");   // el guard pre-paint del index pudo ocultar la app
+      return;
+    }
+    // P19: refuerzo del guard SÍNCRONO del index (html.hm-prelogin oculta #capa-app
+    // ANTES del primer pintado). Si el index no lo aplicó, se aplica aquí igual.
+    raiz.classList.add("hm-prelogin");
     const HASH = "191453084223bb19af625548019079b0b3a24cf079978383ec152fa456f7d952";
     const sha = async t => {
       const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t));
@@ -511,12 +527,31 @@ const App = (() => {
     if (capa) capa.style.visibility = "hidden";
     const div = document.createElement("div");
     div.id = "hm-login";
+    // P21: escenografía hidrometeorológica AUTOCONTENIDA (SVG inline + CSS puro, sin
+    // recursos externos): isolíneas que derivan lentamente + lluvia fina diagonal.
     div.innerHTML = `
+      <div class="hm-login-fondo" aria-hidden="true">
+        <svg class="hm-login-iso" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" focusable="false">
+          <g class="iso-a" fill="none" stroke-linecap="round">
+            <path d="M-80 150 C 160 90, 320 220, 560 170 S 1000 60, 1240 140 S 1480 230, 1560 190"/>
+            <path d="M-80 235 C 180 175, 340 305, 580 255 S 1010 145, 1250 225 S 1490 315, 1560 275"/>
+            <path d="M-80 320 C 200 260, 360 390, 600 340 S 1020 230, 1260 310 S 1500 400, 1560 360"/>
+            <path d="M-80 405 C 220 345, 380 475, 620 425 S 1030 315, 1270 395 S 1510 485, 1560 445"/>
+          </g>
+          <g class="iso-b" fill="none" stroke-linecap="round">
+            <path d="M-80 545 C 200 485, 400 625, 660 575 S 1060 455, 1300 545 S 1500 635, 1560 595"/>
+            <path d="M-80 640 C 220 580, 420 720, 680 670 S 1080 550, 1320 640 S 1510 730, 1560 690"/>
+            <path d="M-80 735 C 240 675, 440 815, 700 765 S 1100 645, 1340 735 S 1520 825, 1560 785"/>
+            <path d="M-80 830 C 260 770, 460 910, 720 860 S 1120 740, 1360 830 S 1530 920, 1560 880"/>
+          </g>
+        </svg>
+        <div class="hm-login-lluvia"></div>
+      </div>
       <div class="hm-login-caja" role="dialog" aria-labelledby="hm-login-tit">
         <div class="hm-login-marca">
           <div class="hm-login-logo">HM</div>
           <div class="hm-login-txt"><div class="hm-login-nombre">HidroMet</div>
-            <div class="hm-login-sub">ECUADOR · INAMHI</div></div>
+            <div class="hm-login-sub">ECUADOR · OPERATIVO</div></div>
         </div>
         <h1 id="hm-login-tit">Acceso al visor</h1>
         <p class="hm-login-hint">Ingresa tus credenciales para ver los productos operativos.</p>
@@ -554,7 +589,12 @@ const App = (() => {
         }
         (form.r.checked ? localStorage : sessionStorage).setItem(LLAVE, "1");
         div.classList.add("ok");
-        setTimeout(() => { div.remove(); if (capa) capa.style.visibility = ""; listo(); }, 420);
+        setTimeout(() => {
+          div.remove();
+          raiz.classList.remove("hm-prelogin");            // libera el guard pre-paint (P19)
+          if (capa) capa.style.visibility = "";
+          listo();
+        }, 420);
       });
     });
   }
@@ -616,13 +656,19 @@ const App = (() => {
       }
     }
     pintarNav();
-    // Drawer móvil: la hamburguesa abre/cierra el sidebar off-canvas; overlay, Escape
-    // y navegar a un módulo lo cierran. En desktop la hamburguesa está oculta por CSS.
-    (function menuMovil() {
+    // Menú hamburguesa GLOBAL (P22): en móvil abre/cierra el drawer off-canvas (patrón
+    // v12 intacto); en ESCRITORIO colapsa/expande la sidebar y el contenido gana el
+    // ancho (estado recordado por dispositivo en localStorage "hm-sidebar").
+    (function menuGlobal() {
       const capa = document.getElementById("capa-app");
       const btn = document.getElementById("btn-menu");
       const ov = document.getElementById("overlay-nav");
       if (!capa) return;
+      const raiz = document.documentElement;
+      const mvl = window.matchMedia ? window.matchMedia("(max-width: 820px)") : { matches: false };
+      const SB = "hm-sidebar";
+      // Estado persistido del colapso (el index lo aplica pre-paint; aquí el fallback).
+      try { if (localStorage.getItem(SB) === "min") raiz.classList.add("hm-sb-min"); } catch (e) {}
       // v12 a11y: aria-controls + devolución del foco al botón al cerrar y foco al nav
       // al abrir (con visibility retrasada en CSS, el drawer cerrado no es tabulable).
       const cerrar = () => {
@@ -632,11 +678,22 @@ const App = (() => {
       };
       if (btn) {
         btn.setAttribute("aria-controls", "sidebar");
+        const ariaSegunEstado = () => btn.setAttribute("aria-expanded",
+          mvl.matches ? (capa.classList.contains("nav-abierto") ? "true" : "false")
+                      : (raiz.classList.contains("hm-sb-min") ? "false" : "true"));
+        ariaSegunEstado();
         btn.addEventListener("click", () => {
-          const ab = capa.classList.toggle("nav-abierto");
-          btn.setAttribute("aria-expanded", ab ? "true" : "false");
-          if (ab) { const primero = document.querySelector("#nav-principal .nav-item"); if (primero) try { primero.focus({ preventScroll: true }); } catch (e) {} }
+          if (mvl.matches) {                       // MÓVIL: drawer (patrón existente)
+            const ab = capa.classList.toggle("nav-abierto");
+            btn.setAttribute("aria-expanded", ab ? "true" : "false");
+            if (ab) { const primero = document.querySelector("#nav-principal .nav-item"); if (primero) try { primero.focus({ preventScroll: true }); } catch (e) {} }
+          } else {                                  // ESCRITORIO: colapsar/expandir
+            const min = raiz.classList.toggle("hm-sb-min");
+            try { localStorage.setItem(SB, min ? "min" : ""); } catch (e) {}
+            btn.setAttribute("aria-expanded", min ? "false" : "true");
+          }
         });
+        if (mvl.addEventListener) mvl.addEventListener("change", ariaSegunEstado);
       }
       if (ov) ov.addEventListener("click", cerrar);
       const nav = document.getElementById("nav-principal");
@@ -644,7 +701,7 @@ const App = (() => {
       document.addEventListener("keydown", e => { if (e.key === "Escape") cerrar(); });
     })();
     actualizarReloj();
-    setInterval(actualizarReloj, 30000);
+    setInterval(actualizarReloj, 1000);
     mostrarUltima();
     setInterval(mostrarUltima, 300000);
     // v15: al VOLVER a la pestaña/navegador se re-chequea al instante la versión
@@ -655,6 +712,18 @@ const App = (() => {
   }
 
   /* ---------------- utilidades compartidas ---------------- */
+  /* P20 — etiqueta NEUTRA de red/dependencia para TODO lo visible al usuario.
+     Los VALORES internos de datos/API (deps=, columnas, claves de config) NO
+     cambian: esto traduce SOLO en el momento de pintar. */
+  function redEtiqueta(v) {
+    const s = String(v == null ? "" : v).trim();
+    const k = s.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase();
+    if (k === "INAMHI") return "Meteorológica";
+    if (k === "CELEC") return "Hidroeléctrica";
+    if (k === "HIDRONACION") return "Hidrológica";
+    return s;
+  }
+
   function el(html) {
     const t = document.createElement("template");
     t.innerHTML = html.trim();
@@ -779,7 +848,7 @@ const App = (() => {
       // nunca quede oculta detrás del borde y se note que la fila se desliza.
       const _act = vista.querySelector(".hm-pestana.activa");
       if (_act) { try { _act.scrollIntoView({ inline: "center", block: "nearest" }); } catch (e) {} }
-      cuerpo.innerHTML = `<div class="vacio"><div class="icono">⏳</div>Cargando…</div>`;
+      cuerpo.innerHTML = HTML_CARGA;
       try { await p.render(cuerpo); }
       catch (e) {
         cuerpo.innerHTML = `<div class="vacio"><div class="icono">⚠️</div>` +
@@ -815,7 +884,7 @@ const App = (() => {
 
   return { api, aviso, tarea, seguirTarea, modalTarea, tema, registrar, navegar, iniciar, el, fmtFecha, plotlyLayoutBase,
            plotlyLayoutSerie, plotlyConfig, pinchZoomMapa, hayTareaActiva, cancelarTarea, cancelarTodas, panel, vistaPestanas, restaurador,
-           rutaAProducto, hoyEC };
+           rutaAProducto, hoyEC, redEtiqueta };
 })();
 
 /* ---------------- MODO VISOR: SOLO EXPLORACIÓN ----------------

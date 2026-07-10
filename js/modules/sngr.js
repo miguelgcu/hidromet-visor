@@ -108,22 +108,6 @@
   // respuestas en vuelo del montaje anterior NO deben tocar el estado/DOM nuevos.
   function vigente(E) { return estado === E && E.epoca >= 0; }
 
-  /* ---------------- cabecera ---------------- */
-  function cabeceraHTML() {
-    return `
-      <div class="sngr-cabecera">
-        <div>
-          <div class="kicker">Módulos · gestión de riesgos</div>
-          <h1>Eventos de Ríos</h1>
-          <div class="sub">Catálogo histórico georreferenciado · API SITREP-SNGR</div>
-        </div>
-        <div class="sngr-acciones">
-          <button class="boton" data-rol="exportar">⤓ Exportar ZIP</button>
-          <button class="boton oscuro" data-rol="actualizar">⟳ Actualizar</button>
-        </div>
-      </div>`;
-  }
-
   /* ---------------- conteos (pills compactas, clicables y dinámicas por filtro) ----
      Reemplazan a las 5 tarjetas grandes: una fila slim que ADEMÁS filtra al hacer clic.
      Como el backend ya devuelve los conteos del filtro vigente, al elegir un tipo solo
@@ -178,6 +162,8 @@
     // v11: acciones DENTRO de la fila de filtros (una sola fila compacta). Deben vivir
     // aquí y ligarse en conectarFiltros(): recargarCascada() regenera este wrapper por
     // outerHTML en cada cambio de provincia/cantón y borraría botones externos.
+    // v14 (P12/P13): la descarga vive en el panel de conteos (un solo botón ZIP claro);
+    // la fila queda solo con los filtros + Actualizar → cabe en UNA fila en escritorio.
     return `
       <div class="sngr-filtros compacta">
         ${selectHTML("tipo", "Tipo", "Todos", f.tipos, s.tipo, false)}
@@ -188,8 +174,6 @@
           <input type="date" data-rol="desde" value="${esc(desde)}"></label>
         <label><div class="tit">Hasta</div>
           <input type="date" data-rol="hasta" value="${esc(hasta)}"></label>
-        <span class="empuje"></span>
-        <button class="boton chico" data-rol="exportar">⤓ Exportar ZIP</button>
         <button class="boton oscuro chico" data-rol="actualizar">⟳ Actualizar</button>
       </div>`;
   }
@@ -224,9 +208,12 @@
           </div>
           <div class="sngr-conteos-panel">
             <div class="sngr-conteos-cab">
-              <span class="tit">Eventos recientes</span>
-              <button class="boton chico" data-rol="descargar-xlsx"
-                title="Descargar conteos por cuenca/subcuenca (todos los niveles) en XLSX, según el filtro">⤓ Conteos XLSX</button>
+              <span class="tit">Eventos de la selección</span>
+              ${window.HIDROMET_VISOR
+                ? `<button class="boton chico" data-rol="zip"
+                    title="ZIP del catálogo completo: shapefile + GeoJSON (WGS84), XLSX, conteos CSV y resumen">⤓ Descargar catálogo (ZIP)</button>`
+                : `<button class="boton chico" data-rol="zip"
+                    title="ZIP de la selección actual: shapefile + GeoJSON (WGS84, con estilo QGIS), XLSX, conteos por provincia/cantón/parroquia y tipo en CSV, y resumen">⤓ Descargar selección (ZIP)</button>`}
             </div>
             ${conteosHTML()}
           </div>
@@ -497,6 +484,27 @@
     const str = q.toString();
     return str ? "?" + str : "";
   }
+  // Normaliza para comparar contra la cascada del visor (sin tildes, minúsculas).
+  const normTxt = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .trim().replace(/\s+/g, " ").toLowerCase();
+  // FILTRADO EN CLIENTE (visor estático): /sngr/eventos congelado devuelve SIEMPRE la
+  // lista completa (exportar_web: "filtros en cliente") — sin esto, píldoras/mapa/tabla
+  // eran estáticos en el visor. ignorarTipo=true → conteos por tipo de la selección.
+  function filtrarLocal(evs, ignorarTipo) {
+    const s = estado.sel;
+    const p = normTxt(s.provincia), ca = normTxt(s.canton), pa = normTxt(s.parroquia);
+    return evs.filter(ev => {
+      if (!ignorarTipo && s.tipo && ev.tipo_evento !== s.tipo) return false;
+      const pp = ev.popup || {};
+      if (p && normTxt(pp.provincia) !== p) return false;
+      if (ca && normTxt(pp.canton) !== ca) return false;
+      if (pa && normTxt(pp.parroquia) !== pa) return false;
+      const f = ev.fecha || "";
+      if (s.desde && (!f || f < s.desde)) return false;
+      if (s.hasta && (!f || f > s.hasta)) return false;
+      return true;
+    });
+  }
   async function recargarEventos() {
     const E = estado;
     const token = ++estado.pidiendo;
@@ -504,9 +512,16 @@
     try { r = await App.api("/sngr/eventos" + queryFiltros()); }
     catch (e) { App.aviso("Eventos: " + e.message, "error"); return; }
     if (!vigente(E) || token !== estado.pidiendo) return;  // recarga más nueva o montaje obsoleto
-    pintarConteos(r.conteos_por_tipo || {});
-    pintarTabla(r.eventos || []);
-    pintarMarcadores(r.eventos || []);
+    let evs = r.eventos || [], conteos = r.conteos_por_tipo || {};
+    if (window.HIDROMET_VISOR) {
+      const sinTipo = filtrarLocal(evs, true);           // selección SIN el filtro de tipo
+      conteos = {};
+      for (const ev of sinTipo) conteos[ev.tipo_evento] = (conteos[ev.tipo_evento] || 0) + 1;
+      evs = estado.sel.tipo ? sinTipo.filter(ev => ev.tipo_evento === estado.sel.tipo) : sinTipo;
+    }
+    pintarConteos(conteos);
+    pintarTabla(evs);
+    pintarMarcadores(evs);
     actualizarSello();
   }
 
@@ -549,31 +564,31 @@
     get("parroquia").onchange = e => { estado.sel.parroquia = e.target.value; recargarEventos(); };
     get("desde").onchange = e => { estado.sel.desde = e.target.value; recargarEventos(); };
     get("hasta").onchange = e => { estado.sel.hasta = e.target.value; recargarEventos(); };
-    // v11: los botones viven en la fila de filtros → religarlos en cada regeneración.
-    const bExp = get("exportar"), bAct = get("actualizar");
-    if (bExp) bExp.onclick = e => exportarZip(e.currentTarget);
+    // v11: el botón vive en la fila de filtros → religarlo en cada regeneración.
+    const bAct = get("actualizar");
     if (bAct) bAct.onclick = actualizar;
   }
 
-  /* ---------------- acciones de cabecera ---------------- */
+  /* ---------------- descarga ZIP de la selección (P12) ---------------- */
+  // URL del ZIP canónico PRE-CONGELADO en el visor estático (catálogo completo, sin
+  // filtros server-side). exportar_web.py debe publicar exactamente este archivo.
+  const ZIP_VISOR = "productos/sngr/eventos_rios_completo.zip";
   async function exportarZip(btn) {
-    btn.disabled = true;
+    if (window.HIDROMET_VISOR) {
+      // Sin backend: se baja el ZIP canónico congelado (como el SHP de advertencias).
+      const a = document.createElement("a");
+      a.href = ZIP_VISOR; a.download = "eventos_rios_completo.zip";
+      document.body.appendChild(a); a.click(); a.remove();
+      App.aviso("Descargando el catálogo completo (en el visor la descarga no aplica filtros).", "info", 6000);
+      return;
+    }
+    const prev = btn.textContent;
+    btn.disabled = true; btn.textContent = "⧗ Generando…";
     try {
       const r = await App.api("/sngr/exportar" + queryFiltros());
       App.aviso(`ZIP guardado en Descargas: ${r.archivo}`, "ok", 6000);
     } catch (e) {
-      App.aviso("Exportar: " + e.message, "error");
-    } finally { btn.disabled = false; }
-  }
-  // Descarga el XLSX dedicado de conteos por cuenca/subcuenca (N1–N4) del filtro vigente.
-  async function descargarConteos(btn) {
-    const prev = btn.textContent;
-    btn.disabled = true; btn.textContent = "⧗ Generando…";
-    try {
-      const r = await App.api("/sngr/exportar_xlsx" + queryFiltros());
-      App.aviso(`Conteos por cuenca (XLSX) guardado en Descargas: ${r.archivo}`, "ok", 6000);
-    } catch (e) {
-      App.aviso("Descargar conteos: " + e.message, "error");
+      App.aviso("Descargar selección: " + e.message, "error");
     } finally { btn.disabled = false; btn.textContent = prev; }
   }
   async function actualizar() {
@@ -610,8 +625,8 @@
 
     conectarFiltros();
     conectarConteos();
-    const bXlsx = cont.querySelector('[data-rol="descargar-xlsx"]');
-    if (bXlsx) bXlsx.onclick = () => descargarConteos(bXlsx);
+    const bZip = cont.querySelector('[data-rol="zip"]');
+    if (bZip) bZip.onclick = () => exportarZip(bZip);
 
     iniciarMapa(cont.querySelector('[data-rol="mapa"]'));
     cont.querySelector('[data-rol="capa"]').onchange = (e) => pintarCapaBase(e.target.value);

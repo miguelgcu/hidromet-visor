@@ -1,92 +1,169 @@
 /* ============================================================
-   DECISIONES OPERATIVAS — pestaña de Pronóstico (decisiones.js).
-   Layout 2 columnas: mapa de veredictos (izquierda) + panel de la
-   estación (veredicto desplegado + validación de esas decisiones).
+   DECISIONES OPERATIVAS — decisiones.css (REDISEÑO v18).
+   Jerarquía: barra de fecha (◀ vie 11/07 ▶) + buscador arriba;
+   VEREDICTO del día como tarjeta protagonista; mapa nacional al
+   lado; desempeño (validación) como <details> colapsable debajo.
    Reusa clases del módulo ML-NWP (ml-card, ml-pill, ml-combo-*,
-   ml-calif-badge, ml-mod-punto) y los tokens de base.css: funciona
-   en tema claro y oscuro sin colores fijos (salvo el mapa, que es
-   papel blanco SIEMPRE por la regla de Pronóstico).
+   ml-calif-badge, ml-mod-punto) y los tokens de base.css: tema
+   claro/oscuro sin colores fijos (salvo el mapa: papel blanco
+   SIEMPRE, regla de Pronóstico).
    ============================================================ */
 
 .dec-raiz { max-width: 1380px; margin: 0 auto; }
-.dec-layout { display: grid; grid-template-columns: minmax(430px, 20fr) minmax(370px, 17fr);
-  gap: 13px; align-items: start; }
-@media (max-width: 1120px) { .dec-layout { grid-template-columns: 1fr; } }
+
+/* ---- barra superior: navegación de fecha + buscador ---- */
+.dec-top { display: flex; align-items: center; gap: 14px; margin-bottom: 13px; }
+.dec-fecha-nav { display: flex; align-items: stretch; gap: 0; flex: none;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 11px;
+  box-shadow: var(--shadow-card); overflow: hidden; }
+.dec-nav-btn { display: flex; align-items: center; justify-content: center; width: 40px;
+  border: none; background: transparent; color: var(--muted); cursor: pointer;
+  transition: background .13s, color .13s; }
+.dec-nav-btn:hover:not(:disabled) { background: var(--surface-3); color: var(--ink); }
+.dec-nav-btn:disabled { opacity: .3; cursor: default; }
+.dec-nav-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.dec-fecha-caja { display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-width: 118px; padding: 6px 12px; border-left: 1px solid var(--line-3);
+  border-right: 1px solid var(--line-3); }
+.dec-fecha-txt { font: 700 15.5px var(--mono); color: var(--ink); font-variant-numeric: tabular-nums;
+  line-height: 1.2; white-space: nowrap; }
+.dec-fecha-sub { font: 600 9.5px var(--mono); letter-spacing: .09em; text-transform: uppercase;
+  color: var(--faint); white-space: nowrap; }
+.dec-buscador { position: relative; flex: 1; min-width: 0; max-width: 460px; }
+
+/* ---- rejilla principal (áreas → en móvil el orden es veredicto→mapa→desempeño) ---- */
+.dec-layout { display: grid; gap: 13px; align-items: start;
+  grid-template-columns: minmax(400px, 10fr) minmax(430px, 11fr);
+  grid-template-areas: "panel mapa" "desemp mapa"; }
+.dec-panel { grid-area: panel; min-width: 0; }
+.dec-mapa-card { grid-area: mapa; }
+.dec-desemp { grid-area: desemp; min-width: 0; }
+@media (max-width: 1120px) {
+  .dec-layout { grid-template-columns: 1fr; grid-template-areas: "panel" "mapa" "desemp"; }
+}
 
 /* ---- columna del MAPA ---- */
-/* overflow VISIBLE: el dropdown del buscador cuelga fuera de la tarjeta
-   (misma lección que el deck de mlnwp.css — con hidden se recortaba). */
 .dec-mapa-card { padding: 12px; overflow: visible; }
-.dec-buscador { position: relative; margin-bottom: 10px; }
-.dec-mapa { height: 590px; background: #fff; border: 1px solid var(--line-2);
+.dec-mapa-cab { display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  margin: 0 2px 9px; }
+.dec-mapa-cab #dec-mapa-tit { font-size: 13.5px; font-weight: 650; color: var(--ink); }
+.dec-prog { font: 500 10.5px var(--mono); color: var(--muted-2); white-space: nowrap; }
+.dec-mapa { height: 560px; background: #fff; border: 1px solid var(--line-2);
   border-radius: 10px; overflow: hidden; }
 @media (max-width: 1120px) { .dec-mapa { height: 460px; } }
 
-.dec-leyenda { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px;
+.dec-leyenda { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px;
   margin-top: 9px; font-size: 11.5px; color: var(--ink-2); }
 .dec-leyenda .it { display: inline-flex; align-items: center; white-space: nowrap; }
-.dec-leyenda .pt { width: 11px; height: 11px; border-radius: 50%; display: inline-block;
-  margin-right: 5px; border: 1.5px solid #fff; box-shadow: 0 0 0 1px var(--line-2); flex: none; }
-.dec-leyenda .pt.chico { width: 8px; height: 8px; }
-.dec-leyenda .dec-ley-tam { color: var(--muted-2); font-style: italic; }
-.dec-prog { margin-left: auto; font: 500 10.5px var(--mono); color: var(--muted-2); }
+.dec-leyenda .pt { width: 12px; height: 12px; border-radius: 50%; display: inline-block;
+  margin-right: 6px; border: 1.5px solid #fff; box-shadow: 0 0 0 1px var(--line-2); flex: none; }
+.dec-leyenda .pt.chico { width: 9px; height: 9px; }
+.dec-leyenda .dec-ley-tam { color: var(--muted-2); font-style: italic; margin-left: auto; }
 
-/* ---- panel derecho ---- */
-.dec-panel { display: flex; flex-direction: column; gap: 13px; min-width: 0; }
+/* ---- tarjeta VEREDICTO (protagonista) ---- */
 .dec-hint .vacio { padding: 70px 24px; }
+.dec-verd-cab { display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 10px; margin-bottom: 10px; }
+.dec-verd-est { min-width: 0; }
+.dec-verd-est b { display: block; font-size: 16px; color: var(--ink); line-height: 1.25; }
+.dec-verd-est span { font: 500 11px var(--mono); color: var(--muted-2); }
+.dec-verd-fecha { flex: none; font: 700 12.5px var(--mono); color: var(--blue);
+  background: var(--blue-50); border: 1px solid var(--blue-100); border-radius: 999px;
+  padding: 4px 12px; white-space: nowrap; }
 
 /* aviso de veredicto envejecido (visor: los productos se congelan) */
 .dec-stale { background: var(--warn-bg); border: 1px solid var(--warn-bd); color: var(--warn);
-  border-radius: 8px; padding: 7px 11px; font-size: 12px; line-height: 1.5; margin: 9px 0 0; }
+  border-radius: 8px; padding: 7px 11px; font-size: 12px; line-height: 1.5; margin: 0 0 10px; }
 
-/* tarjeta VEREDICTO: rejilla de KPIs (lluvia a lo ancho + Tmax/Tmin + tendencia) */
-.dec-verd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 11px; }
-@media (max-width: 480px) { .dec-verd-grid { grid-template-columns: 1fr; } }
-.dec-kpi { background: var(--surface-2); border: 1px solid var(--line-3); border-radius: 10px;
+/* HERO de lluvia: franja protagonista con icono, decisión y barra de probabilidad */
+.dec-hero { display: flex; align-items: center; gap: 14px; border-radius: 12px;
+  border: 1px solid var(--line-3); background: var(--surface-2); padding: 14px 16px; }
+.dec-hero.si { background: var(--blue-50); border-color: var(--blue-100); }
+.dec-hero-ico { flex: none; display: flex; color: var(--muted-2); }
+.dec-hero.si .dec-hero-ico { color: var(--blue); }
+.dec-hero-main { flex: 1 1 200px; min-width: 0; }
+.dec-hero .k { font: 600 10px var(--mono); letter-spacing: .09em; text-transform: uppercase;
+  color: var(--faint); margin-bottom: 3px; }
+.dec-hero .v { font: 700 30px var(--mono); line-height: 1.05; color: var(--ink); }
+.dec-hero.si .v { color: var(--blue); }
+.dec-hero.no .v { color: var(--muted); }
+.dec-hero .v small { font: 600 13px var(--mono); color: var(--muted); margin-left: 8px; }
+.dec-hero .v.dec-sin { color: var(--muted-2); font-size: 22px; }
+/* barra de probabilidad con la marca del umbral 50 % */
+.dec-prob-barra { position: relative; height: 7px; border-radius: 999px; background: var(--line-3);
+  margin-top: 9px; max-width: 230px; overflow: visible; }
+.dec-prob-barra i { position: absolute; inset: 0 auto 0 0; border-radius: 999px;
+  background: linear-gradient(90deg, #7FB1E8, var(--blue)); }
+.dec-hero.no .dec-prob-barra i { background: var(--muted-2); }
+.dec-prob-barra u { position: absolute; top: -3px; bottom: -3px; width: 2px;
+  background: var(--faint); border-radius: 1px; }
+/* mini-KPIs laterales del hero (cantidad, fuerte, confianza) */
+.dec-hero-lado { flex: none; display: flex; flex-direction: column; gap: 7px; min-width: 150px; }
+.dec-hero-lado .mini { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.dec-hero-lado .mini .k { font: 600 9.5px var(--mono); letter-spacing: .05em; text-transform: uppercase;
+  color: var(--faint); margin: 0; }
+.dec-hero-lado .mini .v { font: 700 12.5px var(--mono); color: var(--ink); white-space: nowrap; }
+
+/* fila de KPIs: Tmax · Tmin · tendencia */
+.dec-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
+.dec-kpi { background: var(--surface-2); border: 1px solid var(--line-3); border-radius: 11px;
   padding: 11px 13px; min-width: 0; }
-.dec-kpi .lab { display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
-  font: 600 10px var(--mono); letter-spacing: .09em; text-transform: uppercase;
-  color: var(--faint); margin-bottom: 6px; }
-.dec-kpi .lab .mod { text-transform: none; letter-spacing: 0; font: 500 10.5px var(--mono);
-  color: var(--muted-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.dec-kpi .valor { font: 700 24px var(--mono); font-variant-numeric: tabular-nums;
+.dec-kpi .lab { display: flex; align-items: center; gap: 6px; font: 600 10px var(--mono);
+  letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin-bottom: 6px; }
+.dec-kpi .lab .ico { display: inline-flex; color: var(--muted-2); font-style: normal;
+  font-size: 12px; line-height: 1; }
+.dec-kpi .valor { font: 700 23px var(--mono); font-variant-numeric: tabular-nums;
   color: var(--ink); line-height: 1.15; }
-.dec-kpi .valor small { font-size: 12px; font-weight: 600; color: var(--muted); margin-left: 5px; }
+.dec-kpi .valor small { font-size: 12px; font-weight: 600; color: var(--muted); margin-left: 4px; }
 .dec-kpi .valor.dec-sin { color: var(--muted-2); }
-.dec-kpi .rango { font: 500 11px var(--mono); color: var(--muted); margin-top: 4px; line-height: 1.5; }
-/* la decisión de lluvia ocupa la fila completa y se tiñe según SÍ/NO */
-.dec-kpi-lluvia { grid-column: 1 / -1; }
-.dec-kpi-lluvia.si { background: var(--blue-50); border-color: var(--blue-100); }
-.dec-kpi-lluvia.si .valor { color: var(--blue); }
-.dec-kpi-lluvia.no .valor { color: var(--muted); }
+.dec-kpi .rango { font: 500 10.5px var(--mono); color: var(--muted); margin-top: 4px; line-height: 1.5; }
+.dec-kpi .fuente { font: 500 10px var(--mono); color: var(--muted-2); margin-top: 3px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dec-kpi-tend.calido .lab .ico { color: var(--warn); }
+.dec-kpi-tend.frio .lab .ico { color: var(--blue); }
 
-/* tarjeta VALIDACIÓN: una fila por decisión (Tmax · Tmin · detección de lluvia) */
-.dec-val-filas { margin-top: 7px; }
+/* ---- tarjeta DESEMPEÑO (colapsable, contexto secundario) ---- */
+.dec-desemp-card { padding: 0; overflow: hidden; }
+.dec-desemp-card > summary { display: flex; align-items: baseline; gap: 9px; cursor: pointer;
+  list-style: none; padding: 13px 16px; }
+.dec-desemp-card > summary::-webkit-details-marker { display: none; }
+.dec-desemp-card > summary:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.dec-desemp-tit { font-size: 13.5px; font-weight: 650; color: var(--ink); }
+.dec-desemp-card > summary .ml-sutil { font: 500 11px var(--mono); color: var(--muted-2); }
+.dec-desemp-chev { margin-left: auto; color: var(--muted-2); font-size: 12px;
+  transition: transform .15s; }
+.dec-desemp-card[open] .dec-desemp-chev { transform: rotate(180deg); }
+.dec-desemp-card .dec-val-filas { padding: 0 16px; border-top: 1px solid var(--line-3); }
+.dec-desemp-card .ml-pie { padding: 0 16px 13px; margin-top: 9px; }
+
 .dec-val-fila { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px;
-  padding: 9px 2px; border-top: 1px solid var(--line-3); font-size: 12.5px; color: var(--ink-2); }
+  padding: 10px 2px; border-top: 1px solid var(--line-3); font-size: 12.5px; color: var(--ink-2); }
 .dec-val-fila:first-child { border-top: none; }
-.dec-val-fila .var { flex: none; width: 122px; font-weight: 650; color: var(--ink); }
+.dec-val-fila .var { flex: none; width: 108px; font-weight: 650; color: var(--ink); }
 .dec-val-fila .mod { display: inline-flex; align-items: center; font: 600 11px var(--mono);
   color: var(--muted); white-space: nowrap; }
 .dec-val-fila .met { font: 600 12px var(--mono); color: var(--ink); white-space: nowrap; }
 .dec-val-fila .n { font: 500 11px var(--mono); color: var(--muted-2); margin-left: auto; white-space: nowrap; }
-@media (max-width: 480px) { .dec-val-fila .var { width: 100%; } .dec-val-fila .n { margin-left: 0; } }
 
 /* ---------- MÓVIL (teléfonos 360–430px) ---------- */
 @media (max-width: 560px) {
+  .dec-top { flex-direction: column; align-items: stretch; gap: 9px; }
+  .dec-fecha-nav { justify-content: space-between; }
+  .dec-nav-btn { width: 52px; min-height: 44px; }        /* objetivo táctil cómodo */
+  .dec-fecha-caja { flex: 1; }
+  .dec-buscador { max-width: none; }
   .dec-mapa-card { padding: 10px; }
   .dec-mapa { height: 380px; }
   .dec-leyenda { gap: 5px 10px; font-size: 11px; }
-  .dec-prog { margin-left: 0; }
+  .dec-leyenda .dec-ley-tam { margin-left: 0; }
+  .dec-hero { flex-wrap: wrap; gap: 10px 14px; padding: 12px 13px; }
+  .dec-hero .v { font-size: 25px; }
+  .dec-hero-lado { flex: 1 1 100%; min-width: 0; border-top: 1px dashed var(--line-3);
+    padding-top: 9px; }
+  .dec-kpis { grid-template-columns: 1fr 1fr; }
+  .dec-kpi-tend { grid-column: 1 / -1; }
   .dec-kpi { padding: 10px 11px; }
-  .dec-kpi .valor { font-size: 21px; }
+  .dec-kpi .valor { font-size: 20px; }
+  .dec-val-fila .var { width: 100%; }
+  .dec-val-fila .n { margin-left: 0; }
 }
-
-/* ===== v16: chips de horizonte del veredicto (Mañana · +2..+5 días) ===== */
-.dec-dias { display: flex; gap: 6px; flex-wrap: wrap; margin: 2px 0 12px; }
-.dec-dia { border: 1px solid var(--line); background: var(--surface-2); color: var(--muted);
-  border-radius: 999px; padding: 6px 13px; font: 600 11.5px var(--mono); cursor: pointer;
-  min-height: 32px; transition: background .13s, border-color .13s, color .13s; }
-.dec-dia:hover { border-color: var(--blue); color: var(--ink); }
-.dec-dia.activo { background: var(--navy-700); border-color: var(--navy-700); color: #fff; }
-.dec-dia:focus-visible { outline: none; box-shadow: var(--focus-ring); }

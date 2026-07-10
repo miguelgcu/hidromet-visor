@@ -28,9 +28,13 @@
   const VAR_A_BLOQUE = { precip: "precip_cua", tmax: "tmax", tmin: "tmin" };
   // Etiqueta de variable para Series (la ruta /series acepta precip|tmax|tmin).
   const VAR_SERIE = { precip: "precip", tmax: "tmax", tmin: "tmin" };
-  // VENTANA (chip del diseño: 15/30/45/60) → clave real de validacion.VENTANAS
-  // ({"7","15","30","todo"}). 45/60 no existen como cubo exacto → al más cercano.
-  const VENT_A_API = { "15": "15", "30": "30", "45": "30", "60": "todo" };
+  // v18 (dueño 2026-07-10): el selector VENTANA se RETIRÓ de la UI.
+  // - La serie temporal muestra SIEMPRE 15 fechas de pasado + presente + todo el
+  //   futuro disponible (lookback=15, producto ya congelado en el visor).
+  // - La validación usa la ventana fija de 30 fechas (equilibrio robustez/actualidad,
+  //   la misma que usa "Decisiones operativas").
+  const LOOKBACK_SERIE = 15;
+  const VENTANA_VALID = "30";
 
   // Filtro de FAMILIA de modelo. valor = el que entiende el backend
   // (productos.FAMILIAS); etiqueta = texto del chip. "Todos" = sin filtro.
@@ -75,7 +79,6 @@
   const S = {
     ctx: null,
     variable: "precip",          // precip | tmax | tmin
-    ventana: "30",               // desplegable Ventana (nº de fechas)
     familia: "Todos",            // filtro de familia de modelo
     estacion: "",                // código de estación (v12: siempre por estación)
     valData: null,               // última respuesta de /validacion (alimenta el selector)
@@ -135,36 +138,27 @@
   // ámbito Nacional (retirado): la vista es siempre por estación.
   function deckHTML() {
     const vars = [["precip", "Precipitación"], ["tmax", "T. máxima"], ["tmin", "T. mínima"]];
-    const vents = ["15", "30", "45", "60"];
     // Las temperaturas solo existen en la red INAMHI: sin ella se deshabilitan
     // (con el motivo en el title) en vez de caer a otro bloque en silencio.
     // (Con DEPS fijas siempre está INAMHI; se conserva por robustez.)
     const sinTemp = !DEPS.includes("INAMHI");
     const optsVar = vars.map(([id, t]) => {
       const des = sinTemp && (id === "tmax" || id === "tmin");
-      return `<option value="${id}" ${S.variable === id ? "selected" : ""}${des ? ` disabled title="Requiere la red INAMHI"` : ""}>${t}</option>`;
+      return `<option value="${id}" ${S.variable === id ? "selected" : ""}${des ? ` disabled title="Requiere la red meteorológica"` : ""}>${t}</option>`;
     }).join("");
-    const optsVent = vents.map(v =>
-      `<option value="${v}" ${S.ventana === v ? "selected" : ""}>${v} fechas</option>`).join("");
     const optsFam = FAMILIAS_UI.map(([val, et]) =>
       `<option value="${esc(val)}" ${S.familia === val ? "selected" : ""}>${esc(et)}</option>`).join("");
     const chev = `<span class="ml-loc-chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#95A1B2" stroke-width="2.5"><path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>`;
+    // v18: deck en UNA fila — VARIABLE · ESTACIÓN · FAMILIA (el selector Ventana se
+    // retiró: la serie muestra siempre 15 fechas de pasado + todo el futuro).
     return `
       <div class="ml-deck">
         <div class="ml-deck-rail"></div>
         <div class="ml-deck-cuerpo">
           <div class="ml-grupo">
             <span class="ml-grupo-lab">Variable</span>
-            <div class="ml-loc"${sinTemp ? ` title="T. máxima y T. mínima requieren la red INAMHI"` : ""}>
+            <div class="ml-loc"${sinTemp ? ` title="T. máxima y T. mínima requieren la red meteorológica"` : ""}>
               <select id="ml-sel-var">${optsVar}</select>
-              ${chev}
-            </div>
-          </div>
-          <div class="ml-deck-div"></div>
-          <div class="ml-grupo">
-            <span class="ml-grupo-lab" title="Número de fechas con par modelo-observación">Ventana</span>
-            <div class="ml-loc">
-              <select id="ml-sel-vent">${optsVent}</select>
               ${chev}
             </div>
           </div>
@@ -206,7 +200,7 @@
     // en vez de dejar que el backend caiga a otro bloque en silencio.
     if (!DEPS.includes("INAMHI") && (S.variable === "tmax" || S.variable === "tmin")) {
       S.variable = "precip";
-      App.aviso("Las temperaturas solo existen en la red INAMHI: se muestra precipitación.", "info");
+      App.aviso("Las temperaturas solo existen en la red meteorológica: se muestra precipitación.", "info");
     }
     c.innerHTML = deckHTML() + `<div id="ml-vista-est"></div>`;
     bindDeck(c);
@@ -216,8 +210,6 @@
   function bindDeck(c) {
     const selVar = c.querySelector("#ml-sel-var");
     if (selVar) selVar.onchange = () => { S.variable = selVar.value; cargarValidacion(); };
-    const selVent = c.querySelector("#ml-sel-vent");
-    if (selVent) selVent.onchange = () => { S.ventana = selVent.value; cargarValidacion(); };
     const selFam = c.querySelector("#ml-sel-fam");
     if (selFam) selFam.onchange = () => { S.familia = selFam.value; cargarValidacion(); };
     const combo = c.querySelector("#ml-combo-est");
@@ -232,7 +224,7 @@
 
   function etiquetaEst() {
     const e = comboEsts.find(x => String(x.codigo) === String(S.estacion));
-    return e ? `${e.codigo} · ${e.nombre} (${e.region})` : "";
+    return e ? `${e.codigo} · ${e.nombre} (${App.redEtiqueta(e.region)})` : "";
   }
 
   // Lista agrupada por REGIÓN (encabezados) con la dependencia visible por fila:
@@ -246,11 +238,11 @@
     for (const e of visibles) {
       if (e.region !== region) {
         region = e.region;
-        html += `<div class="ml-combo-grupo">${esc(region)}</div>`;
+        html += `<div class="ml-combo-grupo">${esc(App.redEtiqueta(region))}</div>`;
       }
       html += `<button type="button" class="ml-combo-op ${String(e.codigo) === String(S.estacion) ? "activa" : ""}" data-cod="${esc(e.codigo)}">
         <span class="cod">${esc(e.codigo)}</span><span class="nom">${esc(e.nombre)}</span>
-        <span class="dep">${esc(e.dependencia || "")}</span></button>`;
+        <span class="dep">${esc(App.redEtiqueta(e.dependencia || ""))}</span></button>`;
     }
     return html;
   }
@@ -338,7 +330,7 @@
     const mi = ++gen;
     cont.innerHTML = cargando("Calculando validación…");
     const bloque = VAR_A_BLOQUE[S.variable];
-    const vent = VENT_A_API[S.ventana];
+    const vent = VENTANA_VALID;
     const famQS = "&familia=" + encodeURIComponent(S.familia);
     let d;
     try {
@@ -393,9 +385,9 @@
     const mi = ++gen;
     cont.innerHTML = cargando("Cargando validación y serie de la estación…");
     const bloque = VAR_A_BLOQUE[S.variable];
-    const vent = VENT_A_API[S.ventana];
+    const vent = VENTANA_VALID;
     const famQS = "&familia=" + encodeURIComponent(S.familia);
-    const lookback = parseInt(S.ventana, 10) || 45;
+    const lookback = LOOKBACK_SERIE;   // v18: 15 fechas de pasado, siempre
     const esPrecip = S.variable === "precip";
     let det, ser, detDet;
     try {
@@ -563,7 +555,7 @@
     cont.innerHTML = `
       <div class="ml-card">
         <h3 class="ml-titulo">Clasificación de modelos en ${esc(nom)}
-          <span class="ml-sutil">· ${esc(d.codigo)} · ${esc(d.region)} · ordenados por calificación</span></h3>
+          <span class="ml-sutil">· ${esc(d.codigo)} · ${esc(App.redEtiqueta(d.region))} · ordenados por calificación</span></h3>
         ${cuerpo}
       </div>`;
   }
@@ -888,10 +880,10 @@
     if (probsEl) {
       const pu = d.probs_umbral;
       if (esPrecip && pu && pu.fechas && pu.fechas.length) {
-        // MISMO horizonte que la serie de líneas: TODAS las fechas devueltas por el backend
-        // (pasado + pronóstico), que ya llegan acotadas a [max − lookback, max] con el mismo
-        // 'desde' que datos_serie. Tabla TRANSPUESTA: una COLUMNA por fecha y una FILA por
-        // umbral → se extiende a TODO el ancho de la serie, alineada con su eje temporal.
+        // MISMO eje temporal que las líneas (v18): el backend re-expande la matriz a la
+        // rejilla diaria completa [hoy−15, tope futuro] (_eje_comun) — una COLUMNA por
+        // CADA fecha de la serie, con "—" donde no hay producto. Tabla TRANSPUESTA:
+        // una fila por umbral, alineada 1:1 con el eje de la serie.
         let idx = pu.fechas.map((_, i) => i);
         // Índice de la 1ª columna de pronóstico (>= hoy) para separar visualmente pasado/futuro,
         // coherente con la línea divisoria 'inicio pronóstico →' del gráfico.

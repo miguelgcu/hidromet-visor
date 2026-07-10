@@ -92,11 +92,12 @@
   const ALERTA_FUENTE_OCULTA = new Set(["Confianza", "Modelo de referencia", "Cobertura (n.º modelos)"]);
 
   // Toggles de capa: id (param de carta.png) + etiqueta + valor inicial (1=on).
+  // §P4: Grilla/Isolíneas/Galápagos/Estaciones arrancan ACTIVOS en todas las cartas.
   const TOGGLES = [
     { id: "titulo", et: "Título", on: 1 }, { id: "escala", et: "Escala", on: 1 },
     { id: "galapagos", et: "Galápagos", on: 1 }, { id: "interpolar", et: "Interpolar", on: 1 },
-    { id: "isolineas", et: "Isolíneas", on: 0 }, { id: "grilla", et: "Grilla", on: 1 },
-    { id: "estaciones", et: "Estaciones", on: 0 },
+    { id: "isolineas", et: "Isolíneas", on: 1 }, { id: "grilla", et: "Grilla", on: 1 },
+    { id: "estaciones", et: "Estaciones", on: 1 },
   ];
 
   // Desenlaces de la validación de alertas (clave del backend → tono de tarjeta).
@@ -132,6 +133,34 @@
     if (geoCartas !== null) return;
     try { geoCartas = await App.api("/datos/capas/provincias.geojson"); }
     catch (e) { geoCartas = false; }
+  }
+
+  /* §P14 — la "dinámica" (◀ ▶ / cambio rápido de instante) se trababa por DOS causas:
+     (1) CARRERA de requests: cada re-render lanzaba su tanda de carta_datos y las
+         respuestas tardías de un render VIEJO seguían pintando (o compitiendo) sobre
+         el DOM nuevo; (2) SIN caché: volver a un instante ya visto re-pedía y
+         re-montaba todo. Remedios: token de GENERACIÓN por tanda de montaje (una
+         tanda nueva invalida las anteriores), caché LRU de las respuestas de
+         carta_datos (records ya vistos pintan al instante) y botones de navegación
+         DESHABILITADOS mientras la tanda carga. */
+  let _genMapas = 0;                          // generación vigente del montaje de mapas
+  const _cacheDatos = new Map();              // url -> respuesta de carta_datos (LRU)
+  const _CACHE_DATOS_MAX = 60;
+  function limpiarCacheDatos() {
+    _cacheDatos.clear();
+    _ffrFechas = null; _ffrZonas.clear();     // §P18a: el FFR también se regenera al actualizar
+    _hvDatos = null;                          // §P9: resumen de validación hidro
+  }
+  async function apiDatosCarta(url) {
+    if (_cacheDatos.has(url)) {
+      const v = _cacheDatos.get(url);
+      _cacheDatos.delete(url); _cacheDatos.set(url, v);   // refresca posición LRU
+      return v;
+    }
+    const d = await App.api(url);
+    _cacheDatos.set(url, d);
+    while (_cacheDatos.size > _CACHE_DATOS_MAX) _cacheDatos.delete(_cacheDatos.keys().next().value);
+    return d;
   }
   // Tipos cuyo lienzo es PAPEL FIJO (blanco SIEMPRE): las pestañas grilladas del
   // módulo Pronóstico. El resto (alertas de Advertencias, FFGS bajo Hidrología y
@@ -208,6 +237,49 @@
     return mask;
   }
 
+  /* §P18a — ZONAS DE DESBORDAMIENTO (FFR) como OVERLAY sobre las cartas de alerta
+     de PRECIPITACIÓN (nunca temperatura). Ya no son una carta aparte: se dibujan
+     punteadas y discretas sobre cada mapa de alerta de lluvia cuya FECHA tenga
+     zona FFR. Fechas y anillos se cachean (una petición por sesión / por record). */
+  const FFR_BUFFER = "ambos";
+  let _ffrFechas = null;                      // [{record, fecha}] | false
+  const _ffrZonas = new Map();                // record -> {anillos, color} | false
+  async function asegurarFFRFechas() {
+    if (_ffrFechas !== null) return;
+    try {
+      const r = await App.api("/cartas/riesgo_ffr/fechas");
+      _ffrFechas = Array.isArray(r.fechas) ? r.fechas : [];
+    } catch (e) { _ffrFechas = false; }
+  }
+  // Fecha local (GMT-5) ISO de un epoch en segundos — para casar carta ↔ zona FFR.
+  const fechaLocalISO = ts => new Date((ts - 5 * 3600) * 1000).toISOString().slice(0, 10);
+  async function trazasFFRSobreCarta(fecha) {
+    await asegurarFFRFechas();
+    if (!_ffrFechas || !_ffrFechas.length) return null;
+    const hit = _ffrFechas.find(f => String(f.fecha) === String(fecha));
+    if (!hit) return null;                    // el FFR no cubre esta fecha → sin overlay (honesto)
+    const rec = hit.record;
+    if (!_ffrZonas.has(rec)) {
+      try {
+        const d = await App.api("/cartas/riesgo_ffr/datos?" + qs({ buffer: FFR_BUFFER, record: rec }));
+        _ffrZonas.set(rec, (d && d.anillos && d.anillos.length) ? d : false);
+      } catch (e) { _ffrZonas.set(rec, false); }
+    }
+    const d = _ffrZonas.get(rec);
+    if (!d) return null;
+    const xs = [], ys = [];
+    for (const an of d.anillos) { for (const [lo, la] of an) { xs.push(lo); ys.push(la); } xs.push(null); ys.push(null); }
+    if (!xs.length) return null;
+    const col = d.color || "#009AF2";
+    const c = _hexRgb(col);
+    return [{
+      type: "scatter", mode: "lines", x: xs, y: ys, fill: "toself", meta: "ffr-overlay",
+      fillcolor: `rgba(${c[0]},${c[1]},${c[2]},.14)`,
+      line: { color: col, width: 1.2, dash: "dot" },
+      name: "Zona de desbordamiento (FFR)", hoverinfo: "skip", showlegend: false,
+    }];
+  }
+
   // Microcuencas operativas del FFGS (NWSAFFGS, 1682 subcuencas): contorno que se
   // dibuja sobre las cartas FFGS para ver el dato por subcuenca.
   let geoMicro = null;                         // FeatureCollection microcuencas (cache)
@@ -247,19 +319,39 @@
       _estaciones = Array.isArray(r) ? r : (r && Array.isArray(r.estaciones) ? r.estaciones : false);
     } catch (e) { _estaciones = false; }
   }
-  function trazaEstaciones(bbox, ejeX, ejeY, osc) {
+  // §P4: índice del valor más cercano en un eje (lat o lon) — para muestrear el campo.
+  function _idxCercano(eje, v) {
+    let best = 0, bd = Infinity;
+    for (let i = 0; i < eje.length; i++) { const d = Math.abs(eje[i] - v); if (d < bd) { bd = d; best = i; } }
+    return best;
+  }
+  // §P4 hover RICO: "CÓDIGO · Nombre · valor unidad". `muestra` = {lon, lat, campo, fmt}
+  // (la malla YA cargada de la carta); el valor se toma de la celda más cercana a la
+  // estación en el CLIENTE (sin peticiones extra) y fmt lo formatea con su unidad (o la
+  // etiqueta de nivel en cartas categóricas).
+  function trazaEstaciones(bbox, ejeX, ejeY, osc, muestra) {
     if (!Array.isArray(_estaciones) || !_estaciones.length) return null;
-    const xs = [], ys = [], tx = [];
+    const conMalla = !!(muestra && Array.isArray(muestra.lon) && muestra.lon.length
+      && Array.isArray(muestra.lat) && muestra.lat.length
+      && Array.isArray(muestra.campo) && muestra.campo.length);
+    const xs = [], ys = [], cd = [];
     for (const e of _estaciones) {
       if (e.lon == null || e.lat == null) continue;
       if (e.lon < bbox[0] || e.lon > bbox[1] || e.lat < bbox[2] || e.lat > bbox[3]) continue;
-      xs.push(e.lon); ys.push(e.lat); tx.push(e.nombre || e.codigo || "");
+      let val = "sin dato";
+      if (conMalla) {
+        const j = _idxCercano(muestra.lat, e.lat), i = _idxCercano(muestra.lon, e.lon);
+        const v = (muestra.campo[j] || [])[i];
+        if (v != null && isFinite(v)) val = muestra.fmt ? muestra.fmt(v) : String(v);
+      }
+      xs.push(e.lon); ys.push(e.lat);
+      cd.push([String(e.codigo || e.cod || e.id || ""), String(e.nombre || ""), val]);
     }
     if (!xs.length) return null;
     // osc solo en mapas TEMÁTICOS en tema oscuro (punto claro con halo oscuro).
-    return { type: "scatter", mode: "markers", x: xs, y: ys, text: tx, xaxis: ejeX, yaxis: ejeY, meta: "estaciones-ct",
+    return { type: "scatter", mode: "markers", x: xs, y: ys, customdata: cd, xaxis: ejeX, yaxis: ejeY, meta: "estaciones-ct",
       marker: { size: 5, color: osc ? "#E8EDF6" : "#10233F", line: { width: 1, color: osc ? "#0B1322" : "#fff" } },
-      hovertemplate: "%{text}<extra></extra>", showlegend: false };
+      hovertemplate: "<b>%{customdata[0]}</b> · %{customdata[1]} · <b>%{customdata[2]}</b><extra></extra>", showlegend: false };
   }
 
   // Color (rgb) en una posición pos∈[0,1] interpolando el colorscale de Plotly
@@ -398,8 +490,11 @@
       : "";
     const shpBtn = (esAlertaNivel || esFFGS) ? `<a class="ct-dl ct-dl-shp" role="button" tabindex="0" data-shp="${esc(shpRuta)}"
            title="Descargar en formato shapefile" aria-label="Descargar en formato shapefile">SHP</a>` : "";
+    // §P18a: data-ffr = fecha (ISO) de la carta cuando es ALERTA DE LLUVIA → el
+    // overlay de zonas de desbordamiento (FFR) se dibuja encima en pintarMapaCarta.
+    const ffrAttr = params.ffr ? ` data-ffr="${esc(params.ffr)}"` : "";
     return `
-      <div class="ct-lienzo${papelFijo() ? " ct-lienzo-fijo" : ""}" data-datos="${esc(datosUrl)}">
+      <div class="ct-lienzo${papelFijo() ? " ct-lienzo-fijo" : ""}" data-datos="${esc(datosUrl)}"${ffrAttr}>
         <a class="ct-dl ct-dl-jpg" role="button" tabindex="0" data-jpg="${esc(jpgRuta)}" data-nombre="${esc(slugNombre)}"
            title="Descargar carta (imagen)" aria-label="Descargar carta">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -509,11 +604,24 @@
   // hace que los paneles aparezcan progresivamente.
   async function montarMapasCarta(cont) {
     if (!cont) return;
-    for (const div of [...cont.querySelectorAll(".ct-lienzo[data-datos]")]) {
-      if (div._montado) continue;
-      div._montado = true;
-      await pintarMapaCarta(div, div.dataset.datos);
-      await new Promise(r => setTimeout(r));
+    // §P14: cada tanda de montaje toma una GENERACIÓN nueva; las tandas anteriores
+    // (aún esperando red) quedan invalidadas y no pisan el estado. Mientras la
+    // tanda carga, los botones ◀ ▶ del contenedor se deshabilitan (el selector de
+    // instante sigue activo: elegir en él re-renderiza y abre otra generación).
+    const gen = ++_genMapas;
+    const navs = [...cont.querySelectorAll(".ct-nav")];
+    const previos = navs.map(b => b.disabled);
+    navs.forEach(b => { b.disabled = true; });
+    try {
+      for (const div of [...cont.querySelectorAll(".ct-lienzo[data-datos]")]) {
+        if (gen !== _genMapas) return;        // llegó una tanda más nueva: abortar
+        if (div._montado) continue;
+        div._montado = true;
+        await pintarMapaCarta(div, div.dataset.datos, gen);
+        await new Promise(r => setTimeout(r));
+      }
+    } finally {
+      if (gen === _genMapas) navs.forEach((b, i) => { if (b.isConnected) b.disabled = previos[i]; });
     }
   }
 
@@ -590,6 +698,26 @@
     return { lon: eje(lon), lat: eje(lat), campo: campo };
   }
 
+  // §P2 (franja blanca): el range de los ejes NUNCA debe rebasar la cobertura REAL del
+  // heatmap (centro de celda extremo ± media celda). En el visor, la malla decimada ×2
+  // podía perder la última columna/fila y la "extensión" oficial (bordes de celda de la
+  // malla COMPLETA) dejaba una franja sin datos en el borde derecho/inferior. Se recorta
+  // el marco a la INTERSECCIÓN extensión ∩ cobertura → el campo toca siempre el lienzo.
+  function rangoCubierto(ext, malla) {
+    const lon = malla && malla.lon, lat = malla && malla.lat;
+    if (!Array.isArray(lon) || lon.length < 2 || !Array.isArray(lat) || lat.length < 2) return ext.slice();
+    const cob = a => {                       // [min, max] cubiertos por las celdas (admite eje descendente)
+      const n = a.length, asc = a[0] <= a[n - 1];
+      const dIni = Math.abs(a[1] - a[0]) / 2, dFin = Math.abs(a[n - 1] - a[n - 2]) / 2;
+      const lo = Math.min(a[0], a[n - 1]), hi = Math.max(a[0], a[n - 1]);
+      return [lo - (asc ? dIni : dFin), hi + (asc ? dFin : dIni)];
+    };
+    const cx = cob(lon), cy = cob(lat);
+    const x0 = Math.max(ext[0], cx[0]), x1 = Math.min(ext[1], cx[1]);
+    const y0 = Math.max(ext[2], cy[0]), y1 = Math.min(ext[3], cy[1]);
+    return (x0 < x1 && y0 < y1) ? [x0, x1, y0, y1] : ext.slice();
+  }
+
   // Mapa valor→ETIQUETA para cartas CATEGÓRICAS (alertas/riesgo por nivel): el popup
   // debe decir "Medio/Alto/Muy alto", no "1/2/3". Devuelve una función v→etiqueta o null.
   function etiquetasCarta(d) {
@@ -613,17 +741,21 @@
     };
   }
 
-  async function pintarMapaCarta(div, datosUrl) {
+  async function pintarMapaCarta(div, datosUrl, gen) {
+    // §P14: la traza solo sigue viva si el div sigue en el DOM y NINGUNA tanda de
+    // montaje más nueva ha arrancado (gen === _genMapas). Sin el token, respuestas
+    // tardías de un render viejo pintaban sobre el nuevo (la "dinámica se traba").
+    const vivo = () => div.isConnected && (gen === undefined || gen === _genMapas);
     let d;
-    try { d = await App.api(datosUrl); }
-    catch (e) { falloLienzo(div, "Sin carta para este instante"); return; }
-    if (!div.isConnected) return;
+    try { d = await apiDatosCarta(datosUrl); }
+    catch (e) { if (vivo()) falloLienzo(div, "Sin carta para este instante"); return; }
+    if (!vivo()) return;
     const P = d.principal || d;
     const hayCuencas = !!(d.cuencas && d.cuencas.ids && d.cuencas.ids.length);
     if ((!P || !P.campo || !P.campo.length) && !hayCuencas) { falloLienzo(div, "Sin datos para este instante"); return; }
     await asegurarGeoCartas();
     if (!window.Plotly) { falloLienzo(div, "Plotly no disponible"); return; }
-    if (!div.isConnected) return;
+    if (!vivo()) return;
 
     const ext = P.extension || d.extension || [-81.3, -75.0, -5.1, 1.6];
     const cap = (E && E.capas) || {};
@@ -647,6 +779,12 @@
     // Malla refinada en cliente (§pixelado): en el visor sube 71×66 → 141×131;
     // en la app viva ya viene fina (0.05°) y refinarMalla devuelve la misma.
     const PR = (!d.malla && P && P.campo && P.campo.length) ? refinarMalla(P) : P;
+    // §P4: etiqueta de nivel (cartas categóricas) y formateador "valor unidad" — se usan
+    // en el hover del heatmap (principal y Galápagos) y en el de las ESTACIONES.
+    const etiq = etiquetasCarta(d);
+    const _fmtVal = v => etiq
+      ? (etiq(v) || "")
+      : `${Math.abs(v) < 10 ? (+v).toFixed(2) : (+v).toFixed(1)} ${d.unidad || ""}`.trim();
     if (!cuencasOk) {
       // Raster: cartas INTERPOLADAS (precip/temp/ALERTAS) suavizadas.
       // Continuo (precip/temp/HR/CAPE) Y alertas/heladas (campo YA refinado en backend
@@ -656,8 +794,7 @@
       // falló (cuencasOk=false) llegamos a este raster de RESPALDO → también lo suavizamos,
       // porque pintarlo con zsmooth:false son los cuadrados duros 0.10° (el pixelado real).
       const suavizar = "best";
-      const etiq = etiquetasCarta(d);   // alertas/riesgo → etiqueta de nivel en el popup
-      const hov = etiq
+      const hov = etiq                  // alertas/riesgo → etiqueta de nivel en el popup
         ? { text: PR.campo.map(row => (row || []).map(v => etiq(v) || "")),
             hovertemplate: `%{y:.2f}°, %{x:.2f}°<br><b>%{text}</b><extra></extra>` }
         : { hovertemplate: `%{y:.2f}°, %{x:.2f}°<br><b>%{z:.2f} ${esc(d.unidad || "")}</b><extra></extra>` };
@@ -674,10 +811,11 @@
         zsmooth: suavizar, hoverongaps: false, showscale: false,
       }, hov));
     }
-    // TOGGLE Isolíneas: contornos sobre el campo (aplican a TODAS las cartas raster:
+    // TOGGLE Isolíneas: contornos sobre el campo (aplican a las cartas raster CONTINUAS:
     // pronóstico, calibrado, hidroestimadores, heladas/calor). Traza encima del relleno,
-    // sin color (solo líneas) y con etiqueta de valor.
-    if (cap.isolineas && PR && PR.campo && PR.campo.length) {
+    // sin color (solo líneas) y con etiqueta de valor. §P16: en cartas CATEGÓRICAS
+    // (alertas por nivel) los contornos no tienen sentido → nunca se dibujan.
+    if (cap.isolineas && !d.categorico && PR && PR.campo && PR.campo.length) {
       traces.push({
         type: "contour", x: PR.lon, y: PR.lat, z: PR.campo,
         contours: { coloring: "none", showlabels: true,
@@ -692,11 +830,29 @@
       const mc = trazaMicrocuencas(oscuro);
       if (mc) traces.push(mc);
     }
-    traces.push(...trazasOutline("x", "y", null, 1.5, 3.4, fijo));   // spec grillas: 1.5/3.4
+    // §P10: en Heladas/Calor el contorno provincial iba MUY GRUESO y tapaba los
+    // colores del riesgo (pedido del dueño) → grosor por-tipo: fino en heladas,
+    // el spec de grillas (1.5/3.4) intacto para el resto.
+    const esHeladas = !!(E && E.tipo === "heladas");
+    traces.push(...trazasOutline("x", "y", null, esHeladas ? 0.8 : 1.5, esHeladas ? 1.8 : 3.4, fijo));
+    // §P18a: ZONAS DE DESBORDAMIENTO (FFR) sobre las cartas de alerta de PRECIPITACIÓN
+    // (solo lluvia, nunca temperatura): overlay discreto punteado, si el FFR tiene
+    // zona para la FECHA de la carta. data-ffr la pone cuerpoAlertas.
+    if (div.dataset.ffr) {
+      const zf = await trazasFFRSobreCarta(div.dataset.ffr);
+      if (!vivo()) return;
+      if (zf) traces.push(...zf);
+    }
 
+    // §P4: muestra para el hover de estaciones (malla ya cargada + formateador).
+    const _muestra = (PR && PR.campo && PR.campo.length)
+      ? { lon: PR.lon, lat: PR.lat, campo: PR.campo, fmt: _fmtVal } : null;
     // TOGGLE Estaciones: puntos de las estaciones dentro del recuadro principal.
-    if (cap.estaciones) { await asegurarEstaciones(); const te = trazaEstaciones(ext, "x", "y", oscuro); if (te) traces.push(te); }
+    if (cap.estaciones) { await asegurarEstaciones(); const te = trazaEstaciones(ext, "x", "y", oscuro, _muestra); if (te) traces.push(te); }
 
+    // §P2: marco = extensión oficial recortada a la cobertura real del heatmap (sin
+    // franja blanca en el borde). FFGS vectorial (cuencasOk) conserva la extensión.
+    const marco = (!cuencasOk && PR && PR.campo && PR.campo.length) ? rangoCubierto(ext, PR) : ext.slice();
     // Zoom SOLO de acercamiento: minallowed/maxallowed fijan el extent como tope.
     // TOGGLE Grilla: rejilla lat/lon punteada y tenue (ejes ocultos si está apagada).
     const _ejeGr = cap.grilla
@@ -705,8 +861,8 @@
       : { visible: false };
     const layout = App.plotlyLayoutBase({
       showlegend: false, margin: { l: 0, r: 0, t: 0, b: 0 },
-      xaxis: Object.assign({ range: [ext[0], ext[1]], minallowed: ext[0], maxallowed: ext[1], fixedrange: false }, _ejeGr),
-      yaxis: Object.assign({ range: [ext[2], ext[3]], minallowed: ext[2], maxallowed: ext[3], scaleanchor: "x", scaleratio: 1, fixedrange: false }, _ejeGr),
+      xaxis: Object.assign({ range: [marco[0], marco[1]], minallowed: marco[0], maxallowed: marco[1], fixedrange: false }, _ejeGr),
+      yaxis: Object.assign({ range: [marco[2], marco[3]], minallowed: marco[2], maxallowed: marco[3], scaleanchor: "x", scaleratio: 1, fixedrange: false }, _ejeGr),
       dragmode: "pan",
     });
     layout.hovermode = "closest";   // hover por cuenca FFGS (y por celda en raster): muestra el valor más cercano
@@ -717,20 +873,38 @@
     const _G = (_G0 && _G0.campo && _G0.campo.length && !d.malla) ? refinarMalla(_G0) : _G0;
     if (cap.galapagos && _G && _G.campo && _G.campo.length && _gb) {
       // inset en la ESQUINA INFERIOR DERECHA, separado ~0.5 cm de los márgenes der./inf.
-      const gx0 = 0.652, gx1 = 0.952, gy0 = 0.043, gy1 = 0.316;
-      layout.xaxis2 = { domain: [gx0, gx1], anchor: "y2", range: [_gb[0], _gb[1]], visible: false, fixedrange: true };
-      layout.yaxis2 = { domain: [gy0, gy1], anchor: "x2", range: [_gb[2], _gb[3]], scaleanchor: "x2", scaleratio: 1, visible: false, fixedrange: true };
+      // §P17: recuadro y título corridos ~2 mm a la DERECHA y ~2 mm hacia ABAJO
+      // (paper coords: +0.012 en x, −0.015 en y).
+      const gx0 = 0.664, gx1 = 0.964, gy0 = 0.028, gy1 = 0.301;
+      // §P2: rango del inset recortado a la cobertura real de SU malla (sin franja).
+      const gMarco = rangoCubierto(_gb, _G);
+      // §P17: grilla PROPIA del inset — dtick adecuado a la extensión de Galápagos
+      // (no heredado del continente). Solo si el toggle Grilla está activo.
+      const _gspan = Math.max(gMarco[1] - gMarco[0], gMarco[3] - gMarco[2]);
+      const _gdt = _gspan >= 3 ? 1 : (_gspan >= 1.2 ? 0.5 : 0.25);
+      const _ejeGrG = cap.grilla
+        ? { showticklabels: false, showline: false, zeroline: false, ticks: "", showgrid: true,
+            gridcolor: oscuro ? "rgba(223,230,247,.13)" : "rgba(70,89,122,.16)", griddash: "dot", dtick: _gdt }
+        : { visible: false };
+      layout.xaxis2 = Object.assign({ domain: [gx0, gx1], anchor: "y2", range: [gMarco[0], gMarco[1]], fixedrange: true }, _ejeGrG);
+      layout.yaxis2 = Object.assign({ domain: [gy0, gy1], anchor: "x2", range: [gMarco[2], gMarco[3]], scaleanchor: "x2", scaleratio: 1, fixedrange: true }, _ejeGrG);
       // borde del recuadro (rect por encima de todo, siempre visible)
       layout.shapes = (layout.shapes || []).concat([{ type: "rect", xref: "paper", yref: "paper", x0: gx0, y0: gy0, x1: gx1, y1: gy1,
         line: { color: oscuro ? "#B6C0CD" : "#46597A", width: 1.4 }, fillcolor: "rgba(0,0,0,0)", layer: "above" }]);
       layout.annotations = (layout.annotations || []).concat([{ xref: "paper", yref: "paper", x: gx0, y: gy1 + 0.006, xanchor: "left", yanchor: "bottom",
         text: "Galápagos", showarrow: false, font: { size: 9, color: oscuro ? "#9DAABF" : "#58667A" } }]);
-      traces.push({ type: "heatmap", x: _G.lon, y: _G.lat, z: _G.campo, xaxis: "x2", yaxis: "y2",
+      // §P4: hover del inset con la MISMA regla que el principal — etiqueta de nivel en
+      // categóricas y "valor unidad" en continuas (la unidad SIEMPRE presente).
+      const hovG = etiq
+        ? { text: _G.campo.map(row => (row || []).map(v => etiq(v) || "")),
+            hovertemplate: `%{y:.2f}°, %{x:.2f}°<br><b>%{text}</b><extra></extra>` }
+        : { hovertemplate: `%{y:.2f}°, %{x:.2f}°<br><b>%{z:.2f} ${esc(d.unidad || "")}</b><extra></extra>` };
+      traces.push(Object.assign({ type: "heatmap", x: _G.lon, y: _G.lat, z: _G.campo, xaxis: "x2", yaxis: "y2",
         colorscale: d.colorscale, zmin: d.vmin, zmax: d.vmax, zsmooth: d.malla ? false : "best",
-        hoverongaps: false, showscale: false,
-        hovertemplate: `%{y:.2f}°, %{x:.2f}°<br><b>%{z:.2f} ${esc(d.unidad || "")}</b><extra></extra>` });
-      traces.push(...trazasOutline("x2", "y2", _gb, 0.9, 2, fijo));   // contorno de las islas con encasillado
-      if (cap.estaciones) { await asegurarEstaciones(); const teg = trazaEstaciones(_gb, "x2", "y2", oscuro); if (teg) traces.push(teg); }
+        hoverongaps: false, showscale: false }, hovG));
+      traces.push(...trazasOutline("x2", "y2", _gb, esHeladas ? 0.6 : 0.9, esHeladas ? 1.2 : 2, fijo));   // contorno de las islas con encasillado (§P10: fino en heladas)
+      const _muestraG = { lon: _G.lon, lat: _G.lat, campo: _G.campo, fmt: _fmtVal };
+      if (cap.estaciones) { await asegurarEstaciones(); const teg = trazaEstaciones(_gb, "x2", "y2", oscuro, _muestraG); if (teg) traces.push(teg); }
     }
     // Panel VACÍO: rótulo claro en vez de un mapa en blanco. "sin_datos" = el modelo
     // no llega a esta fecha (su corrida no la cubre); "sin_alerta" = sí hay pronóstico
@@ -745,6 +919,7 @@
         bgcolor: oscuro ? "rgba(20,28,45,.78)" : "rgba(255,255,255,.82)", borderpad: 8,
         bordercolor: oscuro ? "rgba(182,192,205,.40)" : "rgba(100,116,139,.32)", borderwidth: 1 }]);
     }
+    if (!vivo()) return;                       // §P14: no pintar sobre un render más nuevo
     const c = div.querySelector(".cargando"); if (c) c.remove();
     const plot = div.querySelector(".ct-mapa-plot");
     Plotly.newPlot(plot, traces, layout, App.plotlyConfig({ scrollZoom: !TOUCH_COARSE, staticPlot: TOUCH_COARSE, displayModeBar: false, doubleClick: "reset" }));
@@ -876,88 +1051,20 @@
     return g;
   }
 
-  // Toggles de capa (Grilla/Galápagos/Estaciones), compartidos por todas las cartas
-  // interactivas. El estado vive en E.capas y lo lee pintarMapaCarta.
-  function capasHTML() {
+  // Toggles de capa (Grilla/Isolíneas/Galápagos/Estaciones), compartidos por todas las
+  // cartas interactivas. El estado vive en E.capas y lo lee pintarMapaCarta.
+  // §P16: `sinIsolineas` oculta el toggle Isolíneas en ADVERTENCIAS (niveles categóricos:
+  // los contornos no aplican); el resto de toggles se conserva.
+  function capasHTML(sinIsolineas) {
     const c = (E && E.capas) || {};
     const b = (id, et) => `<button class="ct-toggle ${c[id] ? "activo" : ""}" data-capa="${id}">${et}</button>`;
-    return `<div class="ct-capas">${b("grilla", "Grilla")}${b("isolineas", "Isolíneas")}${b("galapagos", "Galápagos")}${b("estaciones", "Estaciones")}</div>`;
+    return `<div class="ct-capas">${b("grilla", "Grilla")}${sinIsolineas ? "" : b("isolineas", "Isolíneas")}${b("galapagos", "Galápagos")}${b("estaciones", "Estaciones")}</div>`;
   }
 
-  // Variables de carta que TIENEN observación (para la serie a 24 h): id de carta → variable de serie.
-  const _SERIE_OBS = { lluvia: "precip", temperatura_2m_max: "Tmax", temperatura_2m_min: "Tmin" };
-
-  // SERIE TEMPORAL multimodelo BAJO la carta — sigue la variable y la frecuencia ELEGIDAS
-  // en la carta (p.ej. CAPE a 6 h = máximo de 6 h). A 24 h, las variables con observación
-  // (lluvia/temp) muestran además el observado con etiqueta de valor.
-  async function pintarSeriePron(cont, tipoId) {
-    const host = cont.querySelector('[data-rol="serie-pron"]');
-    if (!host) return;
-    const t = tipoNodo(tipoId); if (!t) { host.innerHTML = ""; return; }
-    const g = gridState(tipoId);
-    const v = (t.variables || []).find(x => x.id === g.varId) || {};
-    const etiqV = etiquetaVarCorta(g.varId, v.etiqueta);
-    await asegurarEstaciones();
-    const ests = Array.isArray(_estaciones) ? _estaciones : [];
-    if (!ests.length) { host.innerHTML = ""; return; }
-    const valEst = e => String(e.codigo || e.cod || e.id || "");
-    const nomEst = e => String(e.nombre || e.nombre_estacion || e.name || valEst(e));
-    if (!E.serieEst || !ests.some(e => valEst(e) === E.serieEst)) E.serieEst = valEst(ests[0]);
-    const optEst = ests.map(e => `<option value="${esc(valEst(e))}" ${valEst(e) === E.serieEst ? "selected" : ""}>${esc(nomEst(e))} (${esc(valEst(e))})</option>`).join("");
-    host.innerHTML = `
-      <div class="ct-serie-cab">
-        <h3 style="margin:0;font-size:14px">Serie temporal — ${esc(etiqV)} · ${g.horas} h</h3>
-        <label class="bloque"><span class="et">Estación</span><select data-rol="serie-est">${optEst}</select></label>
-      </div>
-      <div data-rol="serie-plot" style="min-height:340px"></div>
-      <p class="ct-nota" data-rol="serie-nota"></p>`;
-    const selEst = host.querySelector('[data-rol="serie-est"]');
-    selEst.onchange = () => { E.serieEst = selEst.value; cargar(); };
-
-    async function cargar() {
-      const cod = E.serieEst;
-      const plot = host.querySelector('[data-rol="serie-plot"]'), nota = host.querySelector('[data-rol="serie-nota"]');
-      const obsVar = _SERIE_OBS[g.varId];
-      const con24obs = (g.horas === 24 && !!obsVar);
-      const key = `${tipoId}|${g.varId}|${g.horas}|${cod}|${con24obs ? 1 : 0}`;
-      E.serieCache = E.serieCache || {};
-      plot.innerHTML = `<p class="suave" style="padding:16px">Cargando serie…</p>`; nota.textContent = "";
-      let r = E.serieCache[key];
-      if (!r) {
-        try {
-          r = con24obs
-            ? await App.api(`/cartas/series/estacion?codigo=${encodeURIComponent(cod)}&variable=${obsVar}&dias=20&tipo=${encodeURIComponent(tipoId)}`)
-            : await App.api(`/cartas/series/grilla?codigo=${encodeURIComponent(cod)}&variable=${encodeURIComponent(g.varId)}&periodo=${g.horas}&tipo=${encodeURIComponent(tipoId)}`);
-          E.serieCache[key] = r;
-        } catch (e) { plot.innerHTML = `<p class="suave" style="padding:16px;color:var(--danger)">No se pudo cargar la serie.</p>`; return; }
-      }
-      if (!host.isConnected) return;
-      if (!r || r.error || !(r.trazas && r.trazas.length)) {
-        plot.innerHTML = `<p class="suave" style="padding:16px">Sin serie para ${esc(etiqV)} a ${g.horas} h en esta estación.</p>`; return;
-      }
-      plot.innerHTML = ""; if (!window.Plotly) return;
-      const esPrecip = (r.es_precip != null) ? r.es_precip : String(g.varId).startsWith("lluvia");
-      const layout = App.plotlyLayoutSerie("", {
-        barmode: "overlay",
-        yaxis: { title: { text: r.unidad || "", font: { size: 11 } }, rangemode: esPrecip ? "tozero" : "normal" },
-        xaxis: { type: "date", tickformat: "%d/%m", tickangle: 0, nticks: 12 },
-      });
-      // F5: el divisor "presente" es HOY (TZ Ecuador) calculado en CLIENTE — el visor
-      // congela los JSON y el 'hoy' del backend envejece. r.hoy da la pista de formato
-      // (fecha vs fecha+hora en ejes sub-diarios) y sirve de fallback.
-      const _hoy = App.hoyEC ? App.hoyEC((r.hoy && String(r.hoy).length > 10) ? 16 : 10) : r.hoy;
-      if (_hoy) {
-        layout.shapes = [{ type: "line", x0: _hoy, x1: _hoy, yref: "paper", y0: 0, y1: 1, line: { color: (App.tema && App.tema() === "oscuro") ? "#75859D" : "#95A1B2", width: 1.2, dash: "dot" } }];
-        layout.annotations = [{ x: _hoy, yref: "paper", y: 1, yanchor: "bottom", text: "presente", showarrow: false, font: { family: "IBM Plex Mono", size: 10, color: (App.tema && App.tema() === "oscuro") ? "#9DAABF" : "#5A6678" } }];
-      }
-      window.Plotly.newPlot(plot, r.trazas, layout, App.plotlyConfig());
-      nota.textContent = `Comparativa multimodelo — ${etiqV} a ${g.horas} h.` +
-        (con24obs ? " Observado (negro) con etiqueta de valor." : " Sin observación para esta variable/frecuencia.") +
-        " Incluye historia reciente + horizonte de pronóstico.";
-    }
-    cargar();
-  }
-
+  // §P1: la serie temporal que vivía BAJO la grilla de cartas (pintarSeriePron) se
+  // ELIMINÓ por redundante: la pestaña "Series, validación e IA" ya ofrece la
+  // comparativa multimodelo por estación. Sus endpoints exclusivos
+  // (/cartas/series/estacion y /cartas/series/grilla) se retiraron del backend.
   function cuerpoGrid(tipoId) {
     const t = tipoNodo(tipoId);
     if (!t || !(t.variables || []).length) {
@@ -1009,10 +1116,11 @@
       }
       const params = { archivo, capa: f.capa, record,
         corrido: f.corrido || p.corrido ? 1 : 0, fin: inst.fin };
+      // §P3: el nombre de descarga lleva la FECHA del instante (fuente_fecha_producto).
       return `<figure class="ct-carta">
         <div class="ct-carta-cab"><span class="titulo">${esc(f.fuente)}</span>
           <span class="meta">${esc(figcap)}</span></div>
-        ${lienzoCarta(params, f.fuente + " · " + figcap)}
+        ${lienzoCarta(params, f.fuente + " · " + fechaLocalISO(inst.inicio) + " · " + figcap)}
         <div class="ct-ley-card" data-rol="ley-card"></div>
       </figure>`;
     }).join("");
@@ -1034,7 +1142,95 @@
         ${capasHTML()}
       </div>
       <div class="ct-grid">${cartas}</div>
-      <div class="ct-serie-pron" data-rol="serie-pron"></div>`;
+      ${tipoId === "hidro" ? htmlValidacionHidro() : ""}`;
+  }
+
+  /* ============================================================
+     §P9 — VALIDACIÓN DE HIDROESTIMADORES (pestaña Hidroestimadores):
+     por producto (IMERG/PDIR), serie de los últimos 15 días con dato
+     comparando ESTIMADO medio vs OBSERVADO medio en las estaciones con
+     par, con las métricas del período al lado (MAE/sesgo/correlación).
+     Datos: /cartas/validacion/hidro_resumen (pares de validacion77_* +
+     stacks 7-7 + base canónica de observaciones).
+     ============================================================ */
+  let _hvDatos = null;                        // caché del resumen (se limpia al actualizar)
+  const HV_COLOR = { IMERG: "#4c78a8", PDIR: "#f58518" };
+  function htmlValidacionHidro() {
+    return `
+      <div class="ct-panel ct-hv">
+        <div class="ct-panel-cab">
+          <h3>Validación de hidroestimadores <span class="suave">· últimos 15 días con dato · estimado vs estaciones</span></h3>
+        </div>
+        <div class="ct-hv-grid" data-rol="hv-grid"><span class="suave" style="font-size:12px">Cargando validación…</span></div>
+        <p class="ct-nota">Cada tarjeta compara el <b>estimado satelital</b> (ventana 7-7, celda más cercana a cada
+          estación) con la <b>lluvia observada</b> de las estaciones ese día: las líneas son la <b>media</b> de las
+          estaciones con par; las métricas (MAE/sesgo/correlación) se calculan sobre <b>todos los pares estación×día</b>
+          del período. «Motor» es la referencia del histórico largo con que se pondera el consenso corregido.</p>
+      </div>`;
+  }
+  const _hvFmt = (v, suf = "") => (v == null ? "—" : (+v).toLocaleString("es-EC", { maximumFractionDigits: 2 }) + suf);
+  async function cargarValidacionHidro(cont) {
+    const host = cont.querySelector('[data-rol="hv-grid"]');
+    if (!host) return;
+    try {
+      if (!_hvDatos) _hvDatos = await App.api("/cartas/validacion/hidro_resumen");
+    } catch (e) {
+      if (host.isConnected) host.innerHTML = `<span class="suave" style="font-size:12px">Validación de hidroestimadores no disponible${window.HIDROMET_VISOR ? " en el visor" : ""}.</span>`;
+      return;
+    }
+    if (!host.isConnected) return;
+    const prods = (_hvDatos && _hvDatos.productos) || [];
+    if (!prods.length) {
+      host.innerHTML = `<span class="suave" style="font-size:12px">Aún no hay pares estimado↔observación (se llenan con la actualización diaria).</span>`;
+      return;
+    }
+    host.innerHTML = prods.map((p, i) => {
+      const m = p.metricas || {};
+      const mo = p.motor || {};
+      const filas = [
+        ["MAE", _hvFmt(m.mae, " mm")], ["Sesgo", _hvFmt(m.bias, " mm")],
+        ["Correlación", _hvFmt(m.corr)], ["Pares", m.n != null ? fmtNum(m.n) : "—"],
+        ["Días con par", m.dias != null ? fmtNum(m.dias) : "—"],
+        ["MAE motor (hist.)", _hvFmt(mo.mae, " mm")],
+      ];
+      return `<div class="ct-hv-card">
+        <div class="ct-hv-cab"><span class="titulo" style="color:${esc(HV_COLOR[p.fuente] || "var(--ink)")}">${esc(p.fuente)}</span>
+          <span class="meta mono">ventana 7-7 · ${fmtNum((p.serie && p.serie.fechas || []).length)} días</span></div>
+        <div class="ct-hv-cuerpo">
+          <div class="ct-hv-plot" data-hv-plot="${i}"></div>
+          <table class="ct-hv-met"><tbody>
+            ${filas.map(([k, v]) => `<tr><td>${esc(k)}</td><td class="mono">${v}</td></tr>`).join("")}
+          </tbody></table>
+        </div>
+      </div>`;
+    }).join("");
+    if (!window.Plotly) return;
+    const oscuro = temaOscuro();
+    const tinta = oscuro ? "#9DAABF" : "#58667A", rejilla = oscuro ? "rgba(223,230,247,.10)" : "rgba(70,89,122,.12)";
+    prods.forEach((p, i) => {
+      const div = host.querySelector(`[data-hv-plot="${i}"]`);
+      const s = p.serie || {};
+      if (!div || !(s.fechas || []).length) return;
+      const col = HV_COLOR[p.fuente] || "#4c78a8";
+      Plotly.newPlot(div, [
+        { type: "bar", name: "Observado (estaciones)", x: s.fechas, y: s.observado,
+          marker: { color: oscuro ? "rgba(174,187,208,.55)" : "rgba(70,89,122,.45)" },
+          hovertemplate: "%{x} · obs media <b>%{y:.2f} mm</b><extra></extra>" },
+        { type: "scatter", mode: "lines+markers", name: "Estimado " + p.fuente,
+          x: s.fechas, y: s.estimado, connectgaps: false,
+          line: { color: col, width: 2.2 }, marker: { size: 5, color: col },
+          customdata: s.n_pares,
+          hovertemplate: "%{x} · estimado <b>%{y:.2f} mm</b> · %{customdata} pares<extra></extra>" },
+      ], {
+        height: 215, margin: { l: 36, r: 8, t: 8, b: 40 },
+        paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+        showlegend: true, legend: { orientation: "h", y: -0.26, font: { size: 10, color: tinta } },
+        xaxis: { type: "category", nticks: 8, tickfont: { size: 9, color: tinta }, showgrid: false },
+        yaxis: { title: { text: "mm", font: { size: 9, color: tinta } },
+                 tickfont: { size: 9, color: tinta }, gridcolor: rejilla, zeroline: false, rangemode: "tozero" },
+        font: { color: tinta }, barcornerradius: 3,
+      }, { displayModeBar: false, responsive: true });
+    });
   }
 
   function conectarGrid(cont, tipoId) {
@@ -1057,7 +1253,7 @@
     cont.querySelector('[data-rol="prev"]').onclick = () => salta(-1);
     cont.querySelector('[data-rol="next"]').onclick = () => salta(1);
     cont.querySelectorAll('.ct-toggle[data-capa]').forEach(b => b.onclick = () => { E.capas[b.dataset.capa] = !E.capas[b.dataset.capa]; re(); });
-    pintarSeriePron(cont, tipoId);
+    if (tipoId === "hidro") cargarValidacionHidro(cont);   // §P9: panel de validación
   }
 
   /* ============================================================
@@ -1118,7 +1314,7 @@
       return `<figure class="ct-carta">
         <div class="ct-carta-cab"><span class="titulo">${esc(sigla)}</span>
           <span class="meta" title="${esc(desc)}">${esc(desc)}</span></div>
-        ${lienzoCarta(params, sigla + (desc ? " · " + desc : ""))}
+        ${lienzoCarta(params, sigla + " · " + fechaLocalISO(it.inicio) + (desc ? " · " + desc : ""))}
         <div class="ct-ley-card" data-rol="ley-card"></div>
       </figure>`;
     }).join("");
@@ -1189,22 +1385,26 @@
       `<option value="${h}" ${h === g.horas ? "selected" : ""}>${String(h).padStart(2, "0")} h</option>`).join("");
     const optsInst = pr.instantes.map((x, i) =>
       `<option value="${i}" ${i === g.inst ? "selected" : ""}>${esc(x.etiqueta)}</option>`).join("");
+    // §P10: el TÍTULO de cada carta es el PRODUCTO ("Riesgo de helada", "Riesgo de
+    // ola de calor", anomalías) — nada de fuentes técnicas en lo visible; el meta
+    // lleva la ventana ("Día 00-24 vs normal local").
     const cartas = vars.flatMap(v => {
       const p = v.periodos.find(pp => pp.horas === g.horas);
       const it = p.instantes[Math.min(g.inst, p.instantes.length - 1)];
+      const rotulo = v.etiqueta || v.id;
       return (p.fuentes || []).slice(0, 4).map(f => {
         const record = it && it.registros ? it.registros[f.fuente] : undefined;
         const archivo = (it && it.archivos && it.archivos[f.fuente]) || f.archivo;
         if (!it || record === undefined || archivo == null) {
-          return `<figure class="ct-carta"><div class="ct-carta-cab"><span class="titulo">${esc(f.fuente)}</span>
-            <span class="meta">${esc(v.etiqueta)}</span></div>
+          return `<figure class="ct-carta"><div class="ct-carta-cab"><span class="titulo">${esc(rotulo)}</span>
+            <span class="meta">${esc(p.figcap || "")}</span></div>
             <div class="ct-lienzo"><div class="fallo"><div class="icono">🗺️</div>Sin dato</div></div></figure>`;
         }
         const params = { archivo, capa: f.capa, record, corrido: f.corrido || p.corrido ? 1 : 0, fin: it.fin };
         return `<figure class="ct-carta">
-          <div class="ct-carta-cab"><span class="titulo">${esc(f.fuente)}</span>
-            <span class="meta" title="${esc(v.etiqueta)}">${esc(v.etiqueta)}</span></div>
-          ${lienzoCarta(params, f.fuente + " · " + (v.etiqueta || ""))}
+          <div class="ct-carta-cab"><span class="titulo">${esc(rotulo)}</span>
+            <span class="meta" title="${esc(p.figcap || "")}">${esc(p.figcap || "")}</span></div>
+          ${lienzoCarta(params, rotulo + " · " + fechaLocalISO(it.inicio))}
           <div class="ct-ley-card" data-rol="ley-card"></div>
         </figure>`;
       });
@@ -1297,15 +1497,26 @@
       // VISOR en modo ZPH: pedir la variante congelada &modo=zph (solo capas de
       // alerta de lluvia; en la app el POST ya intercambió el .nc y no hace falta).
       if (window.HIDROMET_VISOR && a.modo === "zph" && a.varId === "alerta_lluvia") params.modo = "zph";
+      // §P18a: SOLO en precipitación (nunca temperatura) las zonas de desbordamiento
+      // (FFR) se dibujan SOBRE la carta si el FFR cubre la fecha de este instante.
+      if (a.varId === "alerta_lluvia" && inst) params.ffr = fechaLocalISO(inst.inicio);
       return `<figure class="ct-carta">
         <div class="ct-carta-cab"><span class="titulo">${esc(rotulo)}</span><span class="meta">${meta}</span></div>
-        ${lienzoCarta(params, "Alerta " + rotulo)}
+        ${lienzoCarta(params, "Alerta " + rotulo + " · " + fechaLocalISO(inst.inicio))}
         <div class="ct-ley-card" data-rol="ley-card"></div>
       </figure>`;
     }).join("");
 
     const sinArbol = tieneArbol ? "" :
       `<div class="vacio" style="padding:24px"><span class="suave">No hay alertas vigentes en disco; el panel de desempeño usa la validación histórica del programa.</span></div>`;
+
+    // §P18a: la nota del overlay FFR SOLO aplica a precipitación.
+    const esLluvia = a.varId === "alerta_lluvia";
+    const notaFFR = esLluvia
+      ? `<p class="ct-nota" style="margin:-4px 0 14px">Las <b>zonas de desbordamiento (FFR · programa)</b> se dibujan
+           <span style="color:#009AF2;font-weight:700">punteadas</span> SOBRE las cartas de alerta de lluvia cuando el
+           FFR cubre esa fecha (consenso MÁX de los 4 modelos FFGS). Su validación contra eventos SNGR está abajo.</p>`
+      : "";
 
     return `
       <div class="ct-barra compacta">
@@ -1320,13 +1531,14 @@
           <select class="ct-instante" data-rol="ainst">${optsInst}</select>
           <button class="ct-nav" data-rol="anext" ${(!p || a.inst >= p.instantes.length - 1) ? "disabled" : ""}>▶</button>
         </div>
-        ${capasHTML()}
+        ${capasHTML(true)}
       </div>
       ${sinArbol}
       <div class="ct-grid">${cartas}</div>
+      ${notaFFR}
       <div class="ct-panel" id="ct-desempeno">
         <div class="ct-panel-cab">
-          <h3>Validación de desempeño <span class="suave" data-rol="dsub">· cargando…</span></h3>
+          <h3>Validación del programa <span class="suave" data-rol="dsub">· cargando…</span></h3>
         </div>
         <div class="ct-puntaje-headline" data-rol="puntaje-headline"></div>
         <div class="ct-desenlaces" data-rol="desenlaces">
@@ -1335,16 +1547,57 @@
         </div>
         <div class="ct-ranking-modelos" data-rol="ranking-modelos"></div>
         <div class="ct-serie" data-rol="serie"></div>
+        ${esLluvia ? htmlCrucePrograma() : ""}
+        ${esLluvia ? htmlFFRBloque() : ""}
         <p class="ct-nota" data-rol="dnota">Las alertas se construyen por <b>consenso de modelos</b> y traen su desempeño documentado contra lo observado (ventana 24 h, 7-7).</p>
-      </div>
-      ${htmlRiesgoFFR()}`;
+      </div>`;
   }
 
-  // Parámetros de los 7 toggles para carta.png (1/0 cada uno).
-  function optsParams(opts) {
-    const o = {};
-    for (const tg of TOGGLES) o[tg.id] = opts[tg.id] ? 1 : 0;
-    return o;
+  /* §P18b — bloque CRUCE POR ÁREA: la intensidad se juzga con estaciones (tabla de
+     arriba); el ÁREA de lluvia se juzga contra el hidroestimador 7-7 observado.
+     Reusa el endpoint /alertas_programa/validacion.png (fondo hidro + zonas del
+     programa + estaciones por las 5 lecturas), que existía sin consumidor en la UI. */
+  function htmlCrucePrograma() {
+    const opts = ALERTA_FUENTES.map(f =>
+      `<option value="${esc(f)}">${esc(ALERTA_FUENTE_ROTULO[f] || f)}</option>`).join("");
+    return `
+      <div class="ct-vp-bloque" data-rol="cruce-bloque">
+        <div class="ct-vp-cab">
+          <h4>Área de lluvia — cruce alerta ↔ hidroestimador 7-7 <span class="suave">(verdad espacial)</span></h4>
+          <div class="ct-vp-ctrl">
+            <label><span class="et">Versión</span><select data-rol="cx-fuente">${opts}</select></label>
+            <label><span class="et">Fecha</span><select data-rol="cx-fecha"></select></label>
+            <label><span class="et">Fondo</span><select data-rol="cx-prod"><option value="IMERG">IMERG</option></select></label>
+          </div>
+        </div>
+        <div class="ct-vp-img" data-rol="cx-img"><span class="suave" style="font-size:12px">Cargando fechas con histórico…</span></div>
+      </div>`;
+  }
+
+  /* §P18c — bloque FFR ↔ SNGR: las zonas de desbordamiento ya NO tienen carta
+     aparte (van SOBRE las cartas de lluvia); aquí queda su VALIDACIÓN contra los
+     desbordamientos/crecidas observados (eventos SNGR) + la descarga SHP oficial. */
+  function htmlFFRBloque() {
+    return `
+      <div class="ct-vp-bloque" data-rol="ffr-bloque">
+        <div class="ct-vp-cab">
+          <h4>Desbordamientos — zonas FFR ↔ eventos SNGR <span class="suave">(falsas alarmas y cobertura)</span></h4>
+          <div class="ct-vp-ctrl">
+            <label><span class="et">Fecha</span><select data-rol="ffr-fecha"><option value="-1">vigente</option></select></label>
+            <label><span class="et">Buffer</span>
+              <select data-rol="ffr-buffer">
+                <option value="ninguno">Sin buffer (cuencas exactas)</option>
+                <option value="cuencas">Margen sobre cuencas</option>
+                <option value="rios">Corredor fluvial</option>
+                <option value="ambos" selected>Ambos</option>
+              </select></label>
+            <a class="ct-dl ct-dl-shp ct-dl-inline" role="button" tabindex="0" data-rol="ffr-shp"
+               title="Descargar shapefile de la zona (.shp + .qml QGIS)" aria-label="Descargar shapefile FFR">SHP</a>
+          </div>
+        </div>
+        <div class="ct-ffr-valida" data-rol="ffr-valida"></div>
+        <div class="ct-ffr-serie" data-rol="ffr-serie"></div>
+      </div>`;
   }
 
   function conectarAlertas(cont) {
@@ -1365,6 +1618,7 @@
           try { await App.api("/cartas/umbrales_modo", { method: "POST", body: { modo: a.modo } }); }
           catch (e) { App.aviso(e.message, "error"); }
         }
+        limpiarCacheDatos();   // §P14: el swap fija/zph cambió el .nc → la caché de mallas caduca
         re(); cargarFechas();
       });
     cont.querySelector('[data-rol="editar"]').onclick = abrirEditorUmbrales;
@@ -1378,7 +1632,20 @@
     cont.querySelectorAll('.ct-toggle[data-capa]').forEach(b => b.onclick = () => { E.capas[b.dataset.capa] = !E.capas[b.dataset.capa]; re(); });
 
     cargarDesempeno();
-    conectarRiesgoFFR(cont);
+    conectarCruce(cont);      // §P18b: cruce por área (solo precip; el bloque no existe en temp)
+    conectarFFRBloque(cont);  // §P18c: validación FFR ↔ SNGR (solo precip)
+  }
+
+  // §P18b — datos de desempeño CACHEADOS por variable+modo (una petición por clave);
+  // los usan cargarDesempeno (tarjetas/ranking/serie) y conectarCruce (fechas_cruce).
+  async function datosDesempeno() {
+    const a = E.alerta;
+    const varVal = (VAR_ALERTA.find(x => x.id === a.varId) || VAR_ALERTA[0]).val;
+    const clave = varVal + "|" + a.modo;
+    if (a._desClave === clave && a._desDatos) return a._desDatos;
+    const r = await App.api("/cartas/alertas_programa?" + qs({ variable: varVal, modo: a.modo }));
+    a._desClave = clave; a._desDatos = r;
+    return r;
   }
 
   // Validación de desempeño real del programa (5 desenlaces de consenso).
@@ -1386,18 +1653,12 @@
     const panel = document.getElementById("ct-desempeno");
     if (!panel) return;
     const a = E.alerta;
-    const varVal = (VAR_ALERTA.find(x => x.id === a.varId) || VAR_ALERTA[0]).val;
     // El desempeño SÓLO depende de variable+modo (no del instante ni de los
-    // toggles). Cacheamos la respuesta por esa clave: cada toggle/navegación de
-    // instante re-pinta el panel desde caché sin repetir la petición de red. La
-    // caché se invalida tras una actualización (recargar() la limpia).
-    const clave = varVal + "|" + a.modo;
+    // toggles). datosDesempeno() cachea la respuesta por esa clave: cada toggle/
+    // navegación re-pinta desde caché sin repetir la petición. La caché se
+    // invalida tras una actualización (recargar() la limpia).
     try {
-      let r = (a._desClave === clave) ? a._desDatos : null;
-      if (!r) {
-        r = await App.api("/cartas/alertas_programa?" + qs({ variable: varVal, modo: a.modo }));
-        a._desClave = clave; a._desDatos = r;
-      }
+      const r = await datosDesempeno();
       if (!document.getElementById("ct-desempeno")) return;
       const porClave = {};
       (r.lecturas || []).forEach(l => { porClave[l.clave] = l; });
@@ -1582,51 +1843,72 @@
     };
   }
 
-  /* ---- Zonas de riesgo de crecida (FFR): consenso de modelos → polígonos
-     bufferados, exportables en formato oficial. El buffer se elige aquí. ---- */
-  // Producto FFR del PROGRAMA (riesgo de crecida pronosticado). Va en la pestaña
-  // "Advertencias" (catálogo del programa), NO en las oficiales. Se valida POR FECHA
-  // contra los desbordamientos/crecidas observados ese día.
-  function htmlRiesgoFFR() {
-    return `
-      <div class="ct-panel ct-ffr">
-        <div class="ct-ffr-cab">
-          <div>
-            <h3 class="ct-subtitulo" style="margin:0">Zonas de riesgo de crecida (FFR · programa)</h3>
-            <span class="suave">Riesgo de crecida repentina pronosticado · consenso MÁX de los 4 modelos FFGS · validado vs desbordamientos/crecidas observados de la fecha</span>
-          </div>
-          <div class="ct-ffr-ctrl">
-            <label><span class="et">Fecha</span><select data-rol="ffr-fecha"><option value="-1">vigente</option></select></label>
-            <label><span class="et">Buffer</span>
-              <select data-rol="ffr-buffer">
-                <option value="ninguno">Sin buffer (cuencas exactas)</option>
-                <option value="cuencas">Margen sobre cuencas</option>
-                <option value="rios">Corredor fluvial</option>
-                <option value="ambos" selected>Ambos</option>
-              </select></label>
-          </div>
-        </div>
-        <figure class="ct-ffr-mapa ct-det-mapa" style="position:relative;margin:0">
-          <a class="ct-dl ct-dl-jpg" role="button" tabindex="0" data-dlimg="1" data-nombre="zonas_riesgo_crecida_FFR"
-             title="Descargar mapa (imagen)" aria-label="Descargar mapa"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></a>
-          <a class="ct-dl ct-dl-shp" role="button" tabindex="0" data-rol="ffr-shp" title="Descargar shapefile (.shp + .qml QGIS)" aria-label="Descargar shapefile">SHP</a>
-          <div data-rol="ffr-plot" style="width:100%;height:460px"></div>
-        </figure>
-        <div class="ct-ffr-valida" data-rol="ffr-valida"></div>
-        <div class="ct-ffr-serie" data-rol="ffr-serie"></div>
-        <p class="ct-nota">El polígono encierra las microcuencas en riesgo. Se valida cruzándolo con los
-          <b>desbordamientos/crecidas</b> observados de esa fecha (eventos de río dentro de la zona).</p>
-      </div>`;
+  /* §P18b — CRUCE POR ÁREA: imagen del cruce real (fondo hidro 7-7 + zonas del
+     programa + estaciones por lectura). Selectores: versión (consenso/modelos/
+     calibrados) · fecha con histórico · producto de fondo (IMERG/PDIR/consenso). */
+  function conectarCruce(cont) {
+    const bloque = cont.querySelector('[data-rol="cruce-bloque"]');
+    if (!bloque) return;
+    const a = E.alerta;
+    const selFu = bloque.querySelector('[data-rol="cx-fuente"]');
+    const selFe = bloque.querySelector('[data-rol="cx-fecha"]');
+    const selPr = bloque.querySelector('[data-rol="cx-prod"]');
+    const host = bloque.querySelector('[data-rol="cx-img"]');
+    const cargarProductos = async () => {
+      // hidroestimadores CON dato 7-7 para la fecha elegida + "Consenso corregido".
+      if (!selFe.value) return;
+      try {
+        const r = await App.api("/cartas/hidroestimador/opciones?" + qs({ fecha: selFe.value }));
+        const ops = (r.opciones && r.opciones.length) ? r.opciones : [{ id: "IMERG", etiqueta: "IMERG" }];
+        const previo = selPr.value;
+        selPr.innerHTML = ops.map(o => `<option value="${esc(o.id)}">${esc(o.etiqueta)}</option>`).join("");
+        if ([...selPr.options].some(o => o.value === previo)) selPr.value = previo;
+        else if ([...selPr.options].some(o => o.value === "consenso")) selPr.value = "consenso";
+      } catch (e) { /* se queda IMERG */ }
+    };
+    const pintar = () => {
+      if (!selFe.value) {
+        host.innerHTML = `<span class="suave" style="font-size:12px">Aún no hay fechas con histórico de validación para esta variable.</span>`;
+        return;
+      }
+      const url = api("/cartas/alertas_programa/validacion.png?" + qs({
+        fuente: selFu.value, variable: "precip", modo: a.modo,
+        fecha: selFe.value, producto: selPr.value || "IMERG" }));
+      host.innerHTML = `<div class="cargando mono" style="position:static;padding:26px 0">Generando cruce…</div>`;
+      const im = new Image();
+      im.alt = "Cruce de validación del programa";
+      im.onload = () => { if (host.isConnected) { host.innerHTML = ""; host.appendChild(im); } };
+      im.onerror = () => {
+        if (host.isConnected) host.innerHTML =
+          `<span class="suave" style="font-size:12px">Cruce no disponible${window.HIDROMET_VISOR ? " en el visor" : ""} para esa fecha/producto.</span>`;
+      };
+      im.src = url;
+    };
+    selFu.onchange = pintar;
+    selFe.onchange = async () => { await cargarProductos(); pintar(); };
+    selPr.onchange = pintar;
+    (async () => {
+      let fechas = [];
+      try { fechas = (await datosDesempeno()).fechas_cruce || []; } catch (e) { /* sin histórico */ }
+      if (!bloque.isConnected) return;
+      // más reciente PRIMERO (lo habitual es revisar la última fecha validada).
+      selFe.innerHTML = fechas.slice().reverse().map(f => `<option>${esc(f)}</option>`).join("");
+      await cargarProductos();
+      pintar();
+    })();
   }
 
-  function conectarRiesgoFFR(cont) {
-    const plot = cont.querySelector('[data-rol="ffr-plot"]');
-    const sel = cont.querySelector('[data-rol="ffr-buffer"]');
-    const selF = cont.querySelector('[data-rol="ffr-fecha"]');
-    const valida = cont.querySelector('[data-rol="ffr-valida"]');
-    const serieHost = cont.querySelector('[data-rol="ffr-serie"]');
-    const shpBtn = cont.querySelector('[data-rol="ffr-shp"]');
-    if (!plot || !sel) return;
+  /* §P18c — VALIDACIÓN FFR ↔ SNGR (las zonas van SOBRE las cartas; aquí solo la
+     evidencia): KPIs de la fecha elegida + métricas del historial + descarga SHP. */
+  function conectarFFRBloque(cont) {
+    const bloque = cont.querySelector('[data-rol="ffr-bloque"]');
+    if (!bloque) return;
+    const sel = bloque.querySelector('[data-rol="ffr-buffer"]');
+    const selF = bloque.querySelector('[data-rol="ffr-fecha"]');
+    const valida = bloque.querySelector('[data-rol="ffr-valida"]');
+    const serieHost = bloque.querySelector('[data-rol="ffr-serie"]');
+    const shpBtn = bloque.querySelector('[data-rol="ffr-shp"]');
+    if (!sel) return;
     const rec = () => (selF && selF.value) || "-1";
     // ── MÉTRICAS del historial FFR ↔ eventos SNGR (una fila por fecha del histórico F1;
     //    POD agregado micro-promedio). Estados: las fechas que el feed SNGR aún no cubre
@@ -1651,7 +1933,8 @@
           ? `<div style="margin:8px 0 10px;padding:9px 12px;border-radius:9px;font-size:12px;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-bd)">
                <b>Muestra insuficiente:</b> solo <b>${fmtNum(_nEv)}</b> evento(s) observado(s) en el histórico FFR disponible. El POD/FAR de abajo son indicativos, aún <b>no una métrica de desempeño consolidada</b> — se afinará al acumular temporada.</div>`
           : "";
-        const filas = serie.slice().reverse().map(f => {
+        // §P18: tabla COMPACTA — últimas 14 fechas (el POD global sí agrega todo el historial).
+        const filas = serie.slice(-14).reverse().map(f => {
           const aten = (f.estado === "sin_datos_eventos" || f.estado === "pendiente") ? ' style="opacity:.45"' : "";
           return `<tr${aten}><td>${esc(f.fecha)}</td>
             <td class="mono">${f.eventos == null ? "—" : fmtNum(f.eventos)}</td>
@@ -1687,10 +1970,10 @@
       } catch (e) { valida.innerHTML = `<span class="suave" style="font-size:12px">Validación no disponible.</span>`; }
     };
     const pinta = () => {
-      renderFFRZona(plot, { buffer: sel.value, record: rec() });
-      // El botón SHP (esquina, al lado del de imagen) usa el handler genérico [data-shp]:
-      // app = lo guarda el servidor; visor = baja el .zip PRE-CONGELADO. SIN fecha, para que
-      // la ruta calce con el .zip congelado por (buffer+record).
+      // El botón SHP usa el handler genérico [data-shp]: app = lo guarda el servidor;
+      // visor = baja el .zip PRE-CONGELADO. SIN fecha, para que la ruta calce con el
+      // .zip congelado por (buffer+record). El mapa aparte se retiró (§P18a: las
+      // zonas se dibujan SOBRE las cartas de alerta de lluvia).
       if (shpBtn) shpBtn.dataset.shp = "/cartas/riesgo_ffr/descarga?" + qs({ buffer: sel.value, record: rec() });
       cargarValida();
     };
@@ -1704,50 +1987,10 @@
         if (selF && fs.length) selF.innerHTML = fs.map((f, i) =>
           `<option value="${f.record}" ${i === fs.length - 1 ? "selected" : ""}>${esc(f.fecha)}</option>`).join("");
       } catch (e) { /* deja "vigente" */ }
+      if (!bloque.isConnected) return;
       pinta();
       cargarSerie();
     })();
-  }
-
-  // Mapa INTERACTIVO de las zonas de riesgo de crecida (FFR): zona RELLENA translúcida
-  // (formas reales de las microcuencas en riesgo, bufferadas — sin casco convexo que las
-  // infle) sobre el contorno de Ecuador. Reemplaza el PNG estático; funciona en el visor.
-  async function renderFFRZona(div, params) {
-    if (!div) return;
-    await asegurarGeoCartas();
-    let d;
-    try { d = await App.api("/cartas/riesgo_ffr/datos?" + qs(params)); }
-    catch (e) {
-      div.innerHTML = `<div class="vacio" style="padding:22px">${window.HIDROMET_VISOR ? "Zonas FFR no publicadas en el visor" : "Zonas FFR no disponibles"}</div>`;
-      return;
-    }
-    if (!div.isConnected) return;
-    const ext = d.bbox || [-81.3, -75.0, -5.1, 1.6];
-    const col = d.color || "#009AF2";
-    const rgba = (h, a) => { const c = _hexRgb(h); return `rgba(${c[0]},${c[1]},${c[2]},${a})`; };
-    const traces = trazasOutline("x", "y", null, 2.0, 3.4);   // spec mapa grande: 2.0/3.4
-    const anillos = d.anillos || [];
-    if (anillos.length) {
-      const xs = [], ys = [];
-      for (const an of anillos) { for (const [lo, la] of an) { xs.push(lo); ys.push(la); } xs.push(null); ys.push(null); }
-      traces.push({
-        type: "scatter", x: xs, y: ys, fill: "toself", mode: "lines",
-        line: { color: col, width: 1.7 }, fillcolor: rgba(col, .35),
-        name: `Riesgo de crecida (${d.n_cuencas || 0} microcuencas)`, hoverinfo: "skip",
-        showlegend: true, xaxis: "x", yaxis: "y",
-      });
-    }
-    const layout = App.plotlyLayoutBase({
-      showlegend: anillos.length > 0,
-      // tinta TEMÁTICA: mapa de Advertencias → papel claro en claro, fondo del tema en oscuro
-      legend: { orientation: "h", x: 0, y: -0.03, xanchor: "left", font: { size: 10.5, color: temaOscuro() ? "#E8EDF6" : "#283550" } },
-      margin: { l: 0, r: 0, t: 0, b: anillos.length ? 40 : 6 },
-      xaxis: { range: [ext[0], ext[1]], visible: false, fixedrange: false },
-      yaxis: { range: [ext[2], ext[3]], scaleanchor: "x", scaleratio: 1, visible: false, fixedrange: false },
-      dragmode: "pan",
-    });
-    Plotly.newPlot(div, traces, layout, App.plotlyConfig({ scrollZoom: !TOUCH_COARSE, staticPlot: TOUCH_COARSE, displayModeBar: false, doubleClick: "reset" }));
-    if (App.pinchZoomMapa) App.pinchZoomMapa(div);   // v17: pinza = zoom del mapa
   }
 
   /* ============================================================
@@ -1805,6 +2048,7 @@
   async function recargar() {
     if (!E) return;                                   // la vista pudo desmontarse
     if (E.alerta) E.alerta._desClave = null;          // invalida la caché de desempeño
+    limpiarCacheDatos();                              // §P14/§P9: mallas y resúmenes caducan
     try { E.productos = await App.api("/cartas/productos"); }
     catch (e) { /* mantiene el árbol previo */ }
     if (vp) { try { vp.pintar(vp.activa()); } catch (e) {} }   // re-pinta la pestaña activa
@@ -1815,7 +2059,8 @@
   async function asegurarEstado() {
     if (!E) {
       E = { tipo: "pronostico", productos: { tipos: [] }, grid: {},
-            capas: { grilla: true, galapagos: true, estaciones: false },
+            // §P4: los cuatro toggles de capa inician ACTIVOS en todas las cartas.
+            capas: { grilla: true, isolineas: true, galapagos: true, estaciones: true },
             alerta: { varId: "alerta_lluvia", modo: "fija", inst: null,
                       opts: Object.fromEntries(TOGGLES.map(t => [t.id, t.on])), fechasEmitidas: [] } };
     }
@@ -1856,6 +2101,7 @@
   document.addEventListener("datos-actualizados", () => {
     if (!E) return;
     if (E.alerta) E.alerta._desClave = null;
+    limpiarCacheDatos();   // §P14/§P9/§P18: mallas, resumen hidro y zonas FFR caducan
     if (vp) recargar();
     else E._stale = true;   // NO destruir E.productos: rompería un panel FFGS montado bajo Hidrología; re-fetch perezoso en asegurarEstado
   });
@@ -1926,7 +2172,6 @@
   async function descargarImagenMapa(b) {
     const cont = b.closest(".ct-lienzo") || b.closest("figure") || b.parentElement;
     const plot = cont && (cont.querySelector(".ct-mapa-plot")
-      || cont.querySelector('[data-rol="ffr-plot"]')
       || cont.querySelector(".js-plotly-plot"));
     if (!plot || !window.Plotly) throw new Error("El mapa aún no está listo");
     const nombre = String(b.dataset.nombre || "carta").replace(/[^\w\-]+/g, "_").slice(0, 60) || "carta";
@@ -2052,80 +2297,6 @@
   function _wireActualizar(vista) {
     const b = vista.querySelector("#ct-actualizar");
     if (b) b.onclick = abrirActualizar;
-  }
-
-  /* ============================================================
-     PESTAÑA "Series temporales" — comparativa multimodelo por estación,
-     según la variable y la frecuencia: ≥15 días pasados + presente + horizonte
-     futuro. A 24 h se incluyen las observaciones con etiquetas de valor.
-     ============================================================ */
-  async function panelSeries(cont) {
-    await asegurarEstaciones();
-    const ests = Array.isArray(_estaciones) ? _estaciones : [];
-    const valEst = e => String(e.codigo || e.cod || e.id || "");
-    const nomEst = e => String(e.nombre || e.nombre_estacion || e.name || valEst(e));
-    const optEst = ests.map(e => `<option value="${esc(valEst(e))}">${esc(nomEst(e))} (${esc(valEst(e))})</option>`).join("");
-    cont.innerHTML = `
-      <div class="filtros">
-        <label class="campo"><span>Variable</span><select data-rol="s-var">
-          <option value="precip">Precipitación</option>
-          <option value="Tmax">Temperatura máxima</option>
-          <option value="Tmin">Temperatura mínima</option></select></label>
-        <label class="campo"><span>Frecuencia</span><select data-rol="s-freq">
-          <option value="24">24 h (diario)</option>
-          <option value="12">12 h</option><option value="6">6 h</option>
-          <option value="3">3 h</option><option value="1">1 h</option></select></label>
-        <label class="campo" style="min-width:230px"><span>Estación</span><select data-rol="s-est">${optEst}</select></label>
-      </div>
-      <div data-rol="s-plot" style="min-height:400px"></div>
-      <p class="ml-serie-pie" data-rol="s-pie"></p>`;
-    const sel = r => cont.querySelector(`[data-rol="${r}"]`);
-    if (!ests.length) { sel("s-plot").innerHTML = `<p style="padding:20px;color:var(--muted)">No hay estaciones disponibles. Actualiza las cartas primero.</p>`; return; }
-
-    async function pintar() {
-      const v = sel("s-var").value, cod = sel("s-est").value;
-      const plot = sel("s-plot"), pie = sel("s-pie");
-      const esTemp = v !== "precip";
-      sel("s-freq").disabled = esTemp;            // la temperatura solo es diaria (Tmax/Tmin)
-      if (esTemp) sel("s-freq").value = "24";
-      const f = sel("s-freq").value;
-      plot.innerHTML = `<p style="padding:20px;color:var(--muted)">Cargando serie…</p>`; pie.textContent = "";
-      let r;
-      try {
-        // C4: /series/grilla espera el ID DEL ÁRBOL de cartas ("lluvia"), no el de
-        // validación ("precip") — con precip devolvía 404 en las 4 frecuencias sub-diarias.
-        const vGrilla = (v === "precip") ? "lluvia" : v;
-        r = (f === "24")
-          ? await App.api(`/cartas/series/estacion?codigo=${encodeURIComponent(cod)}&variable=${v}&dias=20&tipo=pronostico`)
-          : await App.api(`/cartas/series/grilla?codigo=${encodeURIComponent(cod)}&variable=${vGrilla}&periodo=${f}&tipo=pronostico`);
-      } catch (e) { plot.innerHTML = `<p style="padding:20px;color:var(--danger)">No se pudo cargar la serie.</p>`; return; }
-      if (!r || r.error || !(r.trazas && r.trazas.length)) {
-        plot.innerHTML = `<p style="padding:20px;color:var(--muted)">Sin datos para ${esc(v)} a ${esc(f)} h en esta estación (las series sub-diarias requieren cartas cargadas de ese período).</p>`;
-        return;
-      }
-      plot.innerHTML = "";
-      if (!window.Plotly) return;
-      const esPrecip = (r.es_precip != null) ? r.es_precip : (v === "precip");
-      const layout = App.plotlyLayoutSerie("", {
-        barmode: "overlay",
-        yaxis: { title: { text: r.unidad || (esPrecip ? "mm" : "°C"), font: { size: 11 } }, rangemode: esPrecip ? "tozero" : "normal" },
-        xaxis: { type: "date", tickformat: "%d/%m", tickangle: 0, nticks: 12 },
-      });
-      // F5: el divisor "presente" es HOY (TZ Ecuador) calculado en CLIENTE — el visor
-      // congela los JSON y el 'hoy' del backend envejece. r.hoy da la pista de formato
-      // (fecha vs fecha+hora en ejes sub-diarios) y sirve de fallback.
-      const _hoy = App.hoyEC ? App.hoyEC((r.hoy && String(r.hoy).length > 10) ? 16 : 10) : r.hoy;
-      if (_hoy) {
-        layout.shapes = [{ type: "line", x0: _hoy, x1: _hoy, yref: "paper", y0: 0, y1: 1, line: { color: (App.tema && App.tema() === "oscuro") ? "#75859D" : "#95A1B2", width: 1.2, dash: "dot" } }];
-        layout.annotations = [{ x: _hoy, yref: "paper", y: 1, yanchor: "bottom", text: "presente", showarrow: false, font: { family: "IBM Plex Mono", size: 10, color: (App.tema && App.tema() === "oscuro") ? "#9DAABF" : "#5A6678" } }];
-      }
-      window.Plotly.newPlot(plot, r.trazas, layout, App.plotlyConfig());
-      pie.innerHTML = `Comparativa multimodelo — ${f === "24" ? "diario (24 h)" : f + " h"}.` +
-        (esPrecip && f === "24" ? " Las observaciones (negro) llevan etiqueta de valor." : (esTemp ? " Temperatura diaria por modelo." : " Modelos (sin observación sub-diaria).")) +
-        " Cubre los últimos ~20 días + el horizonte de pronóstico.";
-    }
-    ["s-var", "s-freq", "s-est"].forEach(rr => sel(rr).addEventListener("change", pintar));
-    pintar();
   }
 
   /* ============================================================
