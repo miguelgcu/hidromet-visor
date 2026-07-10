@@ -742,7 +742,9 @@
     if (d.vacio) {
       layout.annotations = (layout.annotations || []).concat([{
         xref: "paper", yref: "paper", x: 0.5, y: 0.5, xanchor: "center", yanchor: "middle",
-        text: d.vacio === "sin_datos" ? "Sin pronóstico<br>para esta fecha" : "Sin alertas<br>para esta fecha",
+        text: d.vacio === "sin_datos"
+          ? "Fuera del horizonte de este modelo:<br>su corrida aún no cubre esta ventana.<br><i>Se completará con la próxima actualización.</i>"
+          : "Con pronóstico, pero sin alertas:<br>ningún punto alcanza el nivel Medio.",
         showarrow: false, align: "center", font: { size: 13, color: oscuro ? "#9DAABF" : "#64748b" },
         bgcolor: oscuro ? "rgba(20,28,45,.78)" : "rgba(255,255,255,.82)", borderpad: 8,
         bordercolor: oscuro ? "rgba(182,192,205,.40)" : "rgba(100,116,139,.32)", borderwidth: 1 }]);
