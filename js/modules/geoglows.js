@@ -71,18 +71,24 @@
             <div class="gg-kicker">Hidrología · caudales modelados</div>
             <h2 class="gg-title">Caudales de ríos — GEOGLOWS</h2>
             <p class="gg-sub">Pronóstico de caudal a 15 días por tramo de río (GEOGLOWS ECMWF v2).
-              Elige un <b>río de la lista</b> o pulsa cualquier punto del mapa.</p>
+              <b>Busca o elige un río</b> en el selector, o pulsa cualquier punto del mapa.</p>
           </div>
           <div class="gg-actions">
             <button class="gg-btn" data-rol="glosario">📖 Guía</button>
             <button class="gg-btn primario" data-rol="actualizar">⟳ Actualizar</button>
           </div>
         </div>
-        <section class="gg-card gg-picks">
-          <div class="gg-picks-tit">Ríos vigilados</div>
-          <div class="gg-picks-list" data-rol="picks">
-            <div class="gg-empty"><span class="spin"></span><span>Cargando ríos…</span></div>
+        <section class="gg-card gg-selector">
+          <label class="gg-sel-lbl" for="gg-sel-input">Río</label>
+          <div class="gg-sel-field" data-rol="combo">
+            <span class="gg-sel-ic" aria-hidden="true">🔍</span>
+            <input id="gg-sel-input" type="text" class="gg-sel-input" data-rol="combo-input"
+                   placeholder="Cargando ríos…" autocomplete="off" role="combobox"
+                   aria-autocomplete="list" aria-expanded="false" aria-controls="gg-sel-pop" disabled>
+            <button class="gg-sel-caret" data-rol="combo-toggle" aria-label="Ver todos los ríos" tabindex="-1">▾</button>
+            <div class="gg-sel-pop" id="gg-sel-pop" data-rol="combo-pop" role="listbox" hidden></div>
           </div>
+          <span class="gg-sel-count" data-rol="combo-count"></span>
         </section>
         <div class="gg-main">
           <section class="gg-card gg-mapwrap">
@@ -140,7 +146,7 @@
       </div>
       <div class="gg-sheet-stats">
         <div><span class="lbl">Caudal actual</span><span class="val">${fmt1(m.actual)}</span><span class="u">m³/s</span></div>
-        <div><span class="lbl">Pico 15 días</span><span class="val">${fmt1(r.pico)}</span><span class="u">m³/s</span></div>
+        <div><span class="lbl">Pico probable</span><span class="val">${fmt1(r.pico)}</span><span class="u">m³/s · p75</span></div>
         <div><span class="lbl">RP cercano</span><span class="val">${m.cercano ? "RP " + m.cercano.anios : "—"}</span>
           <span class="u">${m.cercano ? "umbral " + fmt(m.cercano.caudal) + " m³/s" : "sin umbrales"}</span></div>
       </div>
@@ -154,32 +160,84 @@
            it(COLOR_ALERTA[100], "RP 100") + it("#6B7785", "Sin dato");
   }
 
-  /* ---------------- lista de ríos (quick-picks): "cuáles puedo escoger" ---------------- */
-  function pintarPicks(items) {
-    const cont = document.querySelector('[data-rol="picks"]');
-    if (!cont) return;
-    if (!items.length) {
-      cont.innerHTML = `<div class="gg-empty"><span>Sin ríos vigilados. Pulsa ⟳ Actualizar.</span></div>`;
-      return;
+  /* ---------------- SELECTOR de río con búsqueda por nombre (reemplaza las pastillas) ----
+     Combo accesible: un campo con lupa que filtra los ríos vigilados por nombre y despliega
+     una lista con su estado (color de alerta), nombre y caudal pico. Al elegir uno, carga su
+     hidrograma y detalle. Soporta teclado (↑↓/Enter/Esc) y clic fuera para cerrar. */
+  const _norm = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+  function montarSelector(items) {
+    const campo = document.querySelector('[data-rol="combo"]');
+    const input = document.querySelector('[data-rol="combo-input"]');
+    const pop = document.querySelector('[data-rol="combo-pop"]');
+    const caret = document.querySelector('[data-rol="combo-toggle"]');
+    const cuenta = document.querySelector('[data-rol="combo-count"]');
+    if (!campo || !input || !pop) return;
+    if (!items.length) { input.placeholder = "Sin ríos vigilados — pulsa ⟳ Actualizar"; return; }
+    input.disabled = false;
+    input.placeholder = "Busca un río por nombre…";
+    const enAlerta = items.filter(it => it.nivel_alerta && it.nivel_alerta.anios).length;
+    if (cuenta) cuenta.innerHTML = `${items.length} ríos vigilados`
+      + (enAlerta ? ` · <b style="color:${COLOR_ALERTA[50]}">${enAlerta} en alerta</b>` : "");
+
+    let resaltado = -1, visibles = items.slice();
+
+    const optHTML = (it) => {
+      const na = it.nivel_alerta, et = na ? na.etiqueta : "sin pronóstico";
+      const sel = estado.selRid && String(estado.selRid) === String(it.river_id);
+      return `<div class="gg-opt${sel ? " activo" : ""}" role="option" aria-selected="${sel}">
+        <span class="gg-opt-dot" style="background:${colorNivel(na)}"></span>
+        <span class="gg-opt-main"><span class="gg-opt-nom">${esc(it.nombre)}</span>
+          <span class="gg-opt-sub">${esc(et)}</span></span>
+        <span class="gg-opt-pico">${fmt(it.pico)}<i>m³/s</i></span></div>`;
+    };
+    function pintar() {
+      const q = _norm(input.value);
+      visibles = q ? items.filter(it => _norm(it.nombre).includes(q)) : items.slice();
+      resaltado = -1;
+      if (!visibles.length) {
+        pop.innerHTML = `<div class="gg-opt-vacio">Ningún río coincide con «${esc(input.value)}»</div>`;
+        return;
+      }
+      pop.innerHTML = visibles.map(optHTML).join("");
+      Array.from(pop.querySelectorAll(".gg-opt")).forEach((o, i) => {
+        o.onmousedown = (e) => { e.preventDefault(); elegir(visibles[i]); };
+        o.onmousemove = () => marcar(i);
+      });
     }
-    cont.innerHTML = items.map((it, i) => {
-      const na = it.nivel_alerta;
-      const et = na ? na.etiqueta : "sin pronóstico";
-      const act = (estado.selRid && String(estado.selRid) === String(it.river_id)) ? " activo" : "";
-      return `<button class="gg-rio${act}" data-i="${i}">
-        <span class="dot" style="background:${colorNivel(na)}"></span>
-        <span><span class="nom">${esc(it.nombre)}</span><span class="sub">${esc(et)}</span></span>
-        <span class="pico">${fmt(it.pico)}<br><span style="font-weight:400;opacity:.65">m³/s</span></span>
-      </button>`;
-    }).join("");
-    cont.querySelectorAll(".gg-rio").forEach(b => b.onclick = () => {
-      const it = items[+b.dataset.i];
-      cont.querySelectorAll(".gg-rio").forEach(x => x.classList.remove("activo"));
-      b.classList.add("activo");
+    function abrir() { if (pop.hidden) { pop.hidden = false; input.setAttribute("aria-expanded", "true"); } pintar(); }
+    function cerrar() { pop.hidden = true; input.setAttribute("aria-expanded", "false"); }
+    function marcar(i) {
+      resaltado = i;
+      pop.querySelectorAll(".gg-opt").forEach((o, k) => o.classList.toggle("resaltado", k === i));
+    }
+    function verResaltado() { const o = pop.querySelectorAll(".gg-opt")[resaltado]; if (o) o.scrollIntoView({ block: "nearest" }); }
+    function elegir(it) {
+      if (!it) return;
+      input.value = it.nombre; cerrar();
       if (estado.mapa && typeof it.lat === "number") estado.mapa.setView([it.lat, it.lon], 9);
       if (it.river_id) cargarHidrograma(it.river_id, it.nombre, it.lat, it.lon);
       else consultarPunto(it.lat, it.lon);
-    });
+    }
+
+    input.oninput = abrir;
+    input.onfocus = () => { input.select(); abrir(); };
+    input.onkeydown = (e) => {
+      if (e.key === "ArrowDown") { e.preventDefault(); if (pop.hidden) abrir(); marcar(Math.min(resaltado + 1, visibles.length - 1)); verResaltado(); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); marcar(Math.max(resaltado - 1, 0)); verResaltado(); }
+      else if (e.key === "Enter") { e.preventDefault(); if (resaltado >= 0 && visibles[resaltado]) elegir(visibles[resaltado]); else if (visibles.length === 1) elegir(visibles[0]); }
+      else if (e.key === "Escape") { cerrar(); input.blur(); }
+    };
+    if (caret) caret.onclick = (e) => { e.preventDefault(); if (pop.hidden) { input.focus(); abrir(); } else cerrar(); };
+    // cerrar al hacer clic fuera del combo (listener global; se retira en limpiar()).
+    estado._cerrarFuera = (e) => { if (campo && !campo.contains(e.target)) cerrar(); };
+    document.addEventListener("mousedown", estado._cerrarFuera);
+  }
+
+  // Refleja en el campo del selector el río elegido desde el mapa/marcador.
+  function sincronizarSelector(nombre) {
+    const input = document.querySelector('[data-rol="combo-input"]');
+    if (input) input.value = nombre || "";
   }
 
   /* ---------------- mapa (propio) ---------------- */
@@ -223,8 +281,7 @@
   }
 
   function seleccionarItem(it) {
-    document.querySelectorAll(".gg-rio").forEach(x =>
-      x.classList.toggle("activo", estado.items[+x.dataset.i] === it));
+    sincronizarSelector(it && it.nombre);       // refleja la elección del mapa en el selector
     if (it.river_id) cargarHidrograma(it.river_id, it.nombre, it.lat, it.lon);
     else if (!window.HIDROMET_VISOR) consultarPunto(it.lat, it.lon);
   }
@@ -276,7 +333,7 @@
 
   /* ---------------- hidrograma ---------------- */
   async function consultarPunto(lat, lon) {
-    document.querySelectorAll('.gg-rio').forEach(x => x.classList.remove("activo"));
+    sincronizarSelector("");     // un punto libre del mapa no es un río vigilado con nombre
     await cargarHidrograma(null, null, lat, lon);
   }
 
@@ -354,9 +411,9 @@
         <div class="gg-stat"><span class="lbl">Caudal actual</span>
           <span class="val">${fmt1(actual)} <i>m³/s</i></span>
           <span class="sub">inicio del pronóstico</span></div>
-        <div class="gg-stat"><span class="lbl">Pico previsto</span>
+        <div class="gg-stat"><span class="lbl">Pico probable</span>
           <span class="val">${fmt1(pico)} <i>m³/s</i></span>
-          <span class="sub">máximo del ensemble · 15 días</span></div>
+          <span class="sub">percentil 75 · 15 días${r.pico_max != null ? ` · peor caso ${fmt(r.pico_max)} m³/s` : ""}</span></div>
         <div class="gg-stat"><span class="lbl">RP más cercano</span>
           <span class="val">${cercano ? `RP ${cercano.anios} <i>años</i>` : "—"}</span>
           <span class="sub">${cercano ? `umbral ${fmt(cercano.caudal)} m³/s` : "sin umbrales"}</span></div>
@@ -379,7 +436,7 @@
     const na = r.nivel_alerta || {};
     cont.innerHTML = `
       <span class="gg-chip" style="--c:${colorNivel(na)}">${esc(na.etiqueta || "—")}</span>
-      ${r.pico != null ? `<span class="gg-sub">Pico previsto: <b>${r.pico.toLocaleString("es-EC")}</b> ${esc(r.unidad || "m³/s")}</span>` : ""}
+      ${r.pico != null ? `<span class="gg-sub">Pico probable (p75): <b>${r.pico.toLocaleString("es-EC")}</b> ${esc(r.unidad || "m³/s")}</span>` : ""}
       ${r.aviso ? `<span class="gg-sub" style="color:var(--warn,#C5781B)">${esc(r.aviso)}</span>` : ""}`;
   }
 
@@ -491,12 +548,13 @@
     if (!vigente(estado)) return;
     if (w && w.disponible === false) App.aviso(w.error || "GEOGLOWS no disponible.", "error", 8000);
     estado.items = (w && w.items) || [];
-    pintarPicks(estado.items);
+    montarSelector(estado.items);
     pintarMarcadores(estado.items);
   }
 
   function limpiar() {
     if (_onTema) { document.removeEventListener("temacambiado", _onTema); _onTema = null; }
+    if (estado && estado._cerrarFuera) { document.removeEventListener("mousedown", estado._cerrarFuera); estado._cerrarFuera = null; }
     if (estado) estado.epoca = -1;
     if (estado && estado.mapa) { try { estado.mapa.remove(); } catch (e) {} estado.mapa = null; }
     // También los Plotly propios (hidrograma/retrospectiva) — dejan listeners de window.

@@ -1012,12 +1012,24 @@
   // a horizontes más lejanos con ◀ ▶.
   function instanteDefecto(insts) {
     if (!insts || !insts.length) return 0;
-    let best = insts.length - 1, bestN = -1;
-    for (let i = 0; i < insts.length; i++) {
-      const n = Object.keys(insts[i].registros || {}).length;
-      if (n >= bestN) { bestN = n; best = i; }
+    // (1) máxima cobertura de fuentes. (2) Entre los de cobertura máxima, el MÁS CERCANO A
+    // HOY: el primero cuya ventana aún no terminó (fin>=ahora), y si todos ya pasaron, el
+    // último pasado. Antes, el desempate 'n>=bestN' elegía el ÚLTIMO índice = el más FUTURO
+    // (D+3..D+5), lo que abría Pronóstico/Calibrado/Heladas/⚠Alertas en el día equivocado
+    // (auditoría 2026-07-10). inst.fin es epoch en segundos.
+    let bestN = -1;
+    for (const it of insts) {
+      const n = Object.keys(it.registros || {}).length;
+      if (n > bestN) bestN = n;
     }
-    return best;
+    const ahora = Date.now() / 1000;
+    let ultimoConDato = -1;
+    for (let i = 0; i < insts.length; i++) {
+      if (Object.keys(insts[i].registros || {}).length < bestN) continue;
+      ultimoConDato = i;
+      if ((insts[i].fin || 0) >= ahora) return i;   // ventana que cubre ahora o la próxima
+    }
+    return ultimoConDato >= 0 ? ultimoConDato : insts.length - 1;
   }
 
   // §menús dinámicos: fuentes ÚNICAS del período (el escaneo puede DUPLICAR una
@@ -1871,9 +1883,15 @@
         host.innerHTML = `<span class="suave" style="font-size:12px">Aún no hay fechas con histórico de validación para esta variable.</span>`;
         return;
       }
-      const url = api("/cartas/alertas_programa/validacion.png?" + qs({
-        fuente: selFu.value, variable: "precip", modo: a.modo,
-        fecha: selFe.value, producto: selPr.value || "IMERG" }));
+      // VISOR: el cruce se sirve del PNG PRE-CONGELADO (App.rutaAProducto → productos/…),
+      // no de /api (que no existe en GitHub Pages). El visor solo tiene el cruce CANÓNICO
+      // (fondo IMERG, modo por defecto) → se omiten modo/producto para casar el slug con el
+      // que congela exportar_web.py. En la app viva se pide en vivo con todos los filtros.
+      const _rc = "/cartas/alertas_programa/validacion.png?" + (window.HIDROMET_VISOR
+        ? qs({ fuente: selFu.value, variable: "precip", fecha: selFe.value })
+        : qs({ fuente: selFu.value, variable: "precip", modo: a.modo,
+               fecha: selFe.value, producto: selPr.value || "IMERG" }));
+      const url = window.HIDROMET_VISOR ? App.rutaAProducto(_rc) : api(_rc);
       host.innerHTML = `<div class="cargando mono" style="position:static;padding:26px 0">Generando cruce…</div>`;
       const im = new Image();
       im.alt = "Cruce de validación del programa";

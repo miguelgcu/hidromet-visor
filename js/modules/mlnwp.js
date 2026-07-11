@@ -719,7 +719,7 @@
       <div class="ml-plot-scroll"><div class="ml-serie-plot" id="ml-plot-serie"></div></div>
       <div class="ml-serie-leyenda" id="ml-serie-leyenda"></div>
       <div class="ml-serie-probs" id="ml-serie-probs"></div>
-      <p class="ml-serie-pie">Observado vs. pronóstico (la franja sombreada de la derecha es el horizonte futuro). Los modelos se atenúan según su calificación.${esPrecip ? " Abanico azul = pronóstico probabilístico: franja oscura 50 % probable (P25–P75), clara 80 % (P10–P90); detalle por umbral en la tabla." : (d.banda ? " Franja azul = pronóstico probabilístico: rango 50 % probable (Q25–Q75), en el mismo horizonte que las líneas." : "")}</p>`;
+      <p class="ml-serie-pie">Observado vs. pronóstico (la franja sombreada de la derecha es el horizonte futuro). Los modelos se atenúan según su calificación.${esPrecip ? " Detalle probabilístico por umbral en la tabla inferior." : ""}</p>`;
 
     const el = document.getElementById("ml-plot-serie");
     if (!window.Plotly || !el) return;
@@ -731,32 +731,11 @@
     const traces = [];
     const fx = arr => (arr || []).map(s => s);
 
-    // ABANICO probabilístico. Precip: banda EXTERNA 80 % (P10–P90, clara) + INTERNA 50 %
-    // (P25–P75, más oscura) + mediana P50. Temperatura: banda 50 % (Q25–Q75) sobre el
-    // MISMO horizonte pasado+pronóstico que las líneas (solo trae p25/p75 → se dibuja la
-    // franja interna; sin p10/p90/p50, esas ramas se saltan solas).
-    if (d.banda && d.banda.fechas && d.banda.fechas.length) {
-      const b = d.banda;
-      const poligono = (lo, hi, color) => {
-        const xs = [], ys = [];
-        for (let i = 0; i < b.fechas.length; i++) if (lo[i] != null && hi[i] != null) { xs.push(b.fechas[i]); ys.push(hi[i]); }
-        for (let i = b.fechas.length - 1; i >= 0; i--) if (lo[i] != null && hi[i] != null) { xs.push(b.fechas[i]); ys.push(lo[i]); }
-        if (xs.length < 3) return;
-        traces.push({ type: "scatter", mode: "lines", x: xs, y: ys, fill: "toself",
-          fillcolor: color, line: { width: 0 }, hoverinfo: "skip", showlegend: false });
-      };
-      poligono(b.p10 || b.bajo || [], b.p90 || b.alto || [], C.fan80);   // 80 %
-      if (b.p25 && b.p75) poligono(b.p25, b.p75, C.fan50);                // 50 %
-      if (b.p50) {
-        const intr = !!(b.p25 && b.p75);
-        traces.push({ type: "scatter", mode: "lines", x: b.fechas, y: b.p50,
-          line: { color: C.p50, width: 2.4 }, name: "P50 (mediana)", showlegend: false, connectgaps: false,
-          customdata: b.fechas.map((_, i) => [b.p10[i], b.p90[i], intr ? b.p25[i] : null, intr ? b.p75[i] : null]),
-          hovertemplate: `Mediana P50: %{y} mm`
-            + (intr ? `<br>50 % probable: %{customdata[2]}–%{customdata[3]} mm` : ``)
-            + `<br>80 % probable: %{customdata[0]}–%{customdata[1]} mm<extra></extra>` });
-      }
-    }
+    // BANDA INTERCUARTIL RETIRADA (pedido del dueño 2026-07-11): el abanico P25–P75 /
+    // P10–P90 y la mediana P50 se distorsionaban en el pronóstico a futuro. Se conserva el
+    // pronóstico puntual (líneas/barras de modelos + observado) y, para precip, la tabla de
+    // probabilidad por umbral. d.banda sigue llegando del backend pero ya no se dibuja (solo
+    // se usa más abajo para fijar el tope del horizonte 'futuro' de la franja sombreada).
 
     // Modelos (atenuados por calificación: opacity ya viene de /series). En OSCURO
     // los pasteles atenuados se fantasmagorizan sobre el fondo: piso de opacidad
@@ -871,8 +850,7 @@
 
     const leyEl = document.getElementById("ml-serie-leyenda");
     if (leyEl) leyEl.innerHTML =
-      `<span class="it"><span class="sw-linea"></span>Observado</span>` + leyenda.join("") +
-      (d.banda ? `<span class="it"><span class="sw-banda"></span>Pronóstico probabilístico (${esPrecip ? "50 % / 80 %" : "50 % · Q25–Q75"})</span>` : "");
+      `<span class="it"><span class="sw-linea"></span>Observado</span>` + leyenda.join("");
 
     // Tabla de probabilidades por umbral: los porcentajes por nivel de lluvia (antes
     // solo se veía la 'sombra' de la banda y no estos números).

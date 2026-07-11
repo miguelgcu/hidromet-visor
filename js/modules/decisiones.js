@@ -8,7 +8,7 @@
         (una fecha visible a la vez; rango = mañana .. +5 días) y el
         buscador de estación.
      1) VEREDICTO del día (tarjeta protagonista): lluvia SÍ/NO con
-        probabilidad y rango, Tmax/Tmin con su intervalo Q25–Q75 y la
+        probabilidad, Tmax/Tmin puntuales y la
         tendencia térmica — todo como KPIs con iconografía sobria.
      2) MAPA nacional con el veredicto de lluvia DEL DÍA ELEGIDO por
         estación (color = decisión, tamaño = confianza; tooltip rico;
@@ -226,7 +226,6 @@
         if (ll) {
           h += `<br>Lluvia ${fTxt}: <b>${esc(ll.texto || "—")}</b>${ll.prob != null ? ` · ${ll.prob} %` : ""} · conf. ${conf.toLowerCase()}`;
           const extra = [];
-          if (ll.q25 != null && ll.q75 != null) extra.push(`${num(ll.q25)}–${num(ll.q75)} mm`);
           if (ll.prob_fuerte != null) extra.push(`≥10 mm: ${ll.prob_fuerte} %`);
           if (extra.length) h += `<br>${extra.join(" · ")}`;
         } else h += `<br>Lluvia ${fTxt}: sin dato`;
@@ -448,7 +447,6 @@
     return `<div class="dec-kpi">
       <div class="lab"><span class="ico">${ICO_TERMO}</span>${lab}</div>
       <div class="valor">${num(t.valor)}<small>°C</small></div>
-      <div class="rango">${(t.q25 != null && t.q75 != null) ? `${num(t.q25)} – ${num(t.q75)} °C · 50 % probable` : "sin rango probabilístico"}</div>
       <div class="fuente" title="Modelo que emite el valor">${esc(etModelo(t.modelo))}</div>
     </div>`;
   }
@@ -489,7 +487,6 @@
           ${prob != null ? `<div class="dec-prob-barra" role="img" aria-label="Probabilidad ${prob} %"><i style="width:${prob}%"></i><u style="left:50%"></u></div>` : ""}
         </div>
         <div class="dec-hero-lado">
-          <div class="mini"><span class="k">Cantidad probable</span><span class="v">${(ll.q25 != null && ll.q75 != null) ? `${num(ll.q25)} – ${num(ll.q75)} mm` : "—"}</span></div>
           <div class="mini"><span class="k">Lluvia fuerte ≥ 10 mm</span><span class="v">${ll.prob_fuerte != null ? `${ll.prob_fuerte} %` : "—"}</span></div>
           <div class="mini"><span class="k">Confianza</span><span class="v">${pillConf(conf === "Sin dato" ? null : conf)}</span></div>
         </div>
@@ -519,7 +516,7 @@
         ${kpiTemp("T. mínima", tn)}
         ${kpiTend}
       </div>
-      <p class="ml-pie">Tmax/Tmin = valor del selector operativo con su rango 50 % (Q25–Q75). Lluvia = probabilidad calibrada (promedio de clasificadores); la decisión es SÍ cuando P(≥1 mm) ≥ 50 %. Agregación de lluvia ${esc(v.agg_precip || "07-07")}.</p>
+      <p class="ml-pie">Tmax/Tmin = valor puntual del selector operativo. Lluvia = probabilidad calibrada (promedio de clasificadores); la decisión es SÍ cuando P(≥1 mm) ≥ 50 %. Agregación de lluvia ${esc(v.agg_precip || "07-07")}.</p>
     </div>`;
   }
 
