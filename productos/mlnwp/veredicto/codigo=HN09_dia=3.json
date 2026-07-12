@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"HN09","dias":3,"fecha":"2026-07-14","hoy":"2026-07-11","lluvia":null,"nombre":"San Miguel","sin_datos":true,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"HN09","dias":3,"fecha":"2026-07-14","hoy":"2026-07-11","lluvia":{"llueve":false,"prob":30,"prob_fuerte":10,"q25":2.3,"q75":17.2,"texto":"NO"},"nombre":"San Miguel","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
