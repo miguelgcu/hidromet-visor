@@ -1,1 +1,1 @@
-{"agg_precip":"sum_07_07","codigo":"M0124","dias":5,"fecha":"2026-07-17","hoy":"2026-07-12","lluvia":{"llueve":true,"prob":78,"prob_fuerte":12,"q25":0.0,"q75":2.8,"texto":"S\u00cd"},"nombre":"La Man\u00e1","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_07_07","codigo":"M0124","dias":5,"fecha":"2026-07-18","hoy":"2026-07-13","lluvia":{"llueve":true,"prob":63,"prob_fuerte":8,"q25":0.0,"q75":2.1,"texto":"S\u00cd"},"nombre":"La Man\u00e1","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

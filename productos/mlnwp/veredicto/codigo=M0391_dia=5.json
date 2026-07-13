@@ -1,1 +1,1 @@
-{"agg_precip":"sum_07_07","codigo":"M0391","dias":5,"fecha":"2026-07-17","hoy":"2026-07-12","lluvia":{"llueve":true,"prob":53,"prob_fuerte":12,"q25":0.2,"q75":3.8,"texto":"S\u00cd"},"nombre":"Pallatanga","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_07_07","codigo":"M0391","dias":5,"fecha":"2026-07-18","hoy":"2026-07-13","lluvia":{"llueve":false,"prob":13,"prob_fuerte":4,"q25":0.0,"q75":1.2,"texto":"NO"},"nombre":"Pallatanga","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

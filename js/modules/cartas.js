@@ -1159,7 +1159,7 @@
 
   /* ============================================================
      §P9 — VALIDACIÓN DE HIDROESTIMADORES (pestaña Hidroestimadores):
-     por producto (IMERG/PDIR), serie de los últimos 15 días con dato
+     por producto (IMERG/PDIR), serie de los últimos 10 días calendario
      comparando ESTIMADO medio vs OBSERVADO medio en las estaciones con
      par, con las métricas del período al lado (MAE/sesgo/correlación).
      Datos: /cartas/validacion/hidro_resumen (pares de validacion77_* +
@@ -1171,13 +1171,13 @@
     return `
       <div class="ct-panel ct-hv">
         <div class="ct-panel-cab">
-          <h3>Validación de hidroestimadores <span class="suave">· últimos 15 días con dato · estimado vs estaciones</span></h3>
+          <h3>Validación de hidroestimadores <span class="suave">· últimos 10 días calendario · estimado vs estaciones</span></h3>
         </div>
         <div class="ct-hv-grid" data-rol="hv-grid"><span class="suave" style="font-size:12px">Cargando validación…</span></div>
         <p class="ct-nota">Cada tarjeta compara el <b>estimado satelital</b> (ventana 7-7, celda más cercana a cada
           estación) con la <b>lluvia observada</b> de las estaciones ese día: las líneas son la <b>media</b> de las
           estaciones con par; las métricas (MAE/sesgo/correlación) se calculan sobre <b>todos los pares estación×día</b>
-          del período. «Motor» es la referencia del histórico largo con que se pondera el consenso corregido.</p>
+          del período. «Motor» es la referencia pareada con que se pondera el consenso multifuente solo al superar los mínimos de muestra.</p>
       </div>`;
   }
   const _hvFmt = (v, suf = "") => (v == null ? "—" : (+v).toLocaleString("es-EC", { maximumFractionDigits: 2 }) + suf);
@@ -1204,6 +1204,9 @@
         ["Correlación", _hvFmt(m.corr)], ["Pares", m.n != null ? fmtNum(m.n) : "—"],
         ["Días con par", m.dias != null ? fmtNum(m.dias) : "—"],
         ["MAE motor (hist.)", _hvFmt(mo.mae, " mm")],
+        ["Peso multifuente", mo.apto_ponderacion
+          ? `${_hvFmt(mo.peso)} · ${fmtNum(mo.fechas_pareadas || 0)} días pareados`
+          : "1.00 · muestra insuficiente/no certificada"],
       ];
       return `<div class="ct-hv-card">
         <div class="ct-hv-cab"><span class="titulo" style="color:${esc(HV_COLOR[p.fuente] || "var(--ink)")}">${esc(p.fuente)}</span>
@@ -1527,7 +1530,7 @@
     const notaFFR = esLluvia
       ? `<p class="ct-nota" style="margin:-4px 0 14px">Las <b>zonas de desbordamiento (FFR · programa)</b> se dibujan
            <span style="color:#009AF2;font-weight:700">punteadas</span> SOBRE las cartas de alerta de lluvia cuando el
-           FFR cubre esa fecha (consenso MÁX de los 4 modelos FFGS). Su validación contra eventos SNGR está abajo.</p>`
+           FFR cubre esa fecha (F1 Ecuador WRF 3 km; F2-F4 son escenarios exploratorios). Su validación contra eventos SNGR está abajo.</p>`
       : "";
 
     return `
@@ -1867,7 +1870,7 @@
     const selPr = bloque.querySelector('[data-rol="cx-prod"]');
     const host = bloque.querySelector('[data-rol="cx-img"]');
     const cargarProductos = async () => {
-      // hidroestimadores CON dato 7-7 para la fecha elegida + "Consenso corregido".
+      // hidroestimadores CON dato 7-7 para la fecha elegida + "Consenso multifuente".
       if (!selFe.value) return;
       try {
         const r = await App.api("/cartas/hidroestimador/opciones?" + qs({ fecha: selFe.value }));
@@ -1944,12 +1947,16 @@
           ? `<div style="margin:8px 0 10px;padding:9px 12px;border-radius:9px;font-size:12px;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-bd)">
                Eventos SNGR disponibles hasta <b>${esc(feed.max_fecha)}</b> — las fechas FFR posteriores figuran como «Sin datos SNGR» hasta que el feed se actualice${feed.actualizado ? ` (feed leído el ${esc(feed.actualizado)})` : ""}.</div>`
           : "";
-        // Aviso de MUESTRA INSUFICIENTE: con muy pocos eventos observados el POD/FAR no son
-        // una afirmación de habilidad (el histórico FFR archivado cubre poco tiempo).
-        const _nEv = ag.eventos || 0;
-        const bannerMuestra = (_nEv < 10)
-          ? `<div style="margin:8px 0 10px;padding:9px 12px;border-radius:9px;font-size:12px;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-bd)">
-               <b>Muestra insuficiente:</b> solo <b>${fmtNum(_nEv)}</b> evento(s) observado(s) en el histórico FFR disponible. El POD/FAR de abajo son indicativos, aún <b>no una métrica de desempeño consolidada</b> — se afinará al acumular temporada.</div>`
+        // Fail-closed: el servidor solo publica POD/FAR cuando existe solape y se cumplen
+        // TODOS los mínimos. Una muestra de cero no es evidencia de desempeño cero.
+        const _nEv = ag.eventos || 0, _mins = s.minimos || {};
+        const _noValidable = s.apto_metricas !== true;
+        const _detalleGate = s.estado_validacion === "sin_solape_temporal_ffr_sngr"
+          ? "el historial FFR empieza después del último evento cubierto por SNGR; el solape temporal es 0 fechas"
+          : `muestra disponible: ${fmtNum(ag.fechas_validables || 0)} fechas validables, ${fmtNum(ag.fechas_con_eventos || 0)} fechas con eventos y ${fmtNum(_nEv)} eventos; mínimos: ${fmtNum(_mins.fechas || 0)}, ${fmtNum(_mins.fechas_con_eventos || 0)} y ${fmtNum(_mins.eventos || 0)}`;
+        const bannerMuestra = _noValidable
+          ? `<div style="margin:8px 0 10px;padding:9px 12px;border-radius:9px;font-size:12px;color:var(--danger);background:var(--danger-bg);border:1px solid var(--danger-bd)">
+               <b>NO VALIDABLE:</b> ${esc(_detalleGate)}. <b>POD y FAR no se calculan ni se publican</b> hasta superar el gate metodológico.</div>`
           : "";
         // §P18: tabla COMPACTA — últimas 14 fechas (el POD global sí agrega todo el historial).
         const filas = serie.slice(-14).reverse().map(f => {
@@ -1964,14 +1971,14 @@
           <h3 class="ct-subtitulo" style="margin:16px 0 8px">Métricas por fecha del historial <span class="suave">(FFR histórico F1 · WRF 3 km ↔ eventos SNGR)</span></h3>
           ${banner}${bannerMuestra}
           <div class="ct-stats" style="margin:0 0 10px">
-            <div class="ct-stat"><div class="v ok">${ag.pod_pct != null ? fmtPct(ag.pod_pct) + "<small> %</small>" : "—"}</div><div class="k">POD global (Σcubiertos/Σeventos)</div></div>
-            <div class="ct-stat"><div class="v">${ag.far_dia_pct != null ? fmtPct(ag.far_dia_pct) + "<small> %</small>" : "—"}</div><div class="k">FAR diaria (avisos sin evento / avisos)</div></div>
+            <div class="ct-stat"><div class="v ok">${ag.pod_pct != null ? fmtPct(ag.pod_pct) + "<small> %</small>" : "—"}</div><div class="k">POD global${_noValidable ? " (bloqueado)" : " (Σcubiertos/Σeventos)"}</div></div>
+            <div class="ct-stat"><div class="v">${ag.far_dia_pct != null ? fmtPct(ag.far_dia_pct) + "<small> %</small>" : "—"}</div><div class="k">FAR diaria${_noValidable ? " (bloqueada)" : " (avisos sin evento / avisos)"}</div></div>
             <div class="ct-stat"><div class="v">${fmtNum(ag.cubiertos || 0)}/${fmtNum(ag.eventos || 0)}</div><div class="k">Eventos cubiertos / observados</div></div>
             <div class="ct-stat"><div class="v">${fmtNum(ag.fechas_con_eventos || 0)}<small> de ${fmtNum(ag.fechas || 0)}</small></div><div class="k">Fechas con eventos</div></div>
             <div class="ct-stat"><div class="v">${ag.area_km2_mediana != null ? fmtNum(Math.round(ag.area_km2_mediana)) : "—"}</div><div class="k">Área mediana de la zona (km²)</div></div>
           </div>
           <table class="rm-tabla"><thead><tr><th>Fecha</th><th>Eventos</th><th>Cubiertos</th><th>POD</th><th>Estado</th></tr></thead><tbody>${filas}</tbody></table>
-          <div class="rm-pie mono">POD por fecha = desbordes/crecidas SNGR dentro de la zona FFR de ese día. FAR diaria = de los días con aviso, fracción sin ningún evento observado (sobre-aviso; no es FAR gridded — imposible con eventos puntuales). «Sin zona» = el FFR no marcó riesgo (si hubo eventos, cuentan como no cubiertos) · «Sin datos SNGR» = el feed aún no cubre esa fecha · las fechas atenuadas no entran al POD global.</div>`;
+          <div class="rm-pie mono">${_noValidable ? "NO VALIDABLE: la tabla es diagnóstico de cobertura, no una estimación de habilidad. " : ""}POD por fecha = desbordes/crecidas SNGR dentro de la zona FFR de ese día. FAR diaria = de los días con aviso, fracción sin ningún evento observado (sobre-aviso; no es FAR gridded — imposible con eventos puntuales). «Sin zona» = el FFR no marcó riesgo (si hubo eventos, cuentan como no cubiertos) · «Sin datos SNGR» = el feed aún no cubre esa fecha · las fechas atenuadas no entran al POD global.</div>`;
       } catch (e) { serieHost.innerHTML = `<span class="suave" style="font-size:12px">Métricas del historial no disponibles${window.HIDROMET_VISOR ? " en el visor" : ""}.</span>`; }
     };
     const cargarValida = async () => {

@@ -211,7 +211,7 @@
               <span class="tit">Eventos de la selección</span>
               ${window.HIDROMET_VISOR
                 ? `<button class="boton chico" data-rol="zip"
-                    title="ZIP del catálogo completo: shapefile + GeoJSON (WGS84), XLSX, conteos CSV y resumen">⤓ Descargar catálogo (ZIP)</button>`
+                    title="ZIP de la ventana publicada: shapefile + GeoJSON (WGS84), XLSX, conteos CSV y resumen">⤓ Descargar ventana (ZIP)</button>`
                 : `<button class="boton chico" data-rol="zip"
                     title="ZIP de la selección actual: shapefile + GeoJSON (WGS84, con estilo QGIS), XLSX, conteos por provincia/cantón/parroquia y tipo en CSV, y resumen">⤓ Descargar selección (ZIP)</button>`}
             </div>
@@ -487,8 +487,8 @@
   // Normaliza para comparar contra la cascada del visor (sin tildes, minúsculas).
   const normTxt = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "")
     .trim().replace(/\s+/g, " ").toLowerCase();
-  // FILTRADO EN CLIENTE (visor estático): /sngr/eventos congelado devuelve SIEMPRE la
-  // lista completa (exportar_web: "filtros en cliente") — sin esto, píldoras/mapa/tabla
+  // FILTRADO EN CLIENTE (visor estático): /sngr/eventos contiene la ventana web reciente
+  // completa (nunca el maestro histórico local) — sin esto, píldoras/mapa/tabla
   // eran estáticos en el visor. ignorarTipo=true → conteos por tipo de la selección.
   function filtrarLocal(evs, ignorarTipo) {
     const s = estado.sel;
@@ -570,16 +570,20 @@
   }
 
   /* ---------------- descarga ZIP de la selección (P12) ---------------- */
-  // URL del ZIP canónico PRE-CONGELADO en el visor estático (catálogo completo, sin
-  // filtros server-side). exportar_web.py debe publicar exactamente este archivo.
+  // URL del ZIP PRE-CONGELADO en el visor estático: contiene solo la misma ventana
+  // temporal publicada en el mapa, sin el maestro histórico local.
   const ZIP_VISOR = "productos/sngr/eventos_rios_completo.zip";
   async function exportarZip(btn) {
     if (window.HIDROMET_VISOR) {
-      // Sin backend: se baja el ZIP canónico congelado (como el SHP de advertencias).
+      if (!estado.filtros || !(estado.filtros.total > 0)) {
+        App.aviso("No hay eventos SNGR en la ventana temporal publicada.", "info", 5000);
+        return;
+      }
+      // Sin backend: se baja el ZIP de la ventana (como el SHP de advertencias).
       const a = document.createElement("a");
       a.href = ZIP_VISOR; a.download = "eventos_rios_completo.zip";
       document.body.appendChild(a); a.click(); a.remove();
-      App.aviso("Descargando el catálogo completo (en el visor la descarga no aplica filtros).", "info", 6000);
+      App.aviso("Descargando los eventos de la ventana temporal publicada.", "info", 6000);
       return;
     }
     const prev = btn.textContent;

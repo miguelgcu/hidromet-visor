@@ -1,1 +1,1 @@
-{"agg_precip":"sum_07_07","codigo":"M1040","dias":1,"fecha":"2026-07-13","hoy":"2026-07-12","lluvia":{"llueve":true,"prob":94,"prob_fuerte":40,"q25":4.6,"q75":24.0,"texto":"S\u00cd"},"nombre":"Macas INA","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_07_07","codigo":"M1040","dias":1,"fecha":"2026-07-14","hoy":"2026-07-13","lluvia":{"llueve":true,"prob":84,"prob_fuerte":27,"q25":2.6,"q75":22.1,"texto":"S\u00cd"},"nombre":"Macas INA","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

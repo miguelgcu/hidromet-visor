@@ -29,11 +29,11 @@
   // Etiqueta de variable para Series (la ruta /series acepta precip|tmax|tmin).
   const VAR_SERIE = { precip: "precip", tmax: "tmax", tmin: "tmin" };
   // v18 (dueño 2026-07-10): el selector VENTANA se RETIRÓ de la UI.
-  // - La serie temporal muestra SIEMPRE 15 fechas de pasado + presente + todo el
-  //   futuro disponible (lookback=15, producto ya congelado en el visor).
+  // - La serie temporal muestra SIEMPRE 10 días pasados + presente + todo el
+  //   futuro disponible (lookback=10, producto ya congelado en el visor).
   // - La validación usa la ventana fija de 30 fechas (equilibrio robustez/actualidad,
   //   la misma que usa "Decisiones operativas").
-  const LOOKBACK_SERIE = 15;
+  const LOOKBACK_SERIE = 10;
   const VENTANA_VALID = "30";
 
   // Filtro de FAMILIA de modelo. valor = el que entiende el backend
@@ -150,7 +150,7 @@
       `<option value="${esc(val)}" ${S.familia === val ? "selected" : ""}>${esc(et)}</option>`).join("");
     const chev = `<span class="ml-loc-chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#95A1B2" stroke-width="2.5"><path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>`;
     // v18: deck en UNA fila — VARIABLE · ESTACIÓN · FAMILIA (el selector Ventana se
-    // retiró: la serie muestra siempre 15 fechas de pasado + todo el futuro).
+    // retiró: la serie muestra 10 días pasados + presente + todo el futuro).
     return `
       <div class="ml-deck">
         <div class="ml-deck-rail"></div>
@@ -387,7 +387,7 @@
     const bloque = VAR_A_BLOQUE[S.variable];
     const vent = VENTANA_VALID;
     const famQS = "&familia=" + encodeURIComponent(S.familia);
-    const lookback = LOOKBACK_SERIE;   // v18: 15 fechas de pasado, siempre
+    const lookback = LOOKBACK_SERIE;   // contrato web: 10 días pasados + presente
     const esPrecip = S.variable === "precip";
     let det, ser, detDet;
     try {
@@ -859,7 +859,7 @@
       const pu = d.probs_umbral;
       if (esPrecip && pu && pu.fechas && pu.fechas.length) {
         // MISMO eje temporal que las líneas (v18): el backend re-expande la matriz a la
-        // rejilla diaria completa [hoy−15, tope futuro] (_eje_comun) — una COLUMNA por
+        // rejilla diaria completa [hoy−10, tope futuro] (_eje_comun) — una COLUMNA por
         // CADA fecha de la serie, con "—" donde no hay producto. Tabla TRANSPUESTA:
         // una fila por umbral, alineada 1:1 con el eje de la serie.
         let idx = pu.fechas.map((_, i) => i);

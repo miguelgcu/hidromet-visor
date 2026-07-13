@@ -32,7 +32,7 @@ const App = (() => {
   // rutas que ya son un archivo (.geojson) se sirven tal cual bajo productos/.
   // Construye el path del producto con el MISMO stripping que el exportador (exportar_web.py):
   // carta_datos ignora fin/corrido (redundantes dado archivo+record); mlnwp ignora deps (y
-  // familia salvo en el resumen de validación); sngr/eventos = lista completa. 'drop' añade
+  // familia salvo en el resumen de validación); sngr/eventos = ventana completa publicada. 'drop' añade
   // parámetros volátiles a ignorar para el fallback difuso.
   function _slugProducto(ruta, drop) {
     const [path, query] = String(ruta).split("?");

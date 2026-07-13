@@ -1,1 +1,1 @@
-{"agg_precip":"sum_07_07","codigo":"M5187","dias":5,"fecha":"2026-07-17","hoy":"2026-07-12","lluvia":{"llueve":true,"prob":97,"prob_fuerte":48,"q25":2.2,"q75":23.6,"texto":"S\u00cd"},"nombre":"El Chaco 1","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_07_07","codigo":"M5187","dias":5,"fecha":"2026-07-18","hoy":"2026-07-13","lluvia":{"llueve":true,"prob":92,"prob_fuerte":35,"q25":0.0,"q75":20.7,"texto":"S\u00cd"},"nombre":"El Chaco 1","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

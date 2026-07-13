@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"HN18","dias":3,"fecha":"2026-07-15","hoy":"2026-07-12","lluvia":{"llueve":false,"prob":6,"prob_fuerte":1,"q25":0.0,"q75":0.0,"texto":"NO"},"nombre":"Olmedo","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"HN18","dias":3,"fecha":"2026-07-16","hoy":"2026-07-13","lluvia":{"llueve":false,"prob":6,"prob_fuerte":2,"q25":0.0,"q75":0.0,"texto":"NO"},"nombre":"Olmedo","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

@@ -622,10 +622,9 @@
     try { ests = (await App.api("/clima/records_estaciones")).estaciones || []; } catch (e) {}
     if (!ests.length) { c.innerHTML = vacio("📭", "No hay base de observaciones unificada disponible."); return; }
     const anioActual = new Date().getFullYear();
-    // En el visor solo hay récords congelados de los últimos VISOR_RECORDS_ANIOS=10 años
-    // (exportar_web.py; mantener ambos números iguales) → capar el input para no ofrecer
-    // años sin producto ("no publicado").
-    const minAnio = window.HIDROMET_VISOR ? (anioActual - 9) : 1990;
+    // El histórico diario completo vive en el equipo. El visor solo publica el tramo
+    // reciente del año actual; las normales/envolventes agregadas siguen disponibles.
+    const minAnio = window.HIDROMET_VISOR ? anioActual : 1990;
     const inp = "border:1px solid var(--line,#d7dde6);border-radius:9px;padding:8px 11px;background:var(--surface,#fff);color:var(--ink,#1f2a3a)";
     c.innerHTML = `<div class="cl-wrap">
       <div class="cl-toolbar">
