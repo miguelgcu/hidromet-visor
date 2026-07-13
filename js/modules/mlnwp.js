@@ -746,6 +746,8 @@
     const leyenda = [];
     const _hoyEt = (App.hoyEC ? App.hoyEC() : d.hoy);
     let _conEtiqueta = 0;
+    // El backend antepone los productos operativos que alimentan alertas/cartas;
+    // el cupo restante muestra los comparadores con mayor skill.
     for (let m of (d.modelos || []).slice(0, 8)) {   // let: el respaldo se re-etiqueta abajo
       const color = m.color;
       const opBase = m.opacity ?? .7;
@@ -757,6 +759,7 @@
       // v14: nombre CLARO para el usuario (el crudo "Sin entrenamiento" confundía).
       if (m.sin_entrenar) m = { ...m, modelo: "Respaldo (sin obs para entrenar)" };
       const rtxt = m.sin_entrenar ? "" : ` (${num(m.rating, 1)})`;
+      const otxt = m.operacional ? " · operativo" : "";
       // etiquetas de valor en fechas >= hoy, SOLO para los 3 mejores (d.modelos ya
       // viene ordenado por calificación descendente).
       const _etiquetar = !m.sin_entrenar && _hoyEt && _conEtiqueta < 3;
@@ -770,7 +773,7 @@
         : null;
       if (_etiquetar) _conEtiqueta++;
       if (esPrecip && !m.dash) {
-        traces.push({ type: "bar", x: fx(m.fechas), y: m.valores, name: `${m.modelo}${rtxt}`,
+        traces.push({ type: "bar", x: fx(m.fechas), y: m.valores, name: `${m.modelo}${otxt}${rtxt}`,
           marker: { color, opacity: op },
           ...(_texto ? { text: _texto, textposition: "outside", cliponaxis: false,
             textfont: { size: 8.5, color, shadow: C.halo }, constraintext: "none" } : {}),
@@ -778,7 +781,7 @@
       } else {
         // connectgaps:false + eje completo con null (series.py): un hueco de fechas
         // se ve como hueco, NO como diagonal fantasma (queja La Argelia 84270 03/07).
-        traces.push({ type: "scatter", mode: _texto ? "lines+text" : "lines", x: fx(m.fechas), y: m.valores, name: `${m.modelo}${rtxt}`,
+        traces.push({ type: "scatter", mode: _texto ? "lines+text" : "lines", x: fx(m.fechas), y: m.valores, name: `${m.modelo}${otxt}${rtxt}`,
           line: { color, width: wLin, ...(m.dash ? { dash: m.dash } : {}) }, opacity: op, connectgaps: false,
           ...(_texto ? { text: _texto, textposition: "top center", cliponaxis: false,
             textfont: { size: 8.5, color, shadow: C.halo } } : {}),
@@ -786,7 +789,7 @@
       }
       const swStyle = m.dash ? `border-top:2px dotted ${esc(color)};height:0`
                              : `background:${esc(color)};opacity:${op}`;
-      leyenda.push(`<span class="it"><span class="sw-caja" style="${swStyle}"></span>${esc(m.modelo)}${rtxt}</span>`);
+      leyenda.push(`<span class="it"><span class="sw-caja" style="${swStyle}"></span>${esc(m.modelo)}${esc(otxt)}${rtxt}</span>`);
     }
 
     // Observado: línea punteada negra con marcadores + etiquetas SIEMPRE (v16: el
