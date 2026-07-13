@@ -152,6 +152,7 @@ const App = (() => {
           // pudo componer callbacks durante el await; usar la stale perdería el
           // alTerminar del módulo o el del modal.
           const seg = tareasSeguidas.get(id) || previo;
+          seg._fallosPolling = 0;
           seg.cursor = t.log_cursor;
           seg.nombre = t.nombre;
           seg._ultimoProgreso = t.progreso;
@@ -165,7 +166,20 @@ const App = (() => {
             else if (t.estado === "error") { aviso(`${t.nombre}: ${t.error}`, "error", 8000); seg.alError && seg.alError(t); }
             else aviso(`${t.nombre}: cancelada`, "info");
           }
-        } catch (e) { tareasSeguidas.delete(id); restauradores.delete(id); }
+        } catch (e) {
+          // Un fallo transitorio de red/polling NO significa que la tarea haya
+          // terminado. Antes se borraba aquí y la UI se desbloqueaba mientras
+          // el motor seguía escribiendo. Reintenta ~18 s y solo entonces falla.
+          const seg = tareasSeguidas.get(id) || previo;
+          seg._fallosPolling = (seg._fallosPolling || 0) + 1;
+          if (seg._fallosPolling === 3)
+            aviso(`${seg.nombre || "Actualización"}: conexión interrumpida; reintentando…`, "info", 5000);
+          if (seg._fallosPolling >= 20) {
+            tareasSeguidas.delete(id); restauradores.delete(id);
+            aviso(`${seg.nombre || "Actualización"}: no se pudo recuperar su estado; verifica el servidor.`, "error", 8000);
+            seg.alError && seg.alError({ estado: "error", error: "polling interrumpido" });
+          }
+        }
       }
       pintarChipsTareas();
       sincronizarBloqueo();
@@ -427,17 +441,22 @@ const App = (() => {
   async function mostrarUltima() {
     const el = document.getElementById("topbar-sync");
     if (!el) return;
-    let fecha = null;
+    let fecha = null, estadoOk = true, fallosEstado = [];
     try {
       if (window.HIDROMET_VISOR) {
         const m = await (await fetch("manifest.json?_=" + Date.now())).json();
         fecha = m && (m.generado || m.fecha);
+        estadoOk = !m || m.ok !== false;
+        fallosEstado = (m && m.fallos) || [];
       } else {
         const u = await api("/actualizar/ultima");
         fecha = u && u.fecha;
+        estadoOk = !u || u.ok !== false;
+        fallosEstado = (u && u.fallos) || [];
       }
     } catch (e) { /* aún sin marca */ }
     const chip = document.querySelector("#topbar .sync");
+    if (chip) chip.classList.toggle("fallo", !estadoOk);
     if (!fecha) {
       if (chip) chip.classList.remove("viejo");
       el.textContent = window.HIDROMET_VISOR ? "Visor en línea" : "Datos locales";
@@ -456,11 +475,14 @@ const App = (() => {
       }
     }
     const m = String(fecha).replace("T", " ").match(/(\d{4})-(\d{2})-(\d{2})\D+(\d{2}):(\d{2})/);
-    el.textContent = m ? `Datos al ${m[3]}/${m[2]} · ${m[4]}:${m[5]}` : ("Datos al " + String(fecha).slice(0, 16));
+    const marca = m ? `${m[3]}/${m[2]} · ${m[4]}:${m[5]}` : String(fecha).slice(0, 16);
+    el.textContent = estadoOk ? `Datos al ${marca}` : `Actualización incompleta · ${marca}`;
+    if (!estadoOk) el.title = `Corrida incompleta${fallosEstado.length ? ": " + fallosEstado.join(", ") : ""}`;
+    else el.removeAttribute("title");
     // Semántica de FRESCURA: si los datos tienen >36 h, el punto del chip pasa a ámbar
     // (aviso silencioso al operador de guardia). `fecha` es string ISO → Date.parse.
     const t = Date.parse(String(fecha).replace(" ", "T"));
-    if (chip) chip.classList.toggle("viejo", isFinite(t) && (Date.now() - t) > 36 * 3.6e6);
+    if (chip) chip.classList.toggle("viejo", estadoOk && isFinite(t) && (Date.now() - t) > 36 * 3.6e6);
   }
 
   /* §B.8: estilos del bloqueo global + barra de cancelar (autocontenidos en

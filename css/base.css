@@ -129,6 +129,8 @@ summary:focus-visible, [tabindex]:focus-visible,
 /* v11: frescura — datos >36h: punto ámbar + peso (texto sigue en --muted: AA en ambos temas) */
 #topbar .sync.viejo .punto { background: var(--warn); }
 #topbar .sync.viejo { font-weight: 700; }
+#topbar .sync.fallo .punto { background: var(--danger); box-shadow: 0 0 0 3px rgba(218,75,87,.18); }
+#topbar .sync.fallo { color: var(--danger); font-weight: 700; }
 #topbar .reloj { font: 600 12px var(--mono); color: var(--ink); padding: 5px 11px;
   background: #F0F3F8; border: 1px solid #E0E6EF; border-radius: 7px; }
 html[data-tema="oscuro"] #topbar .reloj { background: var(--surface-3); border-color: var(--line); }
