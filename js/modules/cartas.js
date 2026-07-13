@@ -1488,7 +1488,14 @@
 
     // Grilla: una carta por fuente PRESENTE (Consenso + pronóstico + CALIBRADOS),
     // ordenada según ALERTA_FUENTES; oculta las capas meta (Confianza/Referencia).
-    const _fdisp = p ? (p.fuentes || []).map(f => f.fuente).filter(s => !ALERTA_FUENTE_OCULTA.has(s)) : [];
+    let _fdisp = p ? (p.fuentes || []).map(f => f.fuente).filter(s => !ALERTA_FUENTE_OCULTA.has(s)) : [];
+    // En el visor estático el árbol base corresponde al modo fijo, pero ZPH
+    // puede acreditar menos fuentes. El exportador adjunta el inventario real
+    // de cada modo; ocultar las excluidas evita tarjetas vacías o engañosas.
+    const _porModo = E.productos && E.productos.fuentes_alerta_por_modo;
+    const _permitidas = _porModo && _porModo[a.modo] && _porModo[a.modo][a.varId];
+    if (window.HIDROMET_VISOR && Array.isArray(_permitidas))
+      _fdisp = _fdisp.filter(s => _permitidas.includes(s));
     let _lista = ALERTA_FUENTES.filter(s => _fdisp.includes(s)).concat(_fdisp.filter(s => !ALERTA_FUENTES.includes(s)));
     if (!_lista.length) _lista = ALERTA_FUENTES.slice(0, 4);
     const cartas = _lista.map(fuente => {
