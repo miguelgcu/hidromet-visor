@@ -1,0 +1,1 @@
+{"agg_precip":"sum_00_24","codigo":"C07","dias":1,"fecha":"2026-07-18","hoy":"2026-07-17","lluvia":null,"nombre":"San Antonio","sin_datos":false,"tendencia":{"delta":-0.8,"referencia":"pronóstico de hoy","texto":"más frío","tmax_hoy":27.4},"tmax":{"modelo":"BEST_OP_CV","q25":25.9,"q75":27.9,"valor":26.6},"tmin":{"modelo":"BEST_OP_CV","q25":10.0,"q75":11.9,"valor":11.0}}

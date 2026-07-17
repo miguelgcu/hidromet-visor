@@ -1,7 +1,7 @@
 /* ============================================================
-   HidroMet — Climatología de Ecuador (grillas 1991–2020 calibradas con estaciones).
-   Normales 1991–2020 grilladas a 0.05° (precip/Tmáx/Tmín/PET) corregidas con
-   estaciones. Cuatro pestañas: Mapas · Por estación · Por coordenada · Metodología.
+   Climatología — campos 1991–2020 y observaciones disponibles.
+   Referencias 1991–2020 a 0.05° (precip/Tmáx/Tmín/PET) y soporte observacional.
+   Cuatro pestañas: Mapas · Por estación · Por coordenada · Metodología.
    Backend: /api/clima/* (app/modulos/clima/datos.py).
    ============================================================ */
 "use strict";
@@ -105,7 +105,7 @@
       tk += `<span class="t" style="left:${pos.toFixed(2)}%">${esc(String(+v.toFixed(dec)))}</span>`;
     }
     return `<div class="ct-leyenda-cab"><span class="ct-leyenda-unidad mono">${esc(d.unidad || "")}</span>` +
-      `<span class="ct-leyenda-sub mono">normal 1991–2020</span></div>` +
+      `<span class="ct-leyenda-sub mono">${esc(d.leyenda_sub || "normal 1991–2020")}</span></div>` +
       `<div class="ct-leyenda-barra" style="background:linear-gradient(to right, ${stops})"></div>` +
       `<div class="ct-leyenda-ticks">${tk}</div>`;
   }
@@ -258,8 +258,8 @@
       ${chipConfianza(p.confianza)}
       <div class="cl-tabla-scroll">${tablaMensual(p)}</div>
       ${resumenObs(p.resumen_obs)}
-      ${p.observado ? `<p class="cl-nota">Marcadores = normales <b>observadas</b> de la estación. Como el producto está
-        corregido con observaciones, sobre la estación coinciden casi exactamente con la Climatología.</p>` : ""}
+      ${p.observado ? `<p class="cl-nota">Los marcadores resumen las observaciones disponibles para la estación.
+        Su periodo y escala espacial pueden diferir de la malla 1991–2020, por lo que no se espera coincidencia exacta.</p>` : ""}
     </div>`;
   }
 
@@ -287,7 +287,7 @@
       <div class="cl-mapgrid">
         <div class="cl-card cl-mapa-card"><h3 class="cl-maptit" data-rol="tit">Cargando…</h3><div class="cl-plot cl-plot-mapa" data-rol="plot"></div>
           <div class="ct-leyenda-carta cl-leyenda" data-rol="leyenda"></div>
-          <p class="cl-nota">Normales 1991–2020 (~5 km) construidas con CHIRPS satelital corregido con estaciones. Pasa el cursor para leer lat/lon y valor; los puntos son estaciones (clic → su ficha al lado).</p></div>
+          <p class="cl-nota">Referencia mensual 1991–2020 (~5 km) de la generación climática activa. Pasa el cursor para leer lat/lon y valor; los puntos muestran observaciones disponibles (clic → su ficha).</p></div>
         <div class="cl-card cl-est-card"><h3 class="cl-maptit" data-rol="mini-tit">Ficha de estación</h3>
           <div class="cl-mini-sel">
             <input class="cl-buscar" data-rol="mini-buscar" type="search" placeholder="Buscar por nombre, código o región…" autocomplete="off">
@@ -706,6 +706,267 @@
     pintarVars(); pintarEstaciones(); cargar();
   }
 
+  // PESTAÑA — SERIES, RELLENO Y MAPA POR RANGO ------------------------------
+  function pintarSerieRelleno(host, d) {
+    if (!window.Plotly || !host) return;
+    if (!d || d.error) { limpiarPlot(host); host.innerHTML = vacio("⚠️", esc(d && d.error || "Sin datos")); return; }
+    const u = esc(d.unidad || ""), fechas = d.fechas || [];
+    const traces = [
+      { type: "scatter", mode: "lines", x: fechas, y: d.estimado_grillado, name: "Grilla corregida",
+        line: { color: "#2f7fc1", width: 1.5 }, opacity: .75,
+        hovertemplate: `%{x}<br>%{y:.1f} ${u}<extra>Estimación grillada</extra>` },
+      { type: "scatter", mode: "lines", x: fechas, y: d.completado, name: "Serie completada",
+        line: { color: "#26a69a", width: 2.2 },
+        customdata: d.procedencia || [],
+        hovertemplate: `%{x}<br><b>%{y:.1f} ${u}</b><br>%{customdata}<extra>Completada</extra>` },
+      { type: "scatter", mode: "markers", x: fechas, y: d.observado, name: "Observación QC",
+        marker: { color: "#10243f", size: 5, line: { color: "#fff", width: .7 } },
+        hovertemplate: `%{x}<br><b>%{y:.1f} ${u}</b><extra>Observado</extra>` },
+    ];
+    const layout = App.plotlyLayoutBase({ height: 410, margin: { l: 52, r: 18, t: 10, b: 45 },
+      hovermode: "x unified", legend: { orientation: "h", y: 1.12, x: .5, xanchor: "center" },
+      xaxis: { type: "date", rangeslider: { visible: true, thickness: .08 }, gridcolor: "rgba(120,130,150,.12)" },
+      yaxis: { title: d.unidad || "", rangemode: d.variable === "precip" ? "tozero" : "normal",
+        gridcolor: "rgba(120,130,150,.14)", zeroline: false },
+    });
+    Plotly.react(host, traces, layout, App.plotlyConfig());
+  }
+
+  function metricasRelleno(d) {
+    const c = d.cobertura || {}, fm = (d.metricas || {}).fuera_muestra || {},
+      dg = (d.metricas || {}).diagnostica || {};
+    const met = (et, v, sub) => `<div class="cl-kpi"><div class="v">${v == null ? "—" : esc(v)}</div>` +
+      `<div class="e">${esc(et)}</div>${sub ? `<small class="cl-sutil">${esc(sub)}</small>` : ""}</div>`;
+    return `<div class="cl-kpis cl-kpis-diario">
+      ${met("Observados", c.observados, `${c.dias || 0} días`)}
+      ${met("Rellenados", c.rellenados, "estimación trazable")}
+      ${met("Vacíos", c.vacios, "sin estimación compatible")}
+      ${met("MAE fuera de muestra", fm.mae, fm.n ? `n=${fm.n}` : "no disponible en el rango")}
+      ${met("RMSE fuera de muestra", fm.rmse, fm.n ? `n=${fm.n}` : "validación espacial")}
+      ${met("Correlación fuera de muestra", fm.correlacion, fm.n ? `n=${fm.n}` : "validación espacial")}
+    </div>
+    <details class="cl-metricas-det"><summary>Comparación diagnóstica de la grilla</summary>
+      <p>n=${num(dg.n)} · MAE=${num(dg.mae, 2)} · RMSE=${num(dg.rmse, 2)} · sesgo=${num(dg.bias, 2)} · r=${num(dg.correlacion, 2)}.</p>
+      <p>${esc(dg.nota || "")}</p></details>`;
+  }
+
+  const _dailyChunks = new Map();
+  async function leerBinGzip(url) {
+    if (_dailyChunks.has(url)) return _dailyChunks.get(url);
+    const promise = (async () => {
+      const response = await fetch(url, { cache: "no-cache" });
+      if (!response.ok) throw new Error(`Chunk climático no publicado (HTTP ${response.status})`);
+      let bytes = new Uint8Array(await response.arrayBuffer());
+      if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
+        if (typeof DecompressionStream !== "function") throw new Error("El navegador no admite gzip.");
+        const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+        bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+      }
+      return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    })();
+    _dailyChunks.set(url, promise); return promise;
+  }
+  const fechaUTC = s => new Date(`${s}T00:00:00Z`);
+  const diaMs = 86400000;
+  function metricasCliente(obs, pred) {
+    const pares = obs.map((v, i) => [v, pred[i]]).filter(p => p[0] != null && p[1] != null && isFinite(p[0]) && isFinite(p[1]));
+    if (!pares.length) return { n: 0, mae: null, rmse: null, bias: null, correlacion: null, kge: null };
+    const O = pares.map(p => p[0]), P = pares.map(p => p[1]), n = O.length;
+    const mo = O.reduce((a, b) => a + b, 0) / n, mp = P.reduce((a, b) => a + b, 0) / n;
+    const err = P.map((v, i) => v - O[i]);
+    const so = Math.sqrt(O.reduce((a, v) => a + (v - mo) ** 2, 0) / n), sp = Math.sqrt(P.reduce((a, v) => a + (v - mp) ** 2, 0) / n);
+    const corr = n >= 3 && so > 0 && sp > 0 ? O.reduce((a, v, i) => a + (v - mo) * (P[i] - mp), 0) / n / so / sp : null;
+    const kge = corr != null && Math.abs(mo) > 1e-12 ? 1 - Math.sqrt((corr - 1) ** 2 + (sp / so - 1) ** 2 + (mp / mo - 1) ** 2) : null;
+    const r = v => v == null || !isFinite(v) ? null : Math.round(v * 1000) / 1000;
+    return { n, mae: r(err.reduce((a, v) => a + Math.abs(v), 0) / n),
+      rmse: r(Math.sqrt(err.reduce((a, v) => a + v * v, 0) / n)),
+      bias: r(err.reduce((a, v) => a + v, 0) / n), correlacion: r(corr), kge: r(kge) };
+  }
+  async function serieDesdeChunks(manifest, code, variable, desde, hasta) {
+    const stationIndex = manifest.stations.findIndex(s => String(s.codigo) === String(code));
+    if (stationIndex < 0) throw new Error("Estación no incluida en el producto diario publicado.");
+    const station = manifest.stations[stationIndex], nStations = manifest.stations.length, scale = Number(manifest.scale || 10);
+    const start = fechaUTC(desde), end = fechaUTC(hasta), fechas = [], observed = [], grid = [], cv = [];
+    const mobile = manifest.schema === "hidromet.clima-diario.v2";
+    const chunks = [];
+    if (mobile) {
+      const windowStart = fechaUTC(manifest.window.desde), windowEnd = fechaUTC(manifest.window.hasta);
+      if (start < windowStart || end > windowEnd || start > end) throw new Error("Rango fuera de la ventana móvil publicada.");
+      chunks.push({ desde: windowStart, hasta: windowEnd, file: manifest.series.files[variable] });
+    } else {
+      for (let y = start.getUTCFullYear(); y <= end.getUTCFullYear(); y++) chunks.push({
+        desde: new Date(Date.UTC(y, 0, 1)), hasta: new Date(Date.UTC(y, 11, 31)),
+        file: `series_${variable}_${y}.bin.gz`, year: y,
+      });
+    }
+    const buffers = await Promise.all(chunks.map(c => leerBinGzip(`productos/clima/diario/${c.file}`)));
+    chunks.forEach((chunk, yi) => {
+      const days = Math.round((chunk.hasta - chunk.desde) / diaMs) + 1, plane = days * nStations;
+      const values = new Int16Array(buffers[yi]);
+      if (values.length !== plane * 3) throw new Error(`Chunk de serie ${chunk.year || "móvil"} inconsistente.`);
+      const a = Math.max(start.getTime(), chunk.desde.getTime()), b = Math.min(end.getTime(), chunk.hasta.getTime());
+      for (let time = a; time <= b; time += diaMs) {
+        const day = Math.round((time - chunk.desde.getTime()) / diaMs), pos = day * nStations + stationIndex;
+        const decode = raw => raw === manifest.missing_i16 ? null : raw / scale;
+        fechas.push(new Date(time).toISOString().slice(0, 10)); observed.push(decode(values[pos]));
+        grid.push(decode(values[plane + pos])); cv.push(decode(values[2 * plane + pos]));
+      }
+    });
+    const completed = [], provenance = [];
+    observed.forEach((v, i) => {
+      if (v != null) { completed.push(v); provenance.push("observado"); }
+      else if (grid[i] != null) { completed.push(grid[i]); provenance.push("estimado_grillado"); }
+      else { completed.push(null); provenance.push("vacio"); }
+    });
+    const formal = metricasCliente(observed, cv), diagnostic = metricasCliente(observed, grid);
+    formal.tipo = "validacion_espacial_fuera_muestra"; formal.disponible = !!formal.n;
+    formal.nota = "La estación se excluye del ajuste al estimar su valor.";
+    diagnostic.tipo = "comparacion_diagnostica";
+    diagnostic.nota = "No mide habilidad independiente: la estación pudo participar en la corrección diaria.";
+    const count = kind => provenance.filter(x => x === kind).length;
+    return { codigo: code, nombre: station.nombre || code, variable, unidad: variable === "precip" ? "mm" : "°C",
+      desde, hasta, agregacion_observada: variable === "precip" ? station.precipitation_aggregation : (variable === "tmax" ? "max" : "min"),
+      grilla_compatible: variable !== "precip" || station.precip_grid_compatible,
+      contrato_grilla: variable !== "precip" || station.precip_grid_compatible ? "misma ventana diaria" : "ventana incompatible; no se rellena",
+      fechas, observado: observed, estimado_grillado: grid, completado: completed, procedencia: provenance,
+      qc_observacion: observed.map(v => v == null ? "SIN_VALOR_QC" : "PASS"),
+      cobertura: { dias: fechas.length, observados: count("observado"), rellenados: count("estimado_grillado"), vacios: count("vacio") },
+      metricas: { fuera_muestra: formal, diagnostica: diagnostic },
+      metodologia: manifest.method || "Observación QC > estimación grillada compatible > vacío; nunca se sobrescribe una observación." };
+  }
+  async function mapaDesdeChunks(manifest, desde, hasta, operation) {
+    const start = fechaUTC(desde), end = fechaUTC(hasta), chunks = [];
+    if (manifest.schema === "hidromet.clima-diario.v2") {
+      const windowStart = fechaUTC(manifest.window.desde), windowEnd = fechaUTC(manifest.window.hasta);
+      if (start < windowStart || end > windowEnd || start > end) throw new Error("Rango fuera de la ventana móvil publicada.");
+      chunks.push({ desde: windowStart, hasta: windowEnd, file: manifest.grid.file });
+    } else {
+      for (let y = start.getUTCFullYear(); y <= end.getUTCFullYear(); y++) chunks.push({
+        desde: new Date(Date.UTC(y, 0, 1)), hasta: new Date(Date.UTC(y, 11, 31)),
+        file: `grid_precip_${y}.bin.gz`, year: y,
+      });
+    }
+    const buffers = await Promise.all(chunks.map(c => leerBinGzip(`productos/clima/diario/${c.file}`)));
+    const cells = manifest.grid.ny * manifest.grid.nx, totalDays = Math.round((end - start) / diaMs) + 1;
+    const sum = new Float64Array(cells), count = new Uint32Array(cells), selected = [];
+    chunks.forEach((chunk, yi) => {
+      const days = Math.round((chunk.hasta - chunk.desde) / diaMs) + 1, values = new Uint16Array(buffers[yi]);
+      if (values.length !== days * cells) throw new Error(`Chunk cartográfico ${chunk.year || "móvil"} inconsistente.`);
+      const a = Math.max(start.getTime(), chunk.desde.getTime()), b = Math.min(end.getTime(), chunk.hasta.getTime());
+      for (let time = a; time <= b; time += diaMs) {
+        const day = Math.round((time - chunk.desde.getTime()) / diaMs), base = day * cells;
+        selected.push([values, base]);
+        for (let i = 0; i < cells; i++) if (values[base + i] !== manifest.missing_u16) { sum[i] += values[base + i] / manifest.scale; count[i]++; }
+      }
+    });
+    if (selected.length !== totalDays) throw new Error(`Cobertura incompleta: ${selected.length} de ${totalDays} días.`);
+    if (operation === "mediana" && totalDays > 3660) throw new Error("La mediana exacta admite hasta 10 años.");
+    const field = new Array(cells).fill(null), finite = [], scratch = operation === "mediana" ? new Float32Array(totalDays) : null;
+    for (let i = 0; i < cells; i++) {
+      if (count[i] !== totalDays) continue;
+      let value;
+      if (operation === "acumulado") value = sum[i];
+      else if (operation === "media") value = sum[i] / totalDays;
+      else {
+        for (let d = 0; d < selected.length; d++) scratch[d] = selected[d][0][selected[d][1] + i] / manifest.scale;
+        scratch.sort(); const mid = Math.floor(totalDays / 2);
+        value = totalDays % 2 ? scratch[mid] : (scratch[mid - 1] + scratch[mid]) / 2;
+      }
+      field[i] = Math.round(value * 10) / 10; finite.push(value);
+    }
+    finite.sort((a, b) => a - b); const vmax = Math.max(1, finite[Math.floor((finite.length - 1) * .98)] || 1);
+    const palette = ["#ffffd9", "#edf8b1", "#c7e9b4", "#7fcdbb", "#41b6c4", "#1d91c0", "#225ea8", "#0c2c84"];
+    const colorscale = []; palette.forEach((color, i) => { colorscale.push([i / palette.length, color], [(i + 1) / palette.length, color]); });
+    const rows = []; for (let y = 0; y < manifest.grid.ny; y++) rows.push(field.slice(y * manifest.grid.nx, (y + 1) * manifest.grid.nx));
+    const label = { acumulado: "Lluvia acumulada", media: "Lluvia media diaria", mediana: "Mediana diaria de lluvia" }[operation];
+    return { lon: manifest.grid.lon, lat: manifest.grid.lat, campo: rows, colorscale, vmin: 0, vmax: Math.round(vmax * 10) / 10,
+      unidad: "mm", variable: "precip", operacion: operation, desde, hasta, dias: totalDays,
+      cobertura: { dias_solicitados: totalDays, dias_usados: totalDays, completa: true },
+      titulo: `${label} — ${desde} a ${hasta}`, leyenda_sub: `${totalDays} días · ${desde} a ${hasta}` };
+  }
+
+  async function tabDiario(c) {
+    inyectarCSS(); _alTema = null; await cargarGeo();
+    c.innerHTML = cargando("Preparando series y grillas diarias…");
+    let availability, stations = [], dailyManifest = null;
+    try {
+      if (window.HIDROMET_VISOR) {
+        const response = await fetch("productos/clima/diario/manifest.json", { cache: "no-cache" });
+        if (!response.ok) throw new Error(`Producto diario no publicado (HTTP ${response.status})`);
+        dailyManifest = await response.json();
+        availability = { mapa_precip: dailyManifest.grid }; stations = dailyManifest.stations || [];
+      } else {
+        [availability, stations] = await Promise.all([
+          App.api("/clima/diario_disponible"),
+          App.api("/clima/estaciones").then(x => x.estaciones || []),
+        ]);
+      }
+    } catch (e) { c.innerHTML = vacio("⚠️", esc(e.message)); return; }
+    const mapInv = availability.mapa_precip || {};
+    const end0 = mapInv.hasta || new Date().toISOString().slice(0, 10);
+    const startDate = new Date(`${end0}T12:00:00`); startDate.setDate(startDate.getDate() - 10);
+    const start0 = mapInv.desde || startDate.toISOString().slice(0, 10);
+    const options = stations.map(e => `<option value="${esc(e.codigo)}">${esc(e.nombre || e.codigo)} (${esc(e.codigo)}) · ${esc(App.redEtiqueta(e.dependencia || e.region || ""))}</option>`).join("");
+    c.innerHTML = `<div class="cl-wrap cl-diario-wrap">
+      <div class="cl-toolbar cl-diario-toolbar">
+        <div class="cl-grupo"><span>Desde</span><input type="date" data-rol="desde" min="${esc(mapInv.desde || "1990-01-01")}" max="${esc(end0)}" value="${esc(start0)}"></div>
+        <div class="cl-grupo"><span>Hasta</span><input type="date" data-rol="hasta" min="${esc(mapInv.desde || "1990-01-01")}" max="${esc(end0)}" value="${esc(end0)}"></div>
+        <div class="cl-grupo"><span>Mapa de lluvia</span><select data-rol="operacion"><option value="acumulado">Acumulado</option><option value="media">Promedio diario</option><option value="mediana">Mediana diaria</option></select></div>
+        <div class="cl-grupo"><button class="cl-btn" data-rol="actualizar">Actualizar producto</button></div>
+      </div>
+      <div class="cl-card cl-rango-card"><h3 class="cl-maptit" data-rol="map-tit">Mapa de lluvia por rango</h3>
+        <div class="cl-plot cl-plot-mapa cl-rango-mapa" data-rol="mapa"></div><div class="ct-leyenda-carta cl-leyenda" data-rol="leyenda"></div>
+        <p class="cl-nota" data-rol="map-nota">Se exige cobertura completa en cada píxel para el período seleccionado.</p></div>
+      <div class="cl-card"><div class="cl-serie-head"><h3 class="cl-maptit">Cruce y relleno por estación</h3>
+        <div class="cl-serie-controles"><input class="cl-buscar" data-rol="buscar" type="search" placeholder="Buscar estación…">
+          <select data-rol="est">${options}</select><select data-rol="variable"><option value="precip">Precipitación</option><option value="tmax">T. máxima</option><option value="tmin">T. mínima</option></select></div></div>
+        <div class="cl-plot" data-rol="serie"></div><div data-rol="metricas"></div>
+        <div class="cl-aviso"><span class="ic">ⓘ</span><p data-rol="metodo">Los huecos se rellenan únicamente con una grilla de ventana temporal compatible. Cada valor conserva su procedencia y QC.</p></div></div>
+    </div>`;
+    const desde = c.querySelector('[data-rol="desde"]'), hasta = c.querySelector('[data-rol="hasta"]'),
+      operation = c.querySelector('[data-rol="operacion"]'), mapHost = c.querySelector('[data-rol="mapa"]'),
+      mapTitle = c.querySelector('[data-rol="map-tit"]'), station = c.querySelector('[data-rol="est"]'),
+      variable = c.querySelector('[data-rol="variable"]'), seriesHost = c.querySelector('[data-rol="serie"]'),
+      metricsHost = c.querySelector('[data-rol="metricas"]'), method = c.querySelector('[data-rol="metodo"]'),
+      search = c.querySelector('[data-rol="buscar"]');
+    let lastMap = null, lastSeries = null;
+    async function loadMap() {
+      limpiarPlot(mapHost); mapHost.innerHTML = cargando("Agregando grillas diarias…");
+      try {
+        const d = dailyManifest
+          ? await mapaDesdeChunks(dailyManifest, desde.value, hasta.value, operation.value)
+          : await App.api(`/clima/mapa_rango?desde=${desde.value}&hasta=${hasta.value}&operacion=${operation.value}`);
+        if (d.error) throw new Error(d.error);
+        d.leyenda_sub = `${d.dias} días · ${d.desde} a ${d.hasta}`;
+        mapTitle.textContent = d.titulo || "Mapa por rango"; lastMap = d; pintarMapa(mapHost, d, null);
+      } catch (e) { limpiarPlot(mapHost); mapHost.innerHTML = vacio("⚠️", esc(e.message)); }
+    }
+    async function loadSeries() {
+      if (!station.value) return;
+      limpiarPlot(seriesHost); seriesHost.innerHTML = cargando("Cruzando observación y grilla…"); metricsHost.innerHTML = "";
+      try {
+        const d = dailyManifest
+          ? await serieDesdeChunks(dailyManifest, station.value, variable.value, desde.value, hasta.value)
+          : await App.api(`/clima/serie_relleno?codigo=${encodeURIComponent(station.value)}&variable=${variable.value}&desde=${desde.value}&hasta=${hasta.value}`);
+        if (d.error) throw new Error(d.error);
+        lastSeries = d; pintarSerieRelleno(seriesHost, d); metricsHost.innerHTML = metricasRelleno(d);
+        method.textContent = `${d.metodologia} Contrato: ${d.contrato_grilla}.`;
+      } catch (e) { limpiarPlot(seriesHost); seriesHost.innerHTML = vacio("⚠️", esc(e.message)); }
+    }
+    async function updateAll() { await Promise.all([loadMap(), loadSeries()]); }
+    c.querySelector('[data-rol="actualizar"]').onclick = updateAll;
+    station.onchange = loadSeries; variable.onchange = loadSeries; operation.onchange = loadMap;
+    search.oninput = () => {
+      const q = search.value.trim().toLowerCase(), selected = station.value;
+      station.innerHTML = stations.filter(e => !q || `${e.codigo} ${e.nombre || ""} ${e.dependencia || ""}`.toLowerCase().includes(q))
+        .map(e => `<option value="${esc(e.codigo)}">${esc(e.nombre || e.codigo)} (${esc(e.codigo)}) · ${esc(App.redEtiqueta(e.dependencia || e.region || ""))}</option>`).join("");
+      if ([...station.options].some(o => o.value === selected)) station.value = selected;
+      else if (station.value) loadSeries();
+    };
+    _alTema = () => { if (lastMap) pintarMapa(mapHost, lastMap, null); if (lastSeries) pintarSerieRelleno(seriesHost, lastSeries); };
+    updateAll();
+  }
+
   App.registrar("clima", {
     titulo: "Climatología", orden: 2.5,
     // Al salir del módulo: purgar TODOS los Plotly vivos (mapa, ranking, climogramas,
@@ -727,6 +988,7 @@
           // v14 (pedido del dueño): MENOS pestañas — "Por estación" vive DENTRO de
           // Explorar (selector + clic en mapa/ranking → climograma y ficha ahí mismo).
           { id: "mapas", etiqueta: "Explorar", render: tabMapas },
+          { id: "diario", etiqueta: "Series y acumulados", render: tabDiario },
           { id: "records", etiqueta: "Récords", render: tabRecords },
           // "Por coordenada" consulta lat/lon libres (imposible de congelar) → oculta en el visor.
           window.HIDROMET_VISOR ? null : { id: "punto", etiqueta: "Por coordenada", render: tabPunto },

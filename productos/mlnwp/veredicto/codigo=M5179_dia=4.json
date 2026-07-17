@@ -1,0 +1,1 @@
+{"agg_precip":"sum_00_24","codigo":"M5179","dias":4,"fecha":"2026-07-21","hoy":"2026-07-17","lluvia":null,"nombre":"Paluguillo","sin_datos":false,"tendencia":{"delta":0.9,"referencia":"pronóstico de hoy","texto":"más cálido","tmax_hoy":13.4},"tmax":{"modelo":"BEST_OP_CV","q25":13.6,"q75":15.5,"valor":14.3},"tmin":{"modelo":"BEST_OP_CV","q25":2.4,"q75":4.3,"valor":3.4}}

@@ -1,19 +1,20 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+<script>window.HIDROMET_VISOR=true;/* Proyección pública de solo lectura generada desde ui/. */</script>
+
 <meta charset="utf-8">
 <title>HidroMet Ecuador</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#0B1322">
 <link rel="icon" href="favicon.png">
-<script>window.HIDROMET_VISOR = true;  /* MODO VISOR: la UI lee productos publicados, sin backend.
-   Se fija en <head> para que el guard pre-paint de abajo lo vea de forma SÍNCRONA. */</script>
 <script>try{document.documentElement.dataset.tema=localStorage.getItem("hidromet-tema")||"oscuro"}catch(e){document.documentElement.dataset.tema="oscuro"}</script>
 <script>
-/* P19 — guard SÍNCRONO pre-paint: sin sesión, la app queda oculta ANTES del primer
-   pintado (cero parpadeo, también con caché fría). P22 — sidebar colapsada pre-paint. */
+/* P19 — guard SÍNCRONO pre-paint: si el visor exige acceso y no hay sesión, la app
+   queda oculta ANTES del primer pintado (cero parpadeo, también con caché fría).
+   P22 — la sidebar colapsada recordada se aplica también antes de pintar. */
 (function(){var h=document.documentElement;
-try{if(window.HIDROMET_VISOR&&localStorage.getItem("hm-acceso-v1")!=="1"&&sessionStorage.getItem("hm-acceso-v1")!=="1")h.classList.add("hm-prelogin");}
+try{if(window.HIDROMET_VISOR&&(window.HIDROMET_AUTH_BASE||(localStorage.getItem("hm-acceso-v1")!=="1"&&sessionStorage.getItem("hm-acceso-v1")!=="1")))h.classList.add("hm-prelogin");}
 catch(e){if(window.HIDROMET_VISOR)h.classList.add("hm-prelogin");}
 try{if(localStorage.getItem("hm-sidebar")==="min")h.classList.add("hm-sb-min");}catch(e){}})();
 </script>
@@ -21,17 +22,16 @@ try{if(localStorage.getItem("hm-sidebar")==="min")h.classList.add("hm-sb-min");}
 <link rel="stylesheet" href="lib/leaflet/leaflet.css">
 <link rel="stylesheet" href="lib/leaflet/MarkerCluster.css">
 <link rel="stylesheet" href="lib/leaflet/MarkerCluster.Default.css">
-<link rel="stylesheet" href="css/fonts.css?v=83573c7ec5f1">
-<link rel="stylesheet" href="css/base.css?v=83573c7ec5f1">
-<link rel="stylesheet" href="css/inicio.css?v=83573c7ec5f1">
-<link rel="stylesheet" href="css/mlnwp.css?v=83573c7ec5f1">
-<link rel="stylesheet" href="css/cartas.css?v=83573c7ec5f1">
-<link rel="stylesheet" href="css/sngr.css?v=83573c7ec5f1">
-<link rel="stylesheet" href="css/geoglows.css?v=83573c7ec5f1">
-<link rel="stylesheet" href="css/datos.css?v=83573c7ec5f1">
-<link rel="stylesheet" href="css/configuracion.css?v=83573c7ec5f1">
-<link rel="stylesheet" href="css/clima.css?v=83573c7ec5f1">
-<link rel="stylesheet" href="css/decisiones.css?v=83573c7ec5f1">
+<link rel="stylesheet" href="css/fonts.css?v=05d272cb099c">
+<link rel="stylesheet" href="css/base.css?v=05d272cb099c">
+<link rel="stylesheet" href="css/mlnwp.css?v=05d272cb099c">
+<link rel="stylesheet" href="css/cartas.css?v=05d272cb099c">
+<link rel="stylesheet" href="css/sngr.css?v=05d272cb099c">
+<link rel="stylesheet" href="css/geoglows.css?v=05d272cb099c">
+<link rel="stylesheet" href="css/datos.css?v=05d272cb099c">
+<link rel="stylesheet" href="css/configuracion.css?v=05d272cb099c">
+<link rel="stylesheet" href="css/clima.css?v=05d272cb099c">
+<link rel="stylesheet" href="css/decisiones.css?v=05d272cb099c">
 </head>
 <body>
 <div id="capa-app">
@@ -59,7 +59,7 @@ try{if(localStorage.getItem("hm-sidebar")==="min")h.classList.add("hm-sb-min");}
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
       </button>
       <div class="ruta">
-        <span class="actual">Estación de trabajo</span><span class="sep">/</span><span id="topbar-modulo">Inicio</span>
+        <span class="actual">Estación de trabajo</span><span class="sep">/</span><span id="topbar-modulo">Pronóstico</span>
       </div>
       <div class="estado">
         <div class="sync"><span class="punto"></span><span id="topbar-sync">Datos locales</span></div>
@@ -79,14 +79,14 @@ try{if(localStorage.getItem("hm-sidebar")==="min")h.classList.add("hm-sb-min");}
 <script src="lib/leaflet/leaflet.js"></script>
 <script src="lib/leaflet/leaflet.markercluster.js"></script>
 <script src="lib/plotly/plotly.min.js"></script>
-<script src="js/core.js?v=83573c7ec5f1"></script>
-<script src="js/modules/mlnwp.js?v=83573c7ec5f1"></script>
-<script src="js/modules/cartas.js?v=83573c7ec5f1"></script>
-<script src="js/modules/sngr.js?v=83573c7ec5f1"></script>
-<script src="js/modules/geoglows.js?v=83573c7ec5f1"></script>
-<script src="js/modules/clima.js?v=83573c7ec5f1"></script>
-<script src="js/modules/glosario.js?v=83573c7ec5f1"></script>
-<script src="js/modules/decisiones.js?v=83573c7ec5f1"></script>
+<script src="js/core.js?v=05d272cb099c"></script>
+<script src="js/modules/mlnwp.js?v=05d272cb099c"></script>
+<script src="js/modules/decisiones.js?v=05d272cb099c"></script>
+<script src="js/modules/cartas.js?v=05d272cb099c"></script>
+<script src="js/modules/sngr.js?v=05d272cb099c"></script>
+<script src="js/modules/geoglows.js?v=05d272cb099c"></script>
+<script src="js/modules/clima.js?v=05d272cb099c"></script>
+<script src="js/modules/glosario.js?v=05d272cb099c"></script>
 <script>App.iniciar();</script>
 </body>
 </html>

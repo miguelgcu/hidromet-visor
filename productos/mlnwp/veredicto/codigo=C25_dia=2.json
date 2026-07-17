@@ -1,0 +1,1 @@
+{"agg_precip":"sum_00_24","codigo":"C25","dias":2,"fecha":"2026-07-19","hoy":"2026-07-17","lluvia":null,"nombre":"San José de Minas","sin_datos":false,"tendencia":{"delta":-1.0,"referencia":"pronóstico de hoy","texto":"más frío","tmax_hoy":24.3},"tmax":{"modelo":"BEST_OP_CV","q25":22.6,"q75":24.5,"valor":23.3},"tmin":{"modelo":"BEST_OP_CV","q25":10.5,"q75":12.4,"valor":11.5}}

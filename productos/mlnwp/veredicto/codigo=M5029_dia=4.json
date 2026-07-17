@@ -1,0 +1,1 @@
+{"agg_precip":"sum_00_24","codigo":"M5029","dias":4,"fecha":"2026-07-21","hoy":"2026-07-17","lluvia":null,"nombre":"El Carmen","sin_datos":false,"tendencia":{"delta":0.8,"referencia":"pronóstico de hoy","texto":"más cálido","tmax_hoy":10.2},"tmax":{"modelo":"BEST_OP_CV","q25":10.3,"q75":12.2,"valor":11.0},"tmin":{"modelo":"BEST_OP_CV","q25":-1.6,"q75":0.3,"valor":-0.6}}

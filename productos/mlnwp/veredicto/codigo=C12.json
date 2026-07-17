@@ -1,0 +1,1 @@
+{"agg_precip":"sum_00_24","codigo":"C12","dias":1,"fecha":"2026-07-18","hoy":"2026-07-17","lluvia":null,"nombre":"Quijos Campamento","sin_datos":false,"tendencia":{"delta":1.3,"referencia":"pronóstico de hoy","texto":"más cálido","tmax_hoy":17.7},"tmax":{"modelo":"BEST_OP_CV","q25":18.3,"q75":20.2,"valor":19.0},"tmin":{"modelo":"BEST_OP_CV","q25":9.5,"q75":11.5,"valor":10.6}}

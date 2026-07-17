@@ -148,7 +148,7 @@
   const _CACHE_DATOS_MAX = 60;
   function limpiarCacheDatos() {
     _cacheDatos.clear();
-    _ffrFechas = null; _ffrZonas.clear();     // §P18a: el FFR también se regenera al actualizar
+    _ffrFechas = null; _ffrEstado = "desconocido"; _ffrZonas.clear();
     _hvDatos = null;                          // §P9: resumen de validación hidro
   }
   async function apiDatosCarta(url) {
@@ -237,19 +237,21 @@
     return mask;
   }
 
-  /* §P18a — ZONAS DE DESBORDAMIENTO (FFR) como OVERLAY sobre las cartas de alerta
+  /* §P18a — INDICADOR DE SUSCEPTIBILIDAD FFR como overlay sobre las cartas de alerta
      de PRECIPITACIÓN (nunca temperatura). Ya no son una carta aparte: se dibujan
      punteadas y discretas sobre cada mapa de alerta de lluvia cuya FECHA tenga
      zona FFR. Fechas y anillos se cachean (una petición por sesión / por record). */
   const FFR_BUFFER = "ambos";
   let _ffrFechas = null;                      // [{record, fecha}] | false
+  let _ffrEstado = "desconocido";             // disponible | sin_dato | error
   const _ffrZonas = new Map();                // record -> {anillos, color} | false
   async function asegurarFFRFechas() {
     if (_ffrFechas !== null) return;
     try {
       const r = await App.api("/cartas/riesgo_ffr/fechas");
       _ffrFechas = Array.isArray(r.fechas) ? r.fechas : [];
-    } catch (e) { _ffrFechas = false; }
+      _ffrEstado = r.estado_dato || (_ffrFechas.length ? "disponible" : "sin_dato");
+    } catch (e) { _ffrFechas = false; _ffrEstado = "error"; }
   }
   // Fecha local (GMT-5) ISO de un epoch en segundos — para casar carta ↔ zona FFR.
   const fechaLocalISO = ts => new Date((ts - 5 * 3600) * 1000).toISOString().slice(0, 10);
@@ -276,7 +278,7 @@
       type: "scatter", mode: "lines", x: xs, y: ys, fill: "toself", meta: "ffr-overlay",
       fillcolor: `rgba(${c[0]},${c[1]},${c[2]},.14)`,
       line: { color: col, width: 1.2, dash: "dot" },
-      name: "Zona de desbordamiento (FFR)", hoverinfo: "skip", showlegend: false,
+      name: "Indicador de susceptibilidad FFR", hoverinfo: "skip", showlegend: false,
     }];
   }
 
@@ -461,11 +463,64 @@
     const b = { archivo: params.archivo, capa: params.capa, record: params.record };
     if (params.corrido) b.corrido = params.corrido;
     if (params.fin !== undefined && params.fin !== null && params.fin !== "") b.fin = params.fin;
+    for (const k of ["esperado_inicio", "esperado_fin",
+                     "esperado_registro_inicio", "esperado_registro_fin"]) {
+      if (params[k] !== undefined && params[k] !== null && params[k] !== "") b[k] = params[k];
+    }
     // Variante ZPH en el VISOR: el exportador congela las capas de alerta de lluvia
     // también con &modo=zph; con modo fija se pide SIN el parámetro (compatibilidad
     // con los productos ya congelados sin modo).
     if (params.modo && params.modo !== "fija") b.modo = params.modo;
     return b;
+  }
+
+  const FFGS_SHP_AVAILABILITY_SCHEMA = "hidromet.ffgs-shp-availability.v1";
+
+  // Contrato de artefactos FFGS congelados en el visor. La presencia del schema
+  // nuevo cambia el comportamiento a fail-closed: un contrato mal formado no
+  // puede habilitar por accidente un ZIP distinto del (archivo, record) mostrado.
+  // Los catálogos antiguos (sin este schema) conservan el fallback histórico.
+  function contratoShpFFGS(productos) {
+    const raw = productos && productos.disponibilidad && productos.disponibilidad.ffgs_shp;
+    if (!raw || raw.schema !== FFGS_SHP_AVAILABILITY_SCHEMA) return null;
+    const identidad = raw.identity;
+    const valido = (raw.mode === "all" || raw.mode === "selected")
+      && Array.isArray(identidad) && identidad.length === 2
+      && identidad[0] === "archivo" && identidad[1] === "record"
+      && raw.available_by_file && typeof raw.available_by_file === "object"
+      && !Array.isArray(raw.available_by_file);
+    return { raw, valido };
+  }
+
+  function shpFFGSDisponible(productos, archivo, record, esVisor) {
+    // En escritorio el backend genera el SHP dinámicamente. En un build legacy
+    // del visor no existe inventario y se conserva el intento al ZIP histórico.
+    if (!esVisor) return true;
+    const contrato = contratoShpFFGS(productos);
+    if (!contrato) return true;
+    if (!contrato.valido || !Number.isSafeInteger(record)) return false;
+    const entrada = contrato.raw.available_by_file[String(archivo || "")];
+    return !!(entrada && Array.isArray(entrada.records)
+      && entrada.records.some(r => Number.isSafeInteger(r) && r === record));
+  }
+
+  function botonShpFFGS(params, productos, esVisor) {
+    const record = params && params.record;
+    const archivo = params && params.archivo;
+    const disponible = shpFFGSDisponible(productos, archivo, record, esVisor);
+    if (!disponible) {
+      return `<a class="ct-dl ct-dl-shp" role="button" tabindex="-1" aria-disabled="true"
+        title="Shapefile no publicado para este producto y ciclo" aria-label="Shapefile no disponible">SHP</a>`;
+    }
+    const query = { archivo, record };
+    // La referencia esperada permite verificar el ciclo en el endpoint vivo. El
+    // mapeo del visor la elimina del slug, por lo que el artefacto público sigue
+    // identificado exclusivamente por archivo+record.
+    if (Number.isSafeInteger(params.reference_time))
+      query.esperado_reference_time = params.reference_time;
+    const ruta = "/cartas/ffgs_shp?" + qs(query);
+    return `<a class="ct-dl ct-dl-shp" role="button" tabindex="0" data-shp="${esc(ruta)}"
+      title="Descargar en formato shapefile" aria-label="Descargar en formato shapefile">SHP</a>`;
   }
 
   function lienzoCarta(params, alt) {
@@ -485,13 +540,15 @@
     const shpRuta = esAlertaNivel
       ? "/cartas/alerta_shp?" + qs({ capa: params.capa, record: params.record,
                                      modo: (E && E.alerta && E.alerta.modo) || "fija" })
-      : esFFGS
-      ? "/cartas/ffgs_shp?" + qs({ archivo: params.archivo, record: params.record })
       : "";
-    const shpBtn = (esAlertaNivel || esFFGS) ? `<a class="ct-dl ct-dl-shp" role="button" tabindex="0" data-shp="${esc(shpRuta)}"
-           title="Descargar en formato shapefile" aria-label="Descargar en formato shapefile">SHP</a>` : "";
+    const shpBtn = esFFGS
+      ? botonShpFFGS(params, E && E.productos, !!window.HIDROMET_VISOR)
+      : esAlertaNivel
+      ? `<a class="ct-dl ct-dl-shp" role="button" tabindex="0" data-shp="${esc(shpRuta)}"
+           title="Descargar en formato shapefile" aria-label="Descargar en formato shapefile">SHP</a>`
+      : "";
     // §P18a: data-ffr = fecha (ISO) de la carta cuando es ALERTA DE LLUVIA → el
-    // overlay de zonas de desbordamiento (FFR) se dibuja encima en pintarMapaCarta.
+    // overlay del indicador de susceptibilidad FFR se dibuja encima en pintarMapaCarta.
     const ffrAttr = params.ffr ? ` data-ffr="${esc(params.ffr)}"` : "";
     return `
       <div class="ct-lienzo${papelFijo() ? " ct-lienzo-fijo" : ""}" data-datos="${esc(datosUrl)}"${ffrAttr}>
@@ -835,7 +892,7 @@
     // el spec de grillas (1.5/3.4) intacto para el resto.
     const esHeladas = !!(E && E.tipo === "heladas");
     traces.push(...trazasOutline("x", "y", null, esHeladas ? 0.8 : 1.5, esHeladas ? 1.8 : 3.4, fijo));
-    // §P18a: ZONAS DE DESBORDAMIENTO (FFR) sobre las cartas de alerta de PRECIPITACIÓN
+    // §P18a: INDICADOR DE SUSCEPTIBILIDAD FFR sobre alertas de PRECIPITACIÓN
     // (solo lluvia, nunca temperatura): overlay discreto punteado, si el FFR tiene
     // zona para la FECHA de la carta. data-ffr la pone cuerpoAlertas.
     if (div.dataset.ffr) {
@@ -1019,13 +1076,13 @@
     // (auditoría 2026-07-10). inst.fin es epoch en segundos.
     let bestN = -1;
     for (const it of insts) {
-      const n = Object.keys(it.registros || {}).length;
+      const n = Object.keys(it.descriptores || it.registros || {}).length;
       if (n > bestN) bestN = n;
     }
     const ahora = Date.now() / 1000;
     let ultimoConDato = -1;
     for (let i = 0; i < insts.length; i++) {
-      if (Object.keys(insts[i].registros || {}).length < bestN) continue;
+      if (Object.keys(insts[i].descriptores || insts[i].registros || {}).length < bestN) continue;
       ultimoConDato = i;
       if ((insts[i].fin || 0) >= ahora) return i;   // ventana que cubre ahora o la próxima
     }
@@ -1047,9 +1104,47 @@
     }
     return out;
   }
+
+  // Contrato v2: archivo+capa+record+tiempos son una sola unidad por
+  // fuente/instante. El fallback al catálogo antiguo se permite únicamente si
+  // esa fuente tiene una sola variante; TX/TN 24 h (nativa + agg::) falla
+  // cerrado en vez de combinar el descriptor de una con el record de la otra.
+  function descriptorCarta(p, it, f) {
+    if (!p || !it || !f || !f.fuente) return null;
+    const d = it.descriptores && it.descriptores[f.fuente];
+    if (d && d.archivo && d.capa && Number.isInteger(Number(d.record)) &&
+        d.inicio !== undefined && d.fin !== undefined) return d;
+    const variantes = new Set((p.fuentes || [])
+      .filter(x => x && x.fuente === f.fuente)
+      .map(x => `${x.archivo || ""}\u0000${x.capa || ""}\u0000${x.corrido ? 1 : 0}`));
+    if (variantes.size !== 1 || !it.registros || it.registros[f.fuente] === undefined) return null;
+    return {
+      archivo: (it.archivos && it.archivos[f.fuente]) || f.archivo,
+      capa: f.capa, record: it.registros[f.fuente],
+      inicio: it.inicio, fin: it.fin,
+      corrido: !!f.corrido, objetivo_fin: f.corrido ? it.fin : undefined,
+    };
+  }
+
+  function paramsDescriptor(d, extra) {
+    if (!d) return null;
+    const out = Object.assign({
+      archivo: d.archivo, capa: d.capa, record: d.record,
+      esperado_inicio: d.inicio, esperado_fin: d.fin,
+      esperado_registro_inicio: d.registro_inicio,
+      esperado_registro_fin: d.registro_fin,
+      reference_time: d.reference_time,
+    }, extra || {});
+    if (d.corrido) {
+      out.corrido = 1;
+      out.fin = d.objetivo_fin !== undefined ? d.objetivo_fin : d.fin;
+    }
+    return out;
+  }
+
   const conteoInst = (p, fuentes) =>
     ((p && p.instantes) || []).map(it =>
-      fuentes.reduce((s, f) => s + ((it.registros || {})[f.fuente] !== undefined ? 1 : 0), 0));
+      fuentes.reduce((s, f) => s + (descriptorCarta(p, it, f) ? 1 : 0), 0));
 
   function gridState(tipoId) {
     const t = tipoNodo(tipoId);
@@ -1119,15 +1214,13 @@
 
     // Grilla 2×2: hasta 4 fuentes ÚNICAS del período (cada una con su capa/archivo).
     const cartas = fuentes4.map(f => {
-      const record = inst.registros ? inst.registros[f.fuente] : undefined;
-      const archivo = (inst.archivos && inst.archivos[f.fuente]) || f.archivo;
-      if (record === undefined) {
+      const descriptor = descriptorCarta(p, inst, f);
+      if (!descriptor) {
         return `<figure class="ct-carta"><div class="ct-carta-cab"><span class="titulo">${esc(f.fuente)}</span>
           <span class="meta">${esc(figcap)}</span></div>
           <div class="ct-lienzo"><div class="fallo"><div class="icono">🗺️</div>Sin dato en este instante</div></div></figure>`;
       }
-      const params = { archivo, capa: f.capa, record,
-        corrido: f.corrido || p.corrido ? 1 : 0, fin: inst.fin };
+      const params = paramsDescriptor(descriptor);
       // §P3: el nombre de descarga lleva la FECHA del instante (fuente_fecha_producto).
       return `<figure class="ct-carta">
         <div class="ct-carta-cab"><span class="titulo">${esc(f.fuente)}</span>
@@ -1158,94 +1251,124 @@
   }
 
   /* ============================================================
-     §P9 — VALIDACIÓN DE HIDROESTIMADORES (pestaña Hidroestimadores):
-     por producto (IMERG/PDIR), serie de los últimos 10 días calendario
-     comparando ESTIMADO medio vs OBSERVADO medio en las estaciones con
-     par, con las métricas del período al lado (MAE/sesgo/correlación).
-     Datos: /cartas/validacion/hidro_resumen (pares de validacion77_* +
-     stacks 7-7 + base canónica de observaciones).
+     §P9 — VALIDACIÓN DE HIDROESTIMADORES. Una sola figura comparable,
+     selector de estación y tabla fuente×ventana. Solo usa estaciones 7-7;
+     las 0-24 quedan fuera hasta disponer de un producto con esa ventana.
      ============================================================ */
-  let _hvDatos = null;                        // caché del resumen (se limpia al actualizar)
-  const HV_COLOR = { IMERG: "#4c78a8", PDIR: "#f58518" };
+  const _hvCache = new Map();
+  const _hvEstado = { dias: 14, codigo: "" };
+  const HV_COLOR = { IMERG: "#4c78a8", PDIR: "#f58518", CCS: "#54a24b" };
   function htmlValidacionHidro() {
     return `
       <div class="ct-panel ct-hv">
         <div class="ct-panel-cab">
-          <h3>Validación de hidroestimadores <span class="suave">· últimos 10 días calendario · estimado vs estaciones</span></h3>
+          <h3>Validación de hidroestimadores <span class="suave">· estimado grillado vs observación canónica 7-7</span></h3>
+          <div class="ct-hv-controles">
+            <label><span>Estación</span><select data-rol="hv-estacion"><option value="">Promedio de la red 7-7</option></select></label>
+            <label><span>Ventana</span><select data-rol="hv-ventana">
+              ${[7, 14, 30, 60].map(d => `<option value="${d}" ${d === _hvEstado.dias ? "selected" : ""}>${d} días</option>`).join("")}
+            </select></label>
+          </div>
         </div>
         <div class="ct-hv-grid" data-rol="hv-grid"><span class="suave" style="font-size:12px">Cargando validación…</span></div>
-        <p class="ct-nota">Cada tarjeta compara el <b>estimado satelital</b> (ventana 7-7, celda más cercana a cada
-          estación) con la <b>lluvia observada</b> de las estaciones ese día: las líneas son la <b>media</b> de las
-          estaciones con par; las métricas (MAE/sesgo/correlación) se calculan sobre <b>todos los pares estación×día</b>
-          del período. «Motor» es la referencia pareada con que se pondera el consenso multifuente solo al superar los mínimos de muestra.</p>
+        <p class="ct-nota">La serie y las métricas usan la misma ventana física <b>07:00–07:00</b> y todos los pares
+          estación×día disponibles. <b>CCS está en sombra</b>: se descarga y evalúa, pero todavía no participa en el
+          consenso ni en alertas. GMAP no aparece aquí porque es lluvia media areal por cuenca, no un píxel independiente.</p>
       </div>`;
   }
   const _hvFmt = (v, suf = "") => (v == null ? "—" : (+v).toLocaleString("es-EC", { maximumFractionDigits: 2 }) + suf);
   async function cargarValidacionHidro(cont) {
     const host = cont.querySelector('[data-rol="hv-grid"]');
     if (!host) return;
+    const selEst = cont.querySelector('[data-rol="hv-estacion"]');
+    const selVen = cont.querySelector('[data-rol="hv-ventana"]');
+    const query = `?dias=${_hvEstado.dias}${_hvEstado.codigo ? `&codigo=${encodeURIComponent(_hvEstado.codigo)}` : ""}`;
+    const url = "/cartas/validacion/hidro_resumen" + query;
+    let datos;
     try {
-      if (!_hvDatos) _hvDatos = await App.api("/cartas/validacion/hidro_resumen");
+      if (!_hvCache.has(url)) _hvCache.set(url, App.api(url));
+      datos = await _hvCache.get(url);
     } catch (e) {
       if (host.isConnected) host.innerHTML = `<span class="suave" style="font-size:12px">Validación de hidroestimadores no disponible${window.HIDROMET_VISOR ? " en el visor" : ""}.</span>`;
       return;
     }
     if (!host.isConnected) return;
-    const prods = (_hvDatos && _hvDatos.productos) || [];
+    const estaciones = (datos && datos.estaciones) || [];
+    if (selEst && selEst.options.length <= 1) {
+      selEst.innerHTML = `<option value="">Promedio de la red 7-7 (${fmtNum(estaciones.length)})</option>` +
+        estaciones.map(e => `<option value="${esc(e.codigo)}">${esc(e.codigo)} · ${esc(e.nombre || e.codigo)}</option>`).join("");
+      selEst.value = _hvEstado.codigo;
+      selEst.onchange = () => {
+        _hvEstado.codigo = selEst.value;
+        host.innerHTML = `<span class="suave" style="font-size:12px">Actualizando comparación…</span>`;
+        cargarValidacionHidro(cont);
+      };
+    }
+    if (selVen) {
+      selVen.value = String(_hvEstado.dias);
+      selVen.onchange = () => {
+        _hvEstado.dias = +selVen.value;
+        host.innerHTML = `<span class="suave" style="font-size:12px">Actualizando ventana…</span>`;
+        cargarValidacionHidro(cont);
+      };
+    }
+    const prods = (datos && datos.productos) || [];
     if (!prods.length) {
       host.innerHTML = `<span class="suave" style="font-size:12px">Aún no hay pares estimado↔observación (se llenan con la actualización diaria).</span>`;
       return;
     }
-    host.innerHTML = prods.map((p, i) => {
-      const m = p.metricas || {};
-      const mo = p.motor || {};
-      const filas = [
-        ["MAE", _hvFmt(m.mae, " mm")], ["Sesgo", _hvFmt(m.bias, " mm")],
-        ["Correlación", _hvFmt(m.corr)], ["Pares", m.n != null ? fmtNum(m.n) : "—"],
-        ["Días con par", m.dias != null ? fmtNum(m.dias) : "—"],
-        ["MAE motor (hist.)", _hvFmt(mo.mae, " mm")],
-        ["Peso multifuente", mo.apto_ponderacion
-          ? `${_hvFmt(mo.peso)} · ${fmtNum(mo.fechas_pareadas || 0)} días pareados`
-          : "1.00 · muestra insuficiente/no certificada"],
-      ];
-      return `<div class="ct-hv-card">
-        <div class="ct-hv-cab"><span class="titulo" style="color:${esc(HV_COLOR[p.fuente] || "var(--ink)")}">${esc(p.fuente)}</span>
-          <span class="meta mono">ventana 7-7 · ${fmtNum((p.serie && p.serie.fechas || []).length)} días</span></div>
-        <div class="ct-hv-cuerpo">
-          <div class="ct-hv-plot" data-hv-plot="${i}"></div>
-          <table class="ct-hv-met"><tbody>
-            ${filas.map(([k, v]) => `<tr><td>${esc(k)}</td><td class="mono">${v}</td></tr>`).join("")}
-          </tbody></table>
-        </div>
-      </div>`;
-    }).join("");
+    const ventanas = (datos.ventanas || [7, 14, 30, 60]);
+    const filas = prods.flatMap(p => ventanas.map(ventana => {
+      const m = (p.metricas_ventanas || {})[String(ventana)];
+      const d = (m && m.deteccion) || {};
+      const estado = p.fuente === "CCS" ? "Sombra" : ((p.motor || {}).apto_ponderacion ? "Apto" : "Muestra insuficiente");
+      return `<tr class="${ventana === _hvEstado.dias ? "activa" : ""}">
+        <td><span class="ct-hv-fuente" style="--hv-color:${esc(HV_COLOR[p.fuente] || "#4c78a8")}">${esc(p.fuente)}</span></td>
+        <td class="mono">${ventana} d</td><td class="mono">${_hvFmt(m && m.mae)}</td>
+        <td class="mono">${_hvFmt(m && m.rmse)}</td><td class="mono">${_hvFmt(m && m.bias)}</td>
+        <td class="mono">${_hvFmt(m && m.corr)}</td>
+        <td class="mono">${_hvFmt(d.pod)}</td><td class="mono">${_hvFmt(d.far)}</td>
+        <td class="mono">${_hvFmt(d.csi)}</td><td class="mono">${m ? fmtNum(m.n) : "—"}</td>
+        <td class="mono">${m ? fmtNum(m.dias) : "—"}</td><td>${esc(estado)}</td></tr>`;
+    }));
+    host.innerHTML = `<div class="ct-hv-plot" data-hv-plot="comparacion"></div>
+      <div class="ct-hv-tabla-wrap"><table class="ct-hv-met"><thead><tr>
+        <th>Fuente</th><th>Ventana</th><th>MAE</th><th>RMSE</th><th>Sesgo</th><th>r</th><th>POD</th><th>FAR</th><th>CSI</th><th>Pares</th><th>Días</th><th>Estado</th>
+      </tr></thead><tbody>${filas.join("")}</tbody></table></div>`;
     if (!window.Plotly) return;
     const oscuro = temaOscuro();
     const tinta = oscuro ? "#9DAABF" : "#58667A", rejilla = oscuro ? "rgba(223,230,247,.10)" : "rgba(70,89,122,.12)";
-    prods.forEach((p, i) => {
-      const div = host.querySelector(`[data-hv-plot="${i}"]`);
+    const div = host.querySelector('[data-hv-plot="comparacion"]');
+    if (!div) return;
+    const obs = new Map();
+    prods.forEach(p => {
       const s = p.serie || {};
-      if (!div || !(s.fechas || []).length) return;
-      const col = HV_COLOR[p.fuente] || "#4c78a8";
-      Plotly.newPlot(div, [
-        { type: "bar", name: "Observado (estaciones)", x: s.fechas, y: s.observado,
-          marker: { color: oscuro ? "rgba(174,187,208,.55)" : "rgba(70,89,122,.45)" },
-          hovertemplate: "%{x} · obs media <b>%{y:.2f} mm</b><extra></extra>" },
-        { type: "scatter", mode: "lines+markers", name: "Estimado " + p.fuente,
-          x: s.fechas, y: s.estimado, connectgaps: false,
-          line: { color: col, width: 2.2 }, marker: { size: 5, color: col },
-          customdata: s.n_pares,
-          hovertemplate: "%{x} · estimado <b>%{y:.2f} mm</b> · %{customdata} pares<extra></extra>" },
-      ], {
-        height: 215, margin: { l: 36, r: 8, t: 8, b: 40 },
-        paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
-        showlegend: true, legend: { orientation: "h", y: -0.26, font: { size: 10, color: tinta } },
-        xaxis: { type: "category", nticks: 8, tickfont: { size: 9, color: tinta }, showgrid: false },
-        yaxis: { title: { text: "mm", font: { size: 9, color: tinta } },
-                 tickfont: { size: 9, color: tinta }, gridcolor: rejilla, zeroline: false, rangemode: "tozero" },
-        font: { color: tinta }, barcornerradius: 3,
-      }, { displayModeBar: false, responsive: true });
+      (s.fechas || []).forEach((fecha, i) => {
+        if (s.observado && s.observado[i] != null && !obs.has(fecha)) obs.set(fecha, s.observado[i]);
+      });
     });
+    const fechasObs = [...obs.keys()].sort();
+    const trazas = [{ type: "bar", name: "Observado", x: fechasObs, y: fechasObs.map(f => obs.get(f)),
+      marker: { color: oscuro ? "rgba(174,187,208,.50)" : "rgba(70,89,122,.38)" },
+      hovertemplate: "%{x} · observado <b>%{y:.2f} mm</b><extra></extra>" }];
+    prods.forEach(p => {
+      const s = p.serie || {};
+      const col = HV_COLOR[p.fuente] || "#4c78a8";
+      trazas.push({ type: "scatter", mode: "lines+markers", name: p.fuente,
+        x: s.fechas, y: s.estimado, connectgaps: false,
+        line: { color: col, width: 2.2, dash: p.fuente === "CCS" ? "dot" : "solid" },
+        marker: { size: 5, color: col }, customdata: s.n_pares,
+        hovertemplate: "%{x} · " + p.fuente + " <b>%{y:.2f} mm</b> · %{customdata} pares<extra></extra>" });
+    });
+    Plotly.newPlot(div, trazas, {
+      height: 325, margin: { l: 42, r: 10, t: 12, b: 48 },
+      paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)", barmode: "overlay",
+      showlegend: true, legend: { orientation: "h", y: -0.20, font: { size: 10, color: tinta } },
+      xaxis: { type: "category", nticks: 10, tickfont: { size: 9, color: tinta }, showgrid: false },
+      yaxis: { title: { text: "Precipitación (mm)", font: { size: 10, color: tinta } },
+        tickfont: { size: 9, color: tinta }, gridcolor: rejilla, zeroline: false, rangemode: "tozero" },
+      font: { color: tinta }, barcornerradius: 3,
+    }, { displayModeBar: false, responsive: true });
   }
 
   function conectarGrid(cont, tipoId) {
@@ -1282,17 +1405,106 @@
     (t.variables || []).forEach(v => (v.periodos || []).forEach(p => s.add(p.horas)));
     return [...s].sort((a, b) => a - b);
   }
+
+  function ffgsProductosPeriodo(t, horas) {
+    return ((t && t.variables) || []).filter(v =>
+      (v.periodos || []).some(p => p.horas === horas));
+  }
+
+  // Resuelve el descriptor por la identidad meteorológica del ciclo. Nunca usa
+  // la posición de otro producto: si ese producto no tiene el ciclo, devuelve
+  // null y su tarjeta muestra «Sin dato».
+  function descriptorFFGSPorReferencia(p, referenceTime) {
+    if (!p || !Number.isSafeInteger(referenceTime)) return null;
+    let encontrada = null;
+    for (const it of (p.instantes || [])) {
+      for (const f of fuentesVista(p)) {
+        const descriptor = descriptorCarta(p, it, f);
+        if (!descriptor || !Number.isSafeInteger(descriptor.reference_time)
+            || descriptor.reference_time !== referenceTime) continue;
+        if (encontrada) {
+          const anterior = encontrada.descriptor;
+          if (anterior.archivo !== descriptor.archivo || anterior.capa !== descriptor.capa
+              || anterior.record !== descriptor.record)
+            return null; // referencia ambigua: nunca escoger el primer record al azar
+          continue;
+        }
+        encontrada = { instante: it, descriptor };
+      }
+    }
+    return encontrada;
+  }
+
+  function ciclosReferenciaFFGS(t, horas) {
+    const refs = new Set();
+    for (const v of ffgsProductosPeriodo(t, horas)) {
+      const p = v.periodos.find(pp => pp.horas === horas);
+      for (const it of (p && p.instantes) || []) {
+        for (const f of fuentesVista(p)) {
+          const d = descriptorCarta(p, it, f);
+          if (d && Number.isSafeInteger(d.reference_time)) refs.add(d.reference_time);
+        }
+      }
+    }
+    return [...refs].sort((a, b) => a - b);
+  }
+
+  function ffgsUsaReferencia(t, horas, productos) {
+    // Un contrato v1 reconocido prohíbe volver a índices aunque estuviera
+    // incompleto: mezclar posiciones sería peor que mostrar «Sin dato».
+    return !!contratoShpFFGS(productos) || ciclosReferenciaFFGS(t, horas).length > 0;
+  }
+
+  function coberturaCicloFFGS(t, horas, referenceTime) {
+    return ffgsProductosPeriodo(t, horas).reduce((n, v) => {
+      const p = v.periodos.find(pp => pp.horas === horas);
+      return n + (descriptorFFGSPorReferencia(p, referenceTime) ? 1 : 0);
+    }, 0);
+  }
+
+  function referenciaDefectoFFGS(t, horas, productos, ciclos) {
+    if (!ciclos.length) return null;
+    const contrato = contratoShpFFGS(productos);
+    const porPeriodo = contrato && contrato.raw.default_by_period;
+    const entrada = porPeriodo && porPeriodo[String(horas)];
+    const propuesta = entrada && entrada.reference_time;
+    if (Number.isSafeInteger(propuesta) && ciclos.includes(propuesta)) return propuesta;
+    // Mismo criterio del contrato: máxima cobertura y, en empate, ciclo más
+    // reciente. No depende de Date.now ni de la ventana particular del producto.
+    let mejor = ciclos[0], cobertura = -1;
+    for (const ref of ciclos) {
+      const n = coberturaCicloFFGS(t, horas, ref);
+      if (n > cobertura || (n === cobertura && ref > mejor)) {
+        mejor = ref; cobertura = n;
+      }
+    }
+    return mejor;
+  }
+
+  function etiquetaCicloFFGS(referenceTime) {
+    if (!Number.isSafeInteger(referenceTime)) return "Ciclo sin referencia";
+    const iso = new Date((referenceTime - 5 * 3600) * 1000).toISOString();
+    return `${iso.slice(0, 10)} · ${iso.slice(11, 16)} GMT-5`;
+  }
+
   function ffgsState() {
     const t = tipoNodo("ffgs");
     const g = (E.grid.ffgs = E.grid.ffgs || {});
     if (!t || !(t.variables || []).length) return g;
     const pers = ffgsPeriodos(t);
     if (g.horas == null || !pers.includes(g.horas)) g.horas = pers.includes(6) ? 6 : pers[0];
-    const rep = t.variables.find(v => v.periodos.some(p => p.horas === g.horas));
-    const pr = rep && rep.periodos.find(p => p.horas === g.horas);
-    const nInst = pr ? pr.instantes.length : 0;
-    if (g.inst == null || g.inst >= nInst) g.inst = pr ? instanteDefecto(pr.instantes) : nInst - 1;
-    if (g.inst < 0) g.inst = 0;
+    if (ffgsUsaReferencia(t, g.horas, E.productos)) {
+      const ciclos = ciclosReferenciaFFGS(t, g.horas);
+      if (!ciclos.includes(g.referenceTime))
+        g.referenceTime = referenciaDefectoFFGS(t, g.horas, E.productos, ciclos);
+      g.inst = ciclos.indexOf(g.referenceTime);
+    } else {
+      const rep = t.variables.find(v => v.periodos.some(p => p.horas === g.horas));
+      const pr = rep && rep.periodos.find(p => p.horas === g.horas);
+      const nInst = pr ? pr.instantes.length : 0;
+      if (g.inst == null || g.inst >= nInst) g.inst = pr ? instanteDefecto(pr.instantes) : nInst - 1;
+      if (g.inst < 0) g.inst = 0;
+    }
     return g;
   }
   function cuerpoGridFFGS() {
@@ -1304,28 +1516,42 @@
     }
     const g = ffgsState();
     const pers = ffgsPeriodos(t);
-    const prods = t.variables.filter(v => v.periodos.some(p => p.horas === g.horas));
+    const prods = ffgsProductosPeriodo(t, g.horas);
     const rep = prods[0];
-    const pr = rep.periodos.find(p => p.horas === g.horas);
+    const pr = rep && rep.periodos.find(p => p.horas === g.horas);
+    const porReferencia = ffgsUsaReferencia(t, g.horas, E.productos);
+    const ciclos = porReferencia ? ciclosReferenciaFFGS(t, g.horas) : [];
+    const posicion = porReferencia ? ciclos.indexOf(g.referenceTime) : g.inst;
+    const totalCiclos = porReferencia ? ciclos.length : ((pr && pr.instantes) || []).length;
     const optsPer = pers.map(h =>
       `<option value="${h}" ${h === g.horas ? "selected" : ""}>${String(h).padStart(2, "0")} h</option>`).join("");
-    const optsInst = pr.instantes.map((x, i) =>
-      `<option value="${i}" ${i === g.inst ? "selected" : ""}>${esc(x.etiqueta)}</option>`).join("");
+    const optsInst = porReferencia
+      ? (ciclos.length ? ciclos.map(ref => {
+          const n = coberturaCicloFFGS(t, g.horas, ref);
+          const parcial = n < prods.length ? ` · ${n}/${prods.length}` : "";
+          return `<option value="${ref}" ${ref === g.referenceTime ? "selected" : ""}>${esc(etiquetaCicloFFGS(ref))}${parcial}</option>`;
+        }).join("") : `<option disabled selected>Sin ciclos con referencia válida</option>`)
+      : ((pr && pr.instantes) || []).map((x, i) =>
+          `<option value="${i}" ${i === g.inst ? "selected" : ""}>${esc(x.etiqueta)}</option>`).join("");
     const cartas = prods.map(v => {
       const p = v.periodos.find(pp => pp.horas === g.horas);
-      const it = p.instantes[Math.min(g.inst, p.instantes.length - 1)];
+      const resuelta = porReferencia ? descriptorFFGSPorReferencia(p, g.referenceTime) : null;
+      const it = porReferencia
+        ? resuelta && resuelta.instante
+        : p.instantes[Math.min(g.inst, p.instantes.length - 1)];
       const f = (p.fuentes || [])[0] || {};
-      const record = it && it.registros ? it.registros[f.fuente] : undefined;
-      const archivo = (it && it.archivos && it.archivos[f.fuente]) || f.archivo;
+      const descriptor = porReferencia
+        ? resuelta && resuelta.descriptor
+        : descriptorCarta(p, it, f);
       const partes = (v.etiqueta || "").split(" — ");
       const sigla = partes[0] || v.id;
       const desc = partes[1] || "";
-      if (!it || record === undefined || archivo == null) {
+      if (!it || !descriptor) {
         return `<figure class="ct-carta"><div class="ct-carta-cab"><span class="titulo">${esc(sigla)}</span>
           <span class="meta">${esc(p.figcap || "")}</span></div>
           <div class="ct-lienzo"><div class="fallo"><div class="icono">🗺️</div>Sin dato</div></div></figure>`;
       }
-      const params = { archivo, capa: f.capa, record };
+      const params = paramsDescriptor(descriptor);
       return `<figure class="ct-carta">
         <div class="ct-carta-cab"><span class="titulo">${esc(sigla)}</span>
           <span class="meta" title="${esc(desc)}">${esc(desc)}</span></div>
@@ -1338,9 +1564,9 @@
         <label class="bloque"><span class="et">Período</span>
           <select data-rol="fper">${optsPer}</select></label>
         <div class="ct-inst-nav">
-          <button class="ct-nav" data-rol="fprev" ${g.inst <= 0 ? "disabled" : ""}>◀</button>
+          <button class="ct-nav" data-rol="fprev" ${posicion <= 0 ? "disabled" : ""}>◀</button>
           <select class="ct-instante" data-rol="finst">${optsInst}</select>
-          <button class="ct-nav" data-rol="fnext" ${g.inst >= pr.instantes.length - 1 ? "disabled" : ""}>▶</button>
+          <button class="ct-nav" data-rol="fnext" ${posicion < 0 || posicion >= totalCiclos - 1 ? "disabled" : ""}>▶</button>
         </div>
         ${capasHTML()}
       </div>
@@ -1352,13 +1578,30 @@
     if (!t || !(t.variables || []).length) return;
     const rep = t.variables.find(v => v.periodos.some(p => p.horas === g.horas));
     const pr = rep && rep.periodos.find(p => p.horas === g.horas);
-    const nInst = pr ? pr.instantes.length : 0;
+    const porReferencia = ffgsUsaReferencia(t, g.horas, E.productos);
+    const ciclos = porReferencia ? ciclosReferenciaFFGS(t, g.horas) : [];
+    const nInst = porReferencia ? ciclos.length : (pr ? pr.instantes.length : 0);
+    const posicion = porReferencia ? ciclos.indexOf(g.referenceTime) : g.inst;
     const re = () => pintarCuerpo();
     const q = s => cont.querySelector(s);
-    if (q('[data-rol="fper"]')) q('[data-rol="fper"]').onchange = e => { g.horas = +e.target.value; g.inst = null; re(); };
-    if (q('[data-rol="finst"]')) q('[data-rol="finst"]').onchange = e => { g.inst = +e.target.value; re(); };
-    if (q('[data-rol="fprev"]')) q('[data-rol="fprev"]').onclick = () => { if (g.inst > 0) { g.inst--; re(); } };
-    if (q('[data-rol="fnext"]')) q('[data-rol="fnext"]').onclick = () => { if (g.inst < nInst - 1) { g.inst++; re(); } };
+    if (q('[data-rol="fper"]')) q('[data-rol="fper"]').onchange = e => {
+      g.horas = +e.target.value; g.inst = null; g.referenceTime = null; re();
+    };
+    if (q('[data-rol="finst"]')) q('[data-rol="finst"]').onchange = e => {
+      if (porReferencia) g.referenceTime = +e.target.value;
+      else g.inst = +e.target.value;
+      re();
+    };
+    if (q('[data-rol="fprev"]')) q('[data-rol="fprev"]').onclick = () => {
+      if (posicion <= 0) return;
+      if (porReferencia) g.referenceTime = ciclos[posicion - 1]; else g.inst--;
+      re();
+    };
+    if (q('[data-rol="fnext"]')) q('[data-rol="fnext"]').onclick = () => {
+      if (posicion < 0 || posicion >= nInst - 1) return;
+      if (porReferencia) g.referenceTime = ciclos[posicion + 1]; else g.inst++;
+      re();
+    };
     cont.querySelectorAll('.ct-toggle[data-capa]').forEach(b => b.onclick = () => { E.capas[b.dataset.capa] = !E.capas[b.dataset.capa]; re(); });
   }
 
@@ -1408,14 +1651,13 @@
       const it = p.instantes[Math.min(g.inst, p.instantes.length - 1)];
       const rotulo = v.etiqueta || v.id;
       return (p.fuentes || []).slice(0, 4).map(f => {
-        const record = it && it.registros ? it.registros[f.fuente] : undefined;
-        const archivo = (it && it.archivos && it.archivos[f.fuente]) || f.archivo;
-        if (!it || record === undefined || archivo == null) {
+        const descriptor = descriptorCarta(p, it, f);
+        if (!it || !descriptor) {
           return `<figure class="ct-carta"><div class="ct-carta-cab"><span class="titulo">${esc(rotulo)}</span>
             <span class="meta">${esc(p.figcap || "")}</span></div>
             <div class="ct-lienzo"><div class="fallo"><div class="icono">🗺️</div>Sin dato</div></div></figure>`;
         }
-        const params = { archivo, capa: f.capa, record, corrido: f.corrido || p.corrido ? 1 : 0, fin: it.fin };
+        const params = paramsDescriptor(descriptor);
         return `<figure class="ct-carta">
           <div class="ct-carta-cab"><span class="titulo">${esc(rotulo)}</span>
             <span class="meta" title="${esc(p.figcap || "")}">${esc(p.figcap || "")}</span></div>
@@ -1502,24 +1744,23 @@
       const rotulo = ALERTA_FUENTE_ROTULO[fuente] || fuente;
       // localizar la fuente real dentro del período (los nombres del árbol son
       // CONSENSO/GFS/ICON/IFS, "IFS" se rotula "IFS HRES").
-      let f = null, record;
+      let f = null, descriptor = null;
       if (p) {
         f = (p.fuentes || []).find(x => x.fuente === fuente)
           || (p.fuentes || []).find(x => x.fuente.toUpperCase() === fuente);
-        if (f && inst && inst.registros) record = inst.registros[f.fuente];
+        if (f && inst) descriptor = descriptorCarta(p, inst, f);
       }
       const meta = `Riesgo 24 h${inst ? " · " + esc(inst.rango || inst.etiqueta) : ""}`;
-      if (!f || record === undefined) {
+      if (!f || !descriptor) {
         return `<figure class="ct-carta">
           <div class="ct-carta-cab"><span class="titulo">${esc(rotulo)}</span><span class="meta">${meta}</span></div>
           <div class="ct-lienzo"><div class="fallo"><div class="icono">⚠️</div>Sin alerta para ${esc(rotulo)}</div></div></figure>`;
       }
-      const archivo = (inst.archivos && inst.archivos[f.fuente]) || f.archivo;
-      const params = { archivo, capa: f.capa, record };
+      const params = paramsDescriptor(descriptor);
       // VISOR en modo ZPH: pedir la variante congelada &modo=zph (solo capas de
       // alerta de lluvia; en la app el POST ya intercambió el .nc y no hace falta).
       if (window.HIDROMET_VISOR && a.modo === "zph" && a.varId === "alerta_lluvia") params.modo = "zph";
-      // §P18a: SOLO en precipitación (nunca temperatura) las zonas de desbordamiento
+      // §P18a: SOLO en precipitación (nunca temperatura) el indicador FFR
       // (FFR) se dibujan SOBRE la carta si el FFR cubre la fecha de este instante.
       if (a.varId === "alerta_lluvia" && inst) params.ffr = fechaLocalISO(inst.inicio);
       return `<figure class="ct-carta">
@@ -1535,9 +1776,10 @@
     // §P18a: la nota del overlay FFR SOLO aplica a precipitación.
     const esLluvia = a.varId === "alerta_lluvia";
     const notaFFR = esLluvia
-      ? `<p class="ct-nota" style="margin:-4px 0 14px">Las <b>zonas de desbordamiento (FFR · programa)</b> se dibujan
-           <span style="color:#009AF2;font-weight:700">punteadas</span> SOBRE las cartas de alerta de lluvia cuando el
-           FFR cubre esa fecha (F1 Ecuador WRF 3 km; F2-F4 son escenarios exploratorios). Su validación contra eventos SNGR está abajo.</p>`
+      ? `<p class="ct-nota" style="margin:-4px 0 14px">El <b>indicador FFR de susceptibilidad a crecida</b> se dibuja
+           <span style="color:#009AF2;font-weight:700">punteado</span> SOBRE las cartas cuando F1FFR24 cubre esa fecha.
+           Los cortes 0.10/0.30/0.50 son <b>operativos provisionales y no calibrados</b>: no predicen por sí solos un
+           desbordamiento. Si F1FFR24 falta, el estado es «Sin dato», nunca «Sin riesgo».</p>`
       : "";
 
     return `
@@ -1596,14 +1838,14 @@
       </div>`;
   }
 
-  /* §P18c — bloque FFR ↔ SNGR: las zonas de desbordamiento ya NO tienen carta
-     aparte (van SOBRE las cartas de lluvia); aquí queda su VALIDACIÓN contra los
+  /* §P18c — bloque FFR ↔ SNGR: el indicador de susceptibilidad no tiene carta
+     aparte (va SOBRE las cartas de lluvia); aquí queda su VALIDACIÓN contra los
      desbordamientos/crecidas observados (eventos SNGR) + la descarga SHP oficial. */
   function htmlFFRBloque() {
     return `
       <div class="ct-vp-bloque" data-rol="ffr-bloque">
         <div class="ct-vp-cab">
-          <h4>Desbordamientos — zonas FFR ↔ eventos SNGR <span class="suave">(falsas alarmas y cobertura)</span></h4>
+          <h4>Indicador FFR de susceptibilidad ↔ eventos SNGR <span class="suave">(evaluación exploratoria)</span></h4>
           <div class="ct-vp-ctrl">
             <label><span class="et">Fecha</span><select data-rol="ffr-fecha"><option value="-1">vigente</option></select></label>
             <label><span class="et">Buffer</span>
@@ -1888,7 +2130,9 @@
         else if ([...selPr.options].some(o => o.value === "consenso")) selPr.value = "consenso";
       } catch (e) { /* se queda IMERG */ }
     };
+    let solicitudCruce = 0;
     const pintar = () => {
+      const solicitud = ++solicitudCruce;
       if (!selFe.value) {
         host.innerHTML = `<span class="suave" style="font-size:12px">Aún no hay fechas con histórico de validación para esta variable.</span>`;
         return;
@@ -1905,12 +2149,30 @@
       host.innerHTML = `<div class="cargando mono" style="position:static;padding:26px 0">Generando cruce…</div>`;
       const im = new Image();
       im.alt = "Cruce de validación del programa";
-      im.onload = () => { if (host.isConnected) { host.innerHTML = ""; host.appendChild(im); } };
+      let objetoUrl = "";
+      im.onload = () => {
+        if (solicitud === solicitudCruce && host.isConnected) {
+          host.innerHTML = ""; host.appendChild(im);
+        }
+        if (objetoUrl) URL.revokeObjectURL(objetoUrl);
+      };
       im.onerror = () => {
-        if (host.isConnected) host.innerHTML =
+        if (objetoUrl) URL.revokeObjectURL(objetoUrl);
+        if (solicitud === solicitudCruce && host.isConnected) host.innerHTML =
           `<span class="suave" style="font-size:12px">Cruce no disponible${window.HIDROMET_VISOR ? " en el visor" : ""} para esa fecha/producto.</span>`;
       };
-      im.src = url;
+      if (!window.HIDROMET_VISOR) {
+        im.src = url;
+      } else {
+        // Los PNG con parámetros conservan un slug físico legado terminado en
+        // .json. Leerlos como bytes y fijar image/png evita depender del MIME
+        // inferido por GitHub Pages/proxies o de content sniffing permisivo.
+        fetch(url, { cache: "no-cache" }).then(async resp => {
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          objetoUrl = URL.createObjectURL(new Blob([await resp.arrayBuffer()], { type: "image/png" }));
+          im.src = objetoUrl;
+        }).catch(() => im.onerror());
+      }
     };
     selFu.onchange = pintar;
     selFe.onchange = async () => { await cargarProductos(); pintar(); };
@@ -1941,13 +2203,19 @@
     // ── MÉTRICAS del historial FFR ↔ eventos SNGR (una fila por fecha del histórico F1;
     //    POD agregado micro-promedio). Estados: las fechas que el feed SNGR aún no cubre
     //    se ATENÚAN — "0 eventos" real ≠ "feed desactualizado". Depende solo del buffer.
-    const ESTADO_FFR = { ok: "OK", sin_zona: "Sin zona", sin_datos_eventos: "Sin datos SNGR", pendiente: "Pendiente" };
+    const ESTADO_FFR = { ok: "OK", sin_zona: "Sin superación", sin_dato_ffr: "Sin dato FFR",
+      sin_datos_eventos: "Sin datos SNGR", pendiente: "Pendiente" };
     const cargarSerie = async () => {
       if (!serieHost) return;
       serieHost.innerHTML = `<span class="suave" style="font-size:12px">Calculando métricas del historial…</span>`;
       try {
         const s = await App.api("/cartas/riesgo_ffr/validacion_serie?" + qs({ buffer: sel.value }));
         const ag = s.agregado || {}, feed = s.feed_eventos || {}, serie = s.serie || [];
+        if (s.estado_dato === "sin_dato" && !serie.length) {
+          serieHost.innerHTML = `<div style="margin:8px 0 10px;padding:9px 12px;border-radius:9px;font-size:12px;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-bd)">
+            <b>FFR SIN DATO:</b> no hay un F1FFR24 legible para evaluar. La susceptibilidad es desconocida; esto no significa ausencia de riesgo.</div>`;
+          return;
+        }
         if (!serie.length) { serieHost.innerHTML = ""; return; }
         const ultimaFFR = serie[serie.length - 1].fecha || "";
         const banner = (feed.max_fecha && ultimaFFR && feed.max_fecha < ultimaFFR)
@@ -1958,9 +2226,11 @@
         // TODOS los mínimos. Una muestra de cero no es evidencia de desempeño cero.
         const _nEv = ag.eventos || 0, _mins = s.minimos || {};
         const _noValidable = s.apto_metricas !== true;
-        const _detalleGate = s.estado_validacion === "sin_solape_temporal_ffr_sngr"
-          ? "el historial FFR empieza después del último evento cubierto por SNGR; el solape temporal es 0 fechas"
-          : `muestra disponible: ${fmtNum(ag.fechas_validables || 0)} fechas validables, ${fmtNum(ag.fechas_con_eventos || 0)} fechas con eventos y ${fmtNum(_nEv)} eventos; mínimos: ${fmtNum(_mins.fechas || 0)}, ${fmtNum(_mins.fechas_con_eventos || 0)} y ${fmtNum(_mins.eventos || 0)}`;
+        const _detalleGate = s.estado_validacion === "sin_dato_ffr"
+          ? "F1FFR24 no está disponible o no es legible; la susceptibilidad queda desconocida"
+          : s.estado_validacion === "sin_solape_temporal_ffr_sngr"
+            ? "el historial FFR empieza después del último evento cubierto por SNGR; el solape temporal es 0 fechas"
+            : `muestra disponible: ${fmtNum(ag.fechas_validables || 0)} fechas validables, ${fmtNum(ag.fechas_con_eventos || 0)} fechas con eventos y ${fmtNum(_nEv)} eventos; mínimos: ${fmtNum(_mins.fechas || 0)}, ${fmtNum(_mins.fechas_con_eventos || 0)} y ${fmtNum(_mins.eventos || 0)}`;
         const bannerMuestra = _noValidable
           ? `<div style="margin:8px 0 10px;padding:9px 12px;border-radius:9px;font-size:12px;color:var(--danger);background:var(--danger-bg);border:1px solid var(--danger-bd)">
                <b>NO VALIDABLE:</b> ${esc(_detalleGate)}. <b>POD y FAR no se calculan ni se publican</b> hasta superar el gate metodológico.</div>`
@@ -1985,16 +2255,28 @@
             <div class="ct-stat"><div class="v">${ag.area_km2_mediana != null ? fmtNum(Math.round(ag.area_km2_mediana)) : "—"}</div><div class="k">Área mediana de la zona (km²)</div></div>
           </div>
           <table class="rm-tabla"><thead><tr><th>Fecha</th><th>Eventos</th><th>Cubiertos</th><th>POD</th><th>Estado</th></tr></thead><tbody>${filas}</tbody></table>
-          <div class="rm-pie mono">${_noValidable ? "NO VALIDABLE: la tabla es diagnóstico de cobertura, no una estimación de habilidad. " : ""}POD por fecha = desbordes/crecidas SNGR dentro de la zona FFR de ese día. FAR diaria = de los días con aviso, fracción sin ningún evento observado (sobre-aviso; no es FAR gridded — imposible con eventos puntuales). «Sin zona» = el FFR no marcó riesgo (si hubo eventos, cuentan como no cubiertos) · «Sin datos SNGR» = el feed aún no cubre esa fecha · las fechas atenuadas no entran al POD global.</div>`;
+          <div class="rm-pie mono">${_noValidable ? "NO VALIDABLE: la tabla es diagnóstico de cobertura, no una estimación de habilidad. " : ""}POD por fecha = eventos SNGR dentro del área indicativa FFR de ese día. FAR diaria = días con indicador y sin evento observado (no es FAR gridded). «Sin superación» = hubo dato FFR, pero ningún valor superó los cortes provisionales; «Sin dato FFR» = resultado desconocido, no «Sin riesgo»; «Sin datos SNGR» = el feed aún no cubre esa fecha.</div>`;
       } catch (e) { serieHost.innerHTML = `<span class="suave" style="font-size:12px">Métricas del historial no disponibles${window.HIDROMET_VISOR ? " en el visor" : ""}.</span>`; }
     };
     const cargarValida = async () => {
       if (!valida) return;
+      if (_ffrEstado !== "disponible") {
+        valida.innerHTML = `<div style="margin:8px 0 10px;padding:9px 12px;border-radius:9px;font-size:12px;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-bd)">
+          <b>F1FFR24 SIN DATO:</b> susceptibilidad desconocida; no equivale a «Sin riesgo».</div>`;
+        return;
+      }
       valida.innerHTML = `<span class="suave" style="font-size:12px">Validando vs eventos de río…</span>`;
       try {
         const v = await App.api("/cartas/riesgo_ffr/validacion?" + qs({ buffer: sel.value, record: rec() }));
+        if (v.estado_dato && v.estado_dato !== "disponible") {
+          _ffrEstado = "sin_dato";
+          if (shpBtn) { delete shpBtn.dataset.shp; shpBtn.setAttribute("aria-disabled", "true"); }
+          valida.innerHTML = `<div style="margin:8px 0 10px;padding:9px 12px;border-radius:9px;font-size:12px;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-bd)">
+            <b>F1FFR24 SIN DATO:</b> susceptibilidad desconocida; no equivale a «Sin riesgo».</div>`;
+          return;
+        }
         valida.innerHTML = `<div class="ct-stats" style="margin-top:8px">
-          <div class="ct-stat"><div class="v">${fmtNum(v.n_cuencas || 0)}</div><div class="k">Microcuencas en riesgo</div></div>
+          <div class="ct-stat"><div class="v">${fmtNum(v.n_cuencas || 0)}</div><div class="k">Sobre umbral provisional</div></div>
           <div class="ct-stat"><div class="v">${fmtNum(v.eventos || 0)}</div><div class="k">Desbordes/crecidas ese día</div></div>
           <div class="ct-stat"><div class="v ok">${v.pct != null ? fmtPct(v.pct) + " %" : "—"}</div><div class="k">Cubiertos (${fmtNum(v.cubiertos || 0)})</div></div>
           <div class="ct-stat"><div class="v danger">${fmtNum(v.no_cubiertos || 0)}</div><div class="k">No cubiertos</div></div>
@@ -2006,7 +2288,15 @@
       // visor = baja el .zip PRE-CONGELADO. SIN fecha, para que la ruta calce con el
       // .zip congelado por (buffer+record). El mapa aparte se retiró (§P18a: las
       // zonas se dibujan SOBRE las cartas de alerta de lluvia).
-      if (shpBtn) shpBtn.dataset.shp = "/cartas/riesgo_ffr/descarga?" + qs({ buffer: sel.value, record: rec() });
+      if (shpBtn) {
+        if (_ffrEstado === "disponible") {
+          shpBtn.dataset.shp = "/cartas/riesgo_ffr/descarga?" + qs({ buffer: sel.value, record: rec() });
+          shpBtn.removeAttribute("aria-disabled");
+        } else {
+          delete shpBtn.dataset.shp;
+          shpBtn.setAttribute("aria-disabled", "true");
+        }
+      }
       cargarValida();
     };
     sel.onchange = () => { pinta(); cargarSerie(); };   // la serie depende del buffer, no de la fecha
@@ -2016,8 +2306,10 @@
       try {
         const r = await App.api("/cartas/riesgo_ffr/fechas");
         const fs = r.fechas || [];
+        _ffrEstado = r.estado_dato || (fs.length ? "disponible" : "sin_dato");
         if (selF && fs.length) selF.innerHTML = fs.map((f, i) =>
           `<option value="${f.record}" ${i === fs.length - 1 ? "selected" : ""}>${esc(f.fecha)}</option>`).join("");
+        else if (selF) selF.innerHTML = `<option value="-1">FFR sin dato</option>`;
       } catch (e) { /* deja "vigente" */ }
       if (!bloque.isConnected) return;
       pinta();
@@ -2170,7 +2462,7 @@
         App.aviso(`Carta guardada en Descargas: ${r.archivo}`, "ok", 6000);
       } else if (b.dataset.shp) {
         if (window.HIDROMET_VISOR) {
-          await _descargarShpVisor(b.dataset.shp);   // baja el .zip PRE-CONGELADO
+          await _descargarShpVisor(b.dataset.shp);   // ZIP directo o FFGS reconstruido
         } else {
           const r = await App.api(b.dataset.shp);
           App.aviso(`Shapefile guardado en Descargas: ${r.archivo}`, "ok", 6000);
@@ -2183,14 +2475,30 @@
     }
   });
 
-  // VISOR: descarga el shapefile de una advertencia del PROGRAMA desde el .zip PRE-CONGELADO
-  // (misma ruta que el exportador, con extensión .zip). No hay motor que lo genere en vivo.
+  // VISOR: descarga un ZIP directo (alertas/FFR) o recompone FFGS desde bloques
+  // compartidos. No hay motor que genere el shapefile en vivo.
   async function _descargarShpVisor(rutaApi) {
     const prod = App.rutaAProducto(rutaApi).replace(/\.json$/, ".zip");
-    const resp = await fetch(prod, { cache: "no-cache" });
-    if (!resp.ok) throw new Error("El shapefile de esta advertencia aún no está publicado en el visor");
-    const blob = await resp.blob();
-    const nombre = prod.split("/").pop() || "shapefile.zip";
+    let blob = null, nombre = prod.split("/").pop() || "shapefile.zip";
+    // Los FFGS comparten una geometría grande entre variables/records. El visor
+    // publica una sola copia de cada bloque y recompone localmente el mismo ZIP.
+    // El fallback mantiene compatibles builds anteriores durante la transición.
+    if (/^\/cartas\/ffgs_shp(?:\?|$)/.test(String(rutaApi))) {
+      const manifestProd = App.rutaAProducto(rutaApi).replace(/\.json$/, ".manifest.json");
+      try {
+        const mr = await fetch(manifestProd, { cache: "no-cache" });
+        if (mr.ok) {
+          const reconstruido = await App.zipDesdeManifest(await mr.json(), manifestProd);
+          blob = reconstruido.blob;
+          nombre = reconstruido.nombre;
+        }
+      } catch (e) { /* intentar el ZIP legado debajo */ }
+    }
+    if (!blob) {
+      const resp = await fetch(prod, { cache: "no-cache" });
+      if (!resp.ok) throw new Error("El shapefile de esta advertencia aún no está publicado en el visor");
+      blob = await resp.blob();
+    }
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = nombre;
     document.body.appendChild(a); a.click(); a.remove();
@@ -2459,4 +2767,18 @@
       } catch (e) { App.aviso(e.message, "error"); }
     };
   }
+
+  // Superficie pura para las pruebas Node del contrato FFGS. En navegador no se
+  // expone ningún global adicional; la UI consume exactamente estas funciones.
+  if (typeof module === "object" && module.exports) module.exports = Object.freeze({
+    FFGS_SHP_AVAILABILITY_SCHEMA,
+    contratoShpFFGS,
+    shpFFGSDisponible,
+    botonShpFFGS,
+    descriptorFFGSPorReferencia,
+    ciclosReferenciaFFGS,
+    coberturaCicloFFGS,
+    referenciaDefectoFFGS,
+    ffgsUsaReferencia,
+  });
 })();

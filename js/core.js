@@ -41,6 +41,9 @@ const App = (() => {
     let pares = query ? query.split("&").filter(Boolean) : [];
     const quita = new Set(drop || []);
     if (base === "cartas/carta_datos") { quita.add("fin"); quita.add("corrido"); }
+    // La referencia certifica el ciclo pedido al endpoint vivo, pero el artefacto
+    // FFGS público conserva su identidad canónica exacta: archivo+record.
+    if (base === "cartas/ffgs_shp") quita.add("esperado_reference_time");
     if (base.indexOf("mlnwp/") === 0) { quita.add("deps"); if (base !== "mlnwp/validacion") quita.add("familia"); }
     if (base === "sngr/eventos") pares = [];
     if (quita.size) pares = pares.filter(p => !quita.has(p.split("=")[0]));
@@ -60,14 +63,118 @@ const App = (() => {
   }
   function rutaAProducto(ruta) { return _slugProducto(ruta, []); }
 
+  async function leerJsonGzip(url) {
+    const resp = await fetch(url, { cache: "no-cache" });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const bytes = new Uint8Array(await resp.arrayBuffer());
+    // Algunos hosts aplican Content-Encoding y fetch entrega el cuerpo ya
+    // descomprimido; la firma evita intentar gzip dos veces.
+    if (bytes[0] !== 0x1f || bytes[1] !== 0x8b)
+      return JSON.parse(new TextDecoder("utf-8").decode(bytes));
+    if (typeof DecompressionStream !== "function")
+      throw new Error("Este navegador no admite la descompresión gzip del visor.");
+    const flujo = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+    return new Response(flujo).json();
+  }
+
+  function _zipCabeceraLocal(entrada, nombre) {
+    const b = new Uint8Array(30);
+    const v = new DataView(b.buffer);
+    v.setUint32(0, 0x04034b50, true);
+    v.setUint16(4, 20, true);          // ZIP 2.0 (DEFLATE)
+    v.setUint16(6, 0x0800, true);      // nombres UTF-8
+    v.setUint16(8, 8, true);           // DEFLATE crudo
+    v.setUint16(10, 0, true);
+    v.setUint16(12, 0x0021, true);     // 1980-01-01, reproducible
+    v.setUint32(14, entrada.crc32 >>> 0, true);
+    v.setUint32(18, entrada.tamano_comprimido >>> 0, true);
+    v.setUint32(22, entrada.tamano >>> 0, true);
+    v.setUint16(26, nombre.length, true);
+    return b;
+  }
+
+  function _zipCabeceraCentral(entrada, nombre, offset) {
+    const b = new Uint8Array(46);
+    const v = new DataView(b.buffer);
+    v.setUint32(0, 0x02014b50, true);
+    v.setUint16(4, 20, true);
+    v.setUint16(6, 20, true);
+    v.setUint16(8, 0x0800, true);
+    v.setUint16(10, 8, true);
+    v.setUint16(12, 0, true);
+    v.setUint16(14, 0x0021, true);
+    v.setUint32(16, entrada.crc32 >>> 0, true);
+    v.setUint32(20, entrada.tamano_comprimido >>> 0, true);
+    v.setUint32(24, entrada.tamano >>> 0, true);
+    v.setUint16(28, nombre.length, true);
+    v.setUint32(42, offset >>> 0, true);
+    return b;
+  }
+
+  async function zipDesdeManifest(manifiesto, urlManifest) {
+    if (!manifiesto || manifiesto.schema !== "hidromet.ffgs-shp-dedup.v1"
+        || !Array.isArray(manifiesto.entradas) || !manifiesto.entradas.length)
+      throw new Error("Manifiesto de shapefile no válido.");
+    if (manifiesto.entradas.length > 0xffff)
+      throw new Error("El shapefile excede el límite ZIP del visor.");
+    const encoder = new TextEncoder();
+    const base = new URL(urlManifest, document.baseURI);
+    const cache = new Map();
+    const cargar = async entrada => {
+      const clave = String(entrada.url || "");
+      if (!cache.has(clave)) cache.set(clave, (async () => {
+        const resp = await fetch(new URL(clave, base), { cache: "no-cache" });
+        if (!resp.ok) throw new Error(`Bloque de shapefile no publicado (HTTP ${resp.status}).`);
+        return new Uint8Array(await resp.arrayBuffer());
+      })());
+      return cache.get(clave);
+    };
+    const datos = await Promise.all(manifiesto.entradas.map(cargar));
+    const locales = [], centrales = [];
+    let offset = 0, tamanoCentral = 0;
+    manifiesto.entradas.forEach((entrada, i) => {
+      const nombre = encoder.encode(String(entrada.nombre || ""));
+      const comprimido = datos[i];
+      const tc = Number(entrada.tamano_comprimido);
+      const tr = Number(entrada.tamano);
+      if (!nombre.length || nombre.length > 0xffff || !Number.isInteger(tc)
+          || !Number.isInteger(tr) || tc < 0 || tr < 0 || tc > 0xffffffff
+          || tr > 0xffffffff || comprimido.length !== tc)
+        throw new Error("Bloque de shapefile inconsistente.");
+      const local = _zipCabeceraLocal(entrada, nombre);
+      const central = _zipCabeceraCentral(entrada, nombre, offset);
+      locales.push(local, nombre, comprimido);
+      centrales.push(central, nombre);
+      offset += local.length + nombre.length + comprimido.length;
+      tamanoCentral += central.length + nombre.length;
+      if (offset > 0xffffffff || tamanoCentral > 0xffffffff)
+        throw new Error("El shapefile excede el límite ZIP del visor.");
+    });
+    const fin = new Uint8Array(22);
+    const vf = new DataView(fin.buffer);
+    vf.setUint32(0, 0x06054b50, true);
+    vf.setUint16(8, manifiesto.entradas.length, true);
+    vf.setUint16(10, manifiesto.entradas.length, true);
+    vf.setUint32(12, tamanoCentral, true);
+    vf.setUint32(16, offset, true);
+    const nombre = String(manifiesto.nombre_descarga || "ffgs_shapefile.zip")
+      .split(/[\\/]/).pop() || "ffgs_shapefile.zip";
+    return { blob: new Blob([...locales, ...centrales, fin], { type: "application/zip" }), nombre };
+  }
+
   async function apiVisor(ruta, opts = {}) {
     if ((opts.method || "GET").toUpperCase() !== "GET")
       throw new Error("Acción no disponible en el visor en línea (es de solo lectura).");
     // Intenta el archivo exacto; si no está, cae a versiones canónicas quitando filtros
     // volátiles (familia/deps/lookback) que no cambian la estructura del dato.
     for (const drop of [[], ["familia"], ["familia", "deps", "lookback", "ventana"]]) {
+      const producto = _slugProducto(ruta, drop);
+      if (/^productos\/cartas\/carta_datos\/.+\.json$/i.test(producto)) {
+        try { return await leerJsonGzip(producto + ".gz"); }
+        catch (e) { /* transición: intentar el JSON legado */ }
+      }
       let resp;
-      try { resp = await fetch(_slugProducto(ruta, drop), { cache: "no-cache" }); }
+      try { resp = await fetch(producto, { cache: "no-cache" }); }
       catch (e) { continue; }
       if (resp && resp.ok) return resp.json();
     }
@@ -326,13 +433,10 @@ const App = (() => {
   function navegar(id) { location.hash = "#/" + id; }
 
   function _moduloDefecto() {
-    // En el VISOR no hay "inicio" (centro de operación): se aterriza en el primer
-    // módulo de exploración registrado (menor orden).
-    if (window.HIDROMET_VISOR) {
-      const arr = [...modulos.entries()].sort((a, b) => (a[1].orden ?? 99) - (b[1].orden ?? 99));
-      if (arr.length) return arr[0][0];
-    }
-    return "inicio";
+    // Escritorio y visor comparten la misma entrada: el primer módulo operativo.
+    // Así la fuente local no reintroduce una pantalla que ya no existe publicada.
+    const arr = [...modulos.entries()].sort((a, b) => (a[1].orden ?? 99) - (b[1].orden ?? 99));
+    return arr.length ? arr[0][0] : "pronostico";
   }
 
   // P23: esqueleto de carga compartido — sustituye el "⏳ Cargando…" textual mientras
@@ -378,15 +482,13 @@ const App = (() => {
   }
 
   // Grupos de la barra lateral (rediseño v9): PRINCIPAL · MÓDULOS · SISTEMA.
-  const GRUPO_NAV = { inicio: "PRINCIPAL",
-                      pronostico: "MÓDULOS", validacion: "MÓDULOS", hidrologia: "MÓDULOS",
+  const GRUPO_NAV = { pronostico: "MÓDULOS", validacion: "MÓDULOS", hidrologia: "MÓDULOS",
                       advertencias: "MÓDULOS", clima: "MÓDULOS", glosario: "MÓDULOS",
                       cartas: "MÓDULOS", sngr: "MÓDULOS", eventos: "MÓDULOS", mlnwp: "MÓDULOS",
                       datos: "SISTEMA", configuracion: "SISTEMA", config: "SISTEMA" };
 
   // Iconos SVG de línea del nav (rediseño v9, stroke:currentColor) — sustituyen a los emojis.
   const ICONOS_NAV = {
-    inicio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/></svg>',
     cartas: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3z"/><path d="M9 4v13M15 7v13"/></svg>',
     sngr: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M3 8c2.5 0 2.5 2 5 2s2.5-2 5-2 2.5 2 5 2"/><path d="M3 14c2.5 0 2.5 2 5 2s2.5-2 5-2 2.5 2 5 2"/></svg>',
     mlnwp: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M3 21h18"/><rect x="4" y="12" width="3.6" height="6" rx="1"/><rect x="10.2" y="7" width="3.6" height="11" rx="1"/><rect x="16.4" y="4" width="3.6" height="14" rx="1"/></svg>',
@@ -532,6 +634,40 @@ const App = (() => {
   async function exigirAcceso() {
     const raiz = document.documentElement;
     if (!window.HIDROMET_VISOR) { raiz.classList.remove("hm-prelogin"); return; }
+    // Autenticación real: si el exportador declaró un backend, las banderas del
+    // antiguo login estático NO autorizan nada. El gestor valida contraseña,
+    // licencia, concurrencia y revocación; este camino falla cerrado si el módulo
+    // no cargó. El fallback cosmético de abajo solo se conserva para despliegues
+    // que todavía no tengan HIDROMET_AUTH_BASE.
+    if (window.HIDROMET_AUTH_BASE) {
+      raiz.classList.add("hm-prelogin");
+      const capaDinamica = document.getElementById("capa-app");
+      if (capaDinamica) capaDinamica.style.visibility = "hidden";
+      const bloquear = mensaje => {
+        let aviso = document.getElementById("hm-auth-fallo-config");
+        if (!aviso) {
+          aviso = document.createElement("div");
+          aviso.id = "hm-auth-fallo-config";
+          aviso.style.cssText = "position:fixed;inset:0;z-index:100000;display:grid;" +
+            "place-items:center;padding:24px;background:#0b1220;color:#e6ecf7;" +
+            "font:15px/1.5 system-ui,Segoe UI,sans-serif;text-align:center";
+          document.body.appendChild(aviso);
+        }
+        aviso.textContent = mensaje;
+        return new Promise(() => {}); // fail-closed: App.iniciar no continúa
+      };
+      if (!window.HMAuth || typeof window.HMAuth.exigirLogin !== "function") {
+        return bloquear("No se pudo cargar el servicio de acceso. Contacta al administrador.");
+      }
+      try {
+        await window.HMAuth.exigirLogin();
+      } catch (e) {
+        return bloquear("El servicio de acceso no pudo inicializarse. Intenta nuevamente más tarde.");
+      }
+      raiz.classList.remove("hm-prelogin");
+      if (capaDinamica) capaDinamica.style.visibility = "";
+      return;
+    }
     const LLAVE = "hm-acceso-v1";
     if (localStorage.getItem(LLAVE) === "1" || sessionStorage.getItem(LLAVE) === "1") {
       raiz.classList.remove("hm-prelogin");   // el guard pre-paint del index pudo ocultar la app
@@ -670,7 +806,12 @@ const App = (() => {
         bs.title = "Salir y volver a la pantalla de acceso";
         bs.textContent = "⏻ Cerrar sesión";
         bs.style.marginTop = "6px";
-        bs.onclick = () => {
+        bs.onclick = async () => {
+          if (window.HIDROMET_AUTH_BASE && window.HMAuth &&
+              typeof window.HMAuth.cerrarSesion === "function") {
+            await window.HMAuth.cerrarSesion();
+            return;
+          }
           try { localStorage.removeItem("hm-acceso-v1"); sessionStorage.removeItem("hm-acceso-v1"); } catch (e) {}
           location.reload();
         };
@@ -740,10 +881,21 @@ const App = (() => {
   function redEtiqueta(v) {
     const s = String(v == null ? "" : v).trim();
     const k = s.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase();
-    if (k === "INAMHI") return "Meteorológica";
-    if (k === "CELEC") return "Hidroeléctrica";
-    if (k === "HIDRONACION") return "Hidrológica";
+    if (k === "INAMHI") return "Red meteorológica principal";
+    if (k === "CELEC") return "Red meteorológica energética";
+    if (k === "HIDRONACION") return "Red meteorológica complementaria";
+    if (k === "PRINCIPAL") return "Red meteorológica principal";
+    if (k === "ENERGETICA") return "Red meteorológica energética";
+    if (k === "COMPLEMENTARIA") return "Red meteorológica complementaria";
     return s;
+  }
+
+  function nombreEstacion(v, codigo) {
+    let s = String(v == null ? "" : v);
+    s = s.replace(/pisco|inamhi|celec|hidronaci[oó]n/gi, " ")
+         .replace(/[·|/]+/g, " ").replace(/\s+/g, " ")
+         .replace(/^[\s\-–—·,;()]+|[\s\-–—·,;()]+$/g, "");
+    return s || (codigo ? `Estación ${codigo}` : "Estación meteorológica");
   }
 
   function el(html) {
@@ -906,7 +1058,7 @@ const App = (() => {
 
   return { api, aviso, tarea, seguirTarea, modalTarea, tema, registrar, navegar, iniciar, el, fmtFecha, plotlyLayoutBase,
            plotlyLayoutSerie, plotlyConfig, pinchZoomMapa, hayTareaActiva, cancelarTarea, cancelarTodas, panel, vistaPestanas, restaurador,
-           rutaAProducto, hoyEC, redEtiqueta };
+           rutaAProducto, leerJsonGzip, zipDesdeManifest, hoyEC, redEtiqueta, nombreEstacion };
 })();
 
 /* ---------------- MODO VISOR: SOLO EXPLORACIÓN ----------------

@@ -1,0 +1,1 @@
+{"agg_precip":"sum_00_24","codigo":"C01","dias":5,"fecha":"2026-07-22","hoy":"2026-07-17","lluvia":null,"nombre":"Maucatambo","sin_datos":false,"tendencia":{"delta":0.6,"referencia":"pronóstico de hoy","texto":"más cálido","tmax_hoy":11.5},"tmax":{"modelo":"BEST_OP_CV","q25":11.4,"q75":13.3,"valor":12.1},"tmin":{"modelo":"BEST_OP_CV","q25":0.6,"q75":2.5,"valor":1.6}}

@@ -1,0 +1,1 @@
+{"altitud_m":3670.0,"aviso":null,"bloque":"tmax","codigo":"M5026","familia":"Todos","lat":-0.56334,"lon":-78.44335,"met_cols":["mae","rmse","bias","corr","mae_delta","corr_delta","sign_hit_active","flat_miss_rate"],"modelos":[],"modo":"continuous","nombre":"Cotopaxi Control Norte","region":"Interandina","resumen":null,"ventana":"10"}

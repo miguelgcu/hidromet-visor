@@ -1,0 +1,1 @@
+{"agg_precip":"sum_00_24","codigo":"C10","dias":1,"fecha":"2026-07-18","hoy":"2026-07-17","lluvia":null,"nombre":"La Mica Presa","sin_datos":false,"tendencia":{"delta":1.1,"referencia":"pronóstico de hoy","texto":"más cálido","tmax_hoy":12.5},"tmax":{"modelo":"BEST_OP_CV","q25":12.9,"q75":14.8,"valor":13.6},"tmin":{"modelo":"BEST_OP_CV","q25":-2.1,"q75":-0.2,"valor":-1.1}}

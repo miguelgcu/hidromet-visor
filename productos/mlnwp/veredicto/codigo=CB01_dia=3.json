@@ -1,0 +1,1 @@
+{"agg_precip":"sum_00_24","codigo":"CB01","dias":3,"fecha":"2026-07-20","hoy":"2026-07-17","lluvia":null,"nombre":"Boya Salve Faccha","sin_datos":false,"tendencia":{"delta":1.4,"referencia":"pronóstico de hoy","texto":"más cálido","tmax_hoy":9.8},"tmax":{"modelo":"BEST_OP_CV","q25":10.5,"q75":12.4,"valor":11.2},"tmin":{"modelo":"BEST_OP_CV","q25":-0.2,"q75":1.8,"valor":0.9}}

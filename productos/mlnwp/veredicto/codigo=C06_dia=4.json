@@ -1,0 +1,1 @@
+{"agg_precip":"sum_00_24","codigo":"C06","dias":4,"fecha":"2026-07-21","hoy":"2026-07-17","lluvia":null,"nombre":"Yaruquí","sin_datos":false,"tendencia":{"delta":-0.8,"referencia":"pronóstico de hoy","texto":"más frío","tmax_hoy":24.9},"tmax":{"modelo":"BEST_OP_CV","q25":23.3,"q75":25.3,"valor":24.1},"tmin":{"modelo":"BEST_OP_CV","q25":7.2,"q75":9.1,"valor":8.2}}

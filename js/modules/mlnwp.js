@@ -16,6 +16,37 @@
   const num = (v, nd = 1) => (v === null || v === undefined || Number.isNaN(v)) ? "—" : Number(v).toFixed(nd);
   const sgn = v => (v === null || v === undefined || Number.isNaN(v)) ? "—"
     : (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(Number(v)).toFixed(1);
+  const fechaBreve = fecha => {
+    const f = String(fecha ?? "");
+    return /^\d{4}-\d{2}-\d{2}/.test(f)
+      ? `${f.slice(8, 10)}/${f.slice(5, 7)}/${f.slice(2, 4)}` : f;
+  };
+  const etiquetaFechaValor = (fecha, valor, unidad) =>
+    `${esc(fechaBreve(fecha))}<br><b>${num(valor, 1)} ${esc(unidad)}</b>`;
+  // Halo único para pasado/presente/futuro y para OBS/modelos. El color de la
+  // serie queda en el borde; el fondo no cambia con el tema ni con el skill.
+  const ETIQUETA_BG = "rgba(255,255,255,.95)";
+  const ETIQUETA_TEXTO = "#071326";
+  const ETIQUETA_BORDE = "rgba(20,42,72,.70)";
+  const ETIQUETA_OBS_BORDE = "#0F1B2D";
+  const OPACIDAD_SKILL_MIN = 0.28;
+  const OPACIDAD_SKILL_MAX = 0.92;
+  function opacidadPorSkill(rating, score = null, oscuro = false) {
+    const r = Number(rating);
+    const s = Number(score);
+    // rating es 1–10; score alternativo es 0–1. La ausencia cae al piso visible,
+    // nunca oculta una serie. La curva es estrictamente monótona con el skill.
+    const t = Number.isFinite(r)
+      ? Math.max(0, Math.min(1, (r - 1) / 9))
+      : (Number.isFinite(s) ? Math.max(0, Math.min(1, s)) : 0);
+    const base = OPACIDAD_SKILL_MIN
+      + (OPACIDAD_SKILL_MAX - OPACIDAD_SKILL_MIN) * Math.pow(t, 0.82);
+    // En oscuro se eleva todo el rango sin alterar el orden ni saturar al recomendado.
+    return Number(Math.min(oscuro ? 0.97 : OPACIDAD_SKILL_MAX,
+      base + (oscuro ? 0.10 : 0)).toFixed(3));
+  }
+  const indiceRecomendadoModelos = modelos =>
+    (modelos || []).findIndex(modelo => modelo && modelo.operacional);
 
   // Acento del módulo y colores de modelos de la cabecera de la tabla/leyenda.
   const MORADO = "#6A47CE", NAVY = "#0F2745";
@@ -31,10 +62,10 @@
   // v18 (dueño 2026-07-10): el selector VENTANA se RETIRÓ de la UI.
   // - La serie temporal muestra SIEMPRE 10 días pasados + presente + todo el
   //   futuro disponible (lookback=10, producto ya congelado en el visor).
-  // - La validación usa la ventana fija de 30 fechas (equilibrio robustez/actualidad,
-  //   la misma que usa "Decisiones operativas").
+  // - La validación pública usa la misma ventana móvil de 10 fechas. El backtest
+  //   completo se conserva únicamente en local.
   const LOOKBACK_SERIE = 10;
-  const VENTANA_VALID = "30";
+  const VENTANA_VALID = "10";
 
   // Filtro de FAMILIA de modelo. valor = el que entiende el backend
   // (productos.FAMILIAS); etiqueta = texto del chip. "Todos" = sin filtro.
@@ -42,6 +73,11 @@
     ["Todos", "Todo"], ["Convencionales", "Convencionales"], ["No convencionales", "No conv."],
     ["ML", "ML"], ["Postprocesamiento", "Post. estadístico"],
   ];
+  const filtrarModelosFamilia = (modelos, familia) => {
+    const lista = Array.isArray(modelos) ? modelos : [];
+    if (!familia || familia === "Todos" || familia === "Mejor desempeño") return lista;
+    return lista.filter(modelo => modelo && modelo.familia === familia);
+  };
   // Tamaño del punto del MAPA por confianza (px de marcador Plotly). Borde blanco
   // UNIFORME (nunca color por confianza). Alta grande / Media medio / Baja pequeño.
   const TAM_CONF = { Alta: 15, Media: 11, Baja: 8, "Sin calificar": 6 };
@@ -221,6 +257,7 @@
   // filtradas por red y ordenadas por región → dependencia → nombre.
   let comboEsts = [];
   const normTxt = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const redEst = e => e ? (e.red_etiqueta || App.redEtiqueta(e.dependencia || e.red_id || "")) : "";
 
   function etiquetaEst() {
     const e = comboEsts.find(x => String(x.codigo) === String(S.estacion));
@@ -232,7 +269,7 @@
   function opcionesComboHTML(q) {
     const nq = normTxt(q);
     const visibles = comboEsts.filter(e => !nq ||
-      normTxt(`${e.codigo} ${e.nombre} ${e.region} ${e.dependencia || ""}`).includes(nq));
+      normTxt(`${e.codigo} ${e.nombre} ${e.region} ${redEst(e)}`).includes(nq));
     if (!visibles.length) return `<div class="ml-combo-vacia">Sin coincidencias.</div>`;
     let html = "", region = null;
     for (const e of visibles) {
@@ -242,7 +279,7 @@
       }
       html += `<button type="button" class="ml-combo-op ${String(e.codigo) === String(S.estacion) ? "activa" : ""}" data-cod="${esc(e.codigo)}">
         <span class="cod">${esc(e.codigo)}</span><span class="nom">${esc(e.nombre)}</span>
-        <span class="dep">${esc(App.redEtiqueta(e.dependencia || ""))}</span></button>`;
+        <span class="dep">${esc(redEst(e))}</span></button>`;
     }
     return html;
   }
@@ -328,6 +365,7 @@
     const cont = document.getElementById("ml-vista-est");
     if (!cont) return;
     const mi = ++gen;
+    purgarPlots();
     cont.innerHTML = cargando("Calculando validación…");
     const bloque = VAR_A_BLOQUE[S.variable];
     const vent = VENTANA_VALID;
@@ -344,25 +382,20 @@
     // variable/ventana/familia/deps), cae a la primera disponible.
     if (d.aviso) App.aviso(d.aviso, "info");
 
-    // Filtro de dependencia CLIENT-SIDE: en el visor /validacion está congelado
-    // con las 3 redes juntas (los chips no cambiaban nada); con backend vivo la
-    // intersección es inocua. La red de cada estación sale del contexto
-    // (depMap codigo→dependencia), que ya la trae.
+    // El visor incluye todas las estaciones. La procedencia se usa solo como
+    // etiqueta secundaria; la agrupación y el orden visibles son por región
+    // meteorológica real, nunca por entidad de origen.
     const depMap = {};
-    for (const e of (S.ctx && S.ctx.estaciones) || []) depMap[String(e.codigo)] = e.dependencia || "";
+    for (const e of (S.ctx && S.ctx.estaciones) || []) depMap[String(e.codigo)] = redEst(e);
     const todas = d.estaciones || [];
     const ests = todas
-      .map(e => ({ ...e, dependencia: depMap[String(e.codigo)] || "" }))
-      .filter(e => !e.dependencia || DEPS.includes(e.dependencia));
+      .map(e => ({ ...e, dependencia: depMap[String(e.codigo)] || "" }));
     ests.sort((a, b) => String(a.region).localeCompare(String(b.region))
-      || String(a.dependencia).localeCompare(String(b.dependencia))
       || String(a.nombre).localeCompare(String(b.nombre)));
     if (!ests.length) {
       poblarComboEst([]);
       const cont2 = document.getElementById("ml-vista-est");
-      if (cont2) cont2.innerHTML = vacio(todas.length
-        ? `Ninguna estación de las redes (${DEPS.join(" + ")}) tiene datos para esta combinación.`
-        : "Sin estaciones con datos para esta combinación.");
+      if (cont2) cont2.innerHTML = vacio("Sin estaciones con datos para esta combinación.");
       return;
     }
     if (!ests.some(e => String(e.codigo) === String(S.estacion)))
@@ -392,13 +425,13 @@
     let det, ser, detDet;
     try {
       [det, ser, detDet] = await Promise.all([
-        App.api(`/mlnwp/validacion_estacion?bloque=${bloque}&ventana=${vent}&${depsQS()}&codigo=${encodeURIComponent(S.estacion)}`),
+        App.api(`/mlnwp/validacion_estacion?bloque=${bloque}&ventana=${vent}&${depsQS()}&codigo=${encodeURIComponent(S.estacion)}${famQS}`),
         App.api(`/mlnwp/series?${depsQS()}&codigo=${encodeURIComponent(S.estacion)}&variable=${VAR_SERIE[S.variable]}&lookback=${lookback}${famQS}`),
         // DETECCIÓN de precip (POD/FAR/CSI, bloque precip_det): segunda sección
         // de la tabla de clasificación. OPCIONAL — si el producto no está
         // publicado (visor viejo) o falla, la tabla muestra solo cuantificación.
         esPrecip
-          ? App.api(`/mlnwp/validacion_estacion?bloque=precip_det&ventana=${vent}&${depsQS()}&codigo=${encodeURIComponent(S.estacion)}`).catch(() => null)
+          ? App.api(`/mlnwp/validacion_estacion?bloque=precip_det&ventana=${vent}&${depsQS()}&codigo=${encodeURIComponent(S.estacion)}${famQS}`).catch(() => null)
           : Promise.resolve(null),
       ]);
     } catch (e) { if (mi === gen) cont.innerHTML = vacio("No se pudo cargar la estación: " + e.message); return; }
@@ -410,6 +443,11 @@
     // /mlnwp/veredicto sigue vivo — lo consume el submenú nuevo.)
     cont.innerHTML = `<div class="ml-card" id="ml-serie-card"></div>
       <div id="ml-detalle" style="margin-top:14px"></div>`;
+    // En escritorio el backend ya filtra. El visor estático reutiliza el JSON
+    // completo de "Todos" para evitar miles de artefactos y aplica aquí la misma
+    // regla. Nunca se conserva una curva de la selección anterior.
+    ser = { ...(ser || {}), familia_activa: S.familia,
+      modelos: filtrarModelosFamilia(ser && ser.modelos, S.familia) };
     pintarSerie(document.getElementById("ml-serie-card"), ser);
     pintarDetalle(document.getElementById("ml-detalle"), det, detDet);
   }
@@ -418,15 +456,16 @@
   // La usa pintarDetalle — para precip se pintan DOS (detección + cuantificación).
   function tablaClasifHTML(d) {
     // Filtro de familia: restringe los modelos mostrados (client-side, como el resumen).
-    const filtrarFam = S.familia && S.familia !== "Todos" && S.familia !== "Mejor desempeño";
-    let modelos = d.modelos || [];
-    if (filtrarFam) modelos = modelos.filter(m => m.familia === S.familia);
+    const modelos = filtrarModelosFamilia(d.modelos, S.familia);
     const esDet = d.modo === "detection";
+    const esTemp = d.bloque === "tmax" || d.bloque === "tmin";
 
     // Cabeceras de métricas según el modo (detección vs continuo/cuantificación).
     const metHead = esDet
       ? [["pod", "POD"], ["far", "FAR"], ["csi", "CSI"]]
-      : [["mae", "MAE"], ["rmse", "RMSE"], ["bias", "Sesgo"], ["corr", "Corr"]];
+      : [["mae", "MAE"], ["rmse", "RMSE"], ["bias", "Sesgo"], ["corr", "Corr"],
+         ...(esTemp ? [["mae_delta", "MAE ΔT"], ["corr_delta", "Corr ΔT"],
+           ["sign_hit_active", "Acierto ΔT"], ["flat_miss_rate", "Fallo plano"]] : [])];
     const metHeadHTML = metHead.map(([, t]) => `<th class="der">${t}</th>`).join("");
     const nCols = 5 + metHead.length;
 
@@ -434,7 +473,8 @@
       const v = m[k];
       if (v === null || v === undefined || Number.isNaN(v)) return "—";
       if (k === "bias") return sgn(v);
-      if (k === "corr" || k === "pod" || k === "far" || k === "csi") return Number(v).toFixed(2);
+      if (["corr", "corr_delta", "sign_hit_active", "flat_miss_rate",
+        "pod", "far", "csi"].includes(k)) return Number(v).toFixed(2);
       return Number(v).toFixed(1);
     };
 
@@ -486,8 +526,7 @@
   // en la misma fila por modelo — la columna del MODELO queda FIJA (sticky) y las
   // métricas se deslizan en X. Aplica a escritorio y móvil.
   function tablaUnificadaHTML(dCua, dDet) {
-    const filtrarFam = S.familia && S.familia !== "Todos" && S.familia !== "Mejor desempeño";
-    const fil = ms => filtrarFam ? (ms || []).filter(m => m.familia === S.familia) : (ms || []);
+    const fil = ms => filtrarModelosFamilia(ms, S.familia);
     const cua = fil(dCua.modelos), det = fil(dDet.modelos);
     const dmap = new Map(det.map(m => [m.modelo, m]));
     // Orden = el del bloque base (cuantificación, ya viene por calificación); los
@@ -703,19 +742,49 @@
   function pintarSerie(card, d) {
     const unidad = d.unidad || "mm";
     const esPrecip = !!d.es_precip;
-    // Colores TEMA-CONSCIENTES (modo oscuro): observado, mediana, abanico y anotación. Sin esto,
-    // el negro del observado y el azul oscuro del abanico quedaban invisibles sobre fondo oscuro.
+    // Colores TEMA-CONSCIENTES para trazas y franja. Las etiquetas conservan un
+    // halo blanco único en ambos temas para no perder contraste en el futuro.
     const oscuro = (App.tema && App.tema() === "oscuro");
     const C = oscuro
-      ? { obs: "#E8EDF6", p50: "#6BB1EE", fan80: "rgba(120,165,225,.14)", fan50: "rgba(120,165,225,.30)", anot: "#9DAABF" }
+      ? { obs: "#FFFFFF", p50: "#6BB1EE", fan80: "rgba(120,165,225,.14)", fan50: "rgba(120,165,225,.30)", anot: "#E8F0FF" }
       : { obs: "#0F1B2D", p50: "#0052A3", fan80: "rgba(27,58,107,.10)", fan50: "rgba(27,58,107,.24)", anot: "#5A6678" };
-    // Halo-contenedor de las etiquetas de valor (pedido del dueño): sombra apilada del
-    // color del lienzo → el número "flota" legible sobre banda/líneas en ambos temas.
-    C.halo = oscuro ? "0 0 3px #0E1930, 0 0 3px #0E1930, 0 0 4px #0E1930"
-                    : "0 0 3px #FFFFFF, 0 0 3px #FFFFFF, 0 0 4px #FFFFFF";
-    const tit = `${esc(d.variable === "precip" ? "Precipitación 7-7" : (d.variable === "tmax" ? "T. máxima" : "T. mínima"))} — ${esc(d.nombre || "")} (${esc(d.codigo)})`;
+    const metaCtx = ((S.ctx && S.ctx.estaciones) || []).find(
+      e => String(e.codigo) === String(d.codigo));
+    const meta = { ...(metaCtx || {}), ...d };
+    const regionCruda = String(meta.region || "—");
+    const region = /inamhi|celec|hidronaci[oó]n|pisco/i.test(regionCruda)
+      ? "Región meteorológica no registrada" : regionCruda;
+    const coord = (v, etiqueta) => (v === null || v === undefined || !Number.isFinite(Number(v)))
+      ? null : `${etiqueta} ${Number(v).toFixed(5)}°`;
+    const altitud = (meta.altitud_m === null || meta.altitud_m === undefined
+      || !Number.isFinite(Number(meta.altitud_m)))
+      ? null : `${Math.round(Number(meta.altitud_m))} m s. n. m.`;
+    const varMet = d.variable === "precip" ? "Precipitación"
+      : (d.variable === "tmax" ? "Temperatura máxima" : "Temperatura mínima");
+    const aggMet = ({ sum_07_07: "acumulación 07:00–07:00",
+      sum_00_24: "acumulación 00:00–24:00", max: "máxima diaria",
+      min: "mínima diaria" })[d.agregacion] || String(d.agregacion || "");
+    const chips = [
+      `Código ${meta.codigo || d.codigo || "—"}`,
+      coord(meta.lat, "Lat"), coord(meta.lon, "Lon"), altitud, region,
+    ].filter(Boolean).map(x => `<span class="ml-serie-chip">${esc(x)}</span>`).join("");
+    const cabecera = `<header class="ml-serie-cabecera">
+      <h2>${esc(meta.nombre || d.nombre || d.codigo || "Estación")}</h2>
+      <div class="ml-serie-chips">${chips}</div>
+      <div class="ml-serie-subtitulo">${esc(varMet)}<span aria-hidden="true"> · </span>${esc(aggMet)}</div>
+    </header>`;
+    const modelosRespuesta = Array.isArray(d.modelos) ? d.modelos : [];
+    if (!modelosRespuesta.length) {
+      const fam = d.familia_activa || d.familia || "seleccionada";
+      card.innerHTML = `${cabecera}<div class="ml-serie-vacia" role="status">
+        <div class="icono">∅</div>
+        <b>Sin curvas para esta selección.</b>
+        <span>No hay modelos de ${esc(fam)} con datos en esta estación y variable.</span>
+      </div>`;
+      return;
+    }
     card.innerHTML = `
-      <div class="ml-serie-tit">${tit}</div>
+      ${cabecera}
       <div class="ml-plot-scroll"><div class="ml-serie-plot" id="ml-plot-serie"></div></div>
       <div class="ml-serie-leyenda" id="ml-serie-leyenda"></div>
       <div class="ml-serie-probs" id="ml-serie-probs"></div>
@@ -729,7 +798,48 @@
     const angosto = (card.clientWidth || window.innerWidth || 999) < 560;
 
     const traces = [];
+    const opacidadesTrazas = [];
+    const etiquetasPuntos = [];
+    const fechasGrafico = new Set();
+    const turnosPorFecha = new Map();
     const fx = arr => (arr || []).map(s => s);
+    // Carriles alternados por fecha. Cada punto mantiene su coordenada real, pero la
+    // caja se desplaza unos píxeles para reducir colisiones entre observado y modelos.
+    const carrilesPrecip = [
+      [0, 12], [-38, 22], [38, 22], [-25, 40], [25, 40],
+      [-45, 58], [45, 58], [-12, 64], [12, 64],
+    ];
+    const carrilesTemp = [
+      [0, 13], [-36, 26], [36, 26], [-24, -18], [24, -18],
+      [-42, 48], [42, 48], [-12, -38], [12, -38],
+    ];
+    const agregarEtiquetaPunto = (fecha, valor, borde) => {
+      if (!fecha || valor === null || valor === undefined || !Number.isFinite(Number(valor))) return;
+      fechasGrafico.add(fecha);
+      const turno = turnosPorFecha.get(fecha) || 0;
+      turnosPorFecha.set(fecha, turno + 1);
+      const carriles = esPrecip ? carrilesPrecip : carrilesTemp;
+      const [xshift, yshiftBase] = carriles[turno % carriles.length];
+      const vuelta = Math.floor(turno / carriles.length);
+      const signo = yshiftBase < 0 ? -1 : 1;
+      const yshift = yshiftBase + signo * vuelta * 18;
+      etiquetasPuntos.push({
+        x: fecha, y: Number(valor), xref: "x", yref: "y",
+        text: etiquetaFechaValor(fecha, valor, unidad), showarrow: false,
+        xanchor: "center", yanchor: yshift >= 0 ? "bottom" : "top",
+        xshift, yshift, align: "center", captureevents: false,
+        bgcolor: ETIQUETA_BG, bordercolor: borde || ETIQUETA_BORDE,
+        borderwidth: 1.2, borderpad: 3, opacity: 1,
+        font: { family: "IBM Plex Mono, monospace", size: 9, color: ETIQUETA_TEXTO },
+      });
+    };
+
+    // El observado reserva el primer carril y se etiqueta fecha+valor en TODOS sus
+    // puntos, incluido 0 mm. Los pronósticos se acomodan después alrededor de él.
+    if (d.observado && d.observado.fechas && d.observado.fechas.length) {
+      d.observado.fechas.forEach((fecha, i) =>
+        agregarEtiquetaPunto(fecha, (d.observado.valores || [])[i], ETIQUETA_OBS_BORDE));
+    }
 
     // BANDA INTERCUARTIL RETIRADA (pedido del dueño 2026-07-11): el abanico P25–P75 /
     // P10–P90 y la mediana P50 se distorsionaban en el pronóstico a futuro. Se conserva el
@@ -737,72 +847,65 @@
     // probabilidad por umbral. d.banda sigue llegando del backend pero ya no se dibuja (solo
     // se usa más abajo para fijar el tope del horizonte 'futuro' de la franja sombreada).
 
-    // Modelos (atenuados por calificación: opacity ya viene de /series). En OSCURO
-    // los pasteles atenuados se fantasmagorizan sobre el fondo: piso de opacidad
-    // 0.85 y grosor mínimo 2 conservando la atenuación relativa entre modelos.
-    // v16 (pedido del dueño): los 3 MEJORES modelos muestran sus VALORES como
-    // etiqueta en el presente y el futuro (fechas >= hoy); el pasado queda limpio
-    // (ahí las etiquetas son del observado).
+    // Modelos atenuados por calificación verificada. En oscuro la misma escala
+    // monótona recibe +0.10 de contraste (sin piso arbitrario ni inversión de skill).
+    // Cada modelo visible muestra fecha+valor en todos sus puntos de presente/futuro.
+    // El pasado de la gráfica queda rotulado por el observado.
     const leyenda = [];
     const _hoyEt = (App.hoyEC ? App.hoyEC() : d.hoy);
-    let _conEtiqueta = 0;
     // El backend antepone los productos operativos que alimentan alertas/cartas;
     // el cupo restante muestra los comparadores con mayor skill.
-    for (let m of (d.modelos || []).slice(0, 8)) {   // let: el respaldo se re-etiqueta abajo
+    const modelosVisibles = modelosRespuesta.slice(0, 8);
+    const iRecomendado = indiceRecomendadoModelos(modelosVisibles);
+    for (const [iModelo, original] of modelosVisibles.entries()) {
+      let m = original;   // el respaldo se re-etiqueta abajo
       const color = m.color;
-      const opBase = m.opacity ?? .7;
-      const op = oscuro ? Math.max(.85, opBase) : opBase;
-      const wLin = oscuro ? Math.max(2, m.width ?? 1.5) : (m.width ?? 1.5);
+      const esRecomendado = iRecomendado >= 0 && iModelo === iRecomendado;
+      const op = opacidadPorSkill(m.rating, m.score ?? m.skill, oscuro);
+      const wLin = esRecomendado ? Math.max(3, m.width ?? 1.5)
+        : (oscuro ? Math.max(2, m.width ?? 1.5) : (m.width ?? 1.5));
       // 'Sin entrenamiento' (m.dash/m.sin_entrenar) = tramo pasado-sin-obs con el fallback
       // colapsado: UNA línea punteada gris SIN rating (aunque sea precip), en vez de ~26
       // líneas/barras idénticas superpuestas ("todos los modelos iguales / plano").
       // v14: nombre CLARO para el usuario (el crudo "Sin entrenamiento" confundía).
       if (m.sin_entrenar) m = { ...m, modelo: "Respaldo (sin obs para entrenar)" };
       const rtxt = m.sin_entrenar ? "" : ` (${num(m.rating, 1)})`;
-      const otxt = m.operacional ? " · operativo" : "";
-      // etiquetas de valor en fechas >= hoy, SOLO para los 3 mejores (d.modelos ya
-      // viene ordenado por calificación descendente).
-      const _etiquetar = !m.sin_entrenar && _hoyEt && _conEtiqueta < 3;
-      const _texto = _etiquetar
-        ? (m.fechas || []).map((f, i) => {
-            const v = m.valores[i];
-            if (v == null || f < _hoyEt) return "";
-            // 0 mm ES un dato (pedido del dueño): se etiqueta como cualquier valor.
-            return num(v, 1);
-          })
-        : null;
-      if (_etiquetar) _conEtiqueta++;
+      const otxt = esRecomendado ? " · recomendado" : (m.operacional ? " · operativo" : "");
+      (m.fechas || []).forEach((fecha, i) => {
+        fechasGrafico.add(fecha);
+        // 0 es válido: solo se excluyen nulos y fechas estrictamente pasadas.
+        if (_hoyEt && fecha >= _hoyEt) agregarEtiquetaPunto(fecha, (m.valores || [])[i], color);
+      });
       if (esPrecip && !m.dash) {
         traces.push({ type: "bar", x: fx(m.fechas), y: m.valores, name: `${m.modelo}${otxt}${rtxt}`,
-          marker: { color, opacity: op },
-          ...(_texto ? { text: _texto, textposition: "outside", cliponaxis: false,
-            textfont: { size: 8.5, color, shadow: C.halo }, constraintext: "none" } : {}),
-          hovertemplate: `${esc(m.modelo)}: %{y} ${unidad}<extra></extra>` });
+          marker: { color }, opacity: op,
+          hovertemplate: `${esc(m.modelo)}<br>%{x|%d/%m/%Y}: %{y:.1f} ${esc(unidad)}<extra></extra>` });
       } else {
         // connectgaps:false + eje completo con null (series.py): un hueco de fechas
         // se ve como hueco, NO como diagonal fantasma (queja La Argelia 84270 03/07).
-        traces.push({ type: "scatter", mode: _texto ? "lines+text" : "lines", x: fx(m.fechas), y: m.valores, name: `${m.modelo}${otxt}${rtxt}`,
+        traces.push({ type: "scatter", mode: "lines", x: fx(m.fechas), y: m.valores, name: `${m.modelo}${otxt}${rtxt}`,
           line: { color, width: wLin, ...(m.dash ? { dash: m.dash } : {}) }, opacity: op, connectgaps: false,
-          ...(_texto ? { text: _texto, textposition: "top center", cliponaxis: false,
-            textfont: { size: 8.5, color, shadow: C.halo } } : {}),
-          hovertemplate: `${esc(m.modelo)}: %{y} ${unidad}<extra></extra>` });
+          hovertemplate: `${esc(m.modelo)}<br>%{x|%d/%m/%Y}: %{y:.1f} ${esc(unidad)}<extra></extra>` });
       }
+      opacidadesTrazas.push(op);
       const swStyle = m.dash ? `border-top:2px dotted ${esc(color)};height:0`
                              : `background:${esc(color)};opacity:${op}`;
       leyenda.push(`<span class="it"><span class="sw-caja" style="${swStyle}"></span>${esc(m.modelo)}${esc(otxt)}${rtxt}</span>`);
     }
 
-    // Observado: línea punteada negra con marcadores + etiquetas SIEMPRE (v16: el
-    // lienzo angosto es de 680px con scroll, caben; pedido del dueño).
+    // Observado: línea con marcadores. Sus etiquetas son anotaciones con fondo
+    // translúcido, creadas arriba para reservar el primer carril de cada fecha.
     if (d.observado && d.observado.fechas && d.observado.fechas.length) {
-      traces.push({ type: "scatter", mode: "lines+markers+text", x: d.observado.fechas, y: d.observado.valores,
-        // 0 mm observado ES un dato (pedido del dueño): se etiqueta igual que el resto.
-        text: d.observado.valores.map(v => (v == null ? "" : num(v, 1))),
-        textposition: "top center", textfont: { size: 9, color: C.obs, shadow: C.halo }, cliponaxis: false,
-        name: "Observado", line: { color: C.obs, width: 2.8 }, connectgaps: false,
+      traces.push({ type: "scatter", mode: "lines+markers", x: d.observado.fechas, y: d.observado.valores,
+        name: "Observado", opacity: 1, line: { color: C.obs, width: 3.2 }, connectgaps: false,
         marker: { color: C.obs, size: 8, symbol: "circle" },
-        hovertemplate: `Observado: %{y} ${unidad}<extra></extra>` });
+        hovertemplate: `Observado<br>%{x|%d/%m/%Y}: %{y:.1f} ${esc(unidad)}<extra></extra>` });
+      opacidadesTrazas.push(1);
     }
+
+    // Ancho proporcional al número real de días: escritorio y móvil conservan espacio
+    // para cada etiqueta y usan el mismo carril horizontal desplazable.
+    el.style.minWidth = `${Math.max(680, fechasGrafico.size * 112)}px`;
 
     const layout = App.plotlyLayoutSerie("", {
       // barmode "overlay": los hietogramas de modelos se superponen y se atenúan por
@@ -811,6 +914,7 @@
       // tiempo aunque tengan distinta cantidad de fechas.
       barmode: "overlay",
       showlegend: false,   // única leyenda = la HTML (ml-serie-leyenda); evita leyenda doble
+      annotations: etiquetasPuntos,
       yaxis: { title: { text: unidad, font: { size: 11 } }, rangemode: esPrecip ? "tozero" : "normal",
                ...(angosto ? { fixedrange: true } : {}) },
       // Eje X: TODAS las fechas (un tick por día, rotadas -45°) — el lienzo tiene ancho
@@ -840,7 +944,7 @@
         { type: "line", x0: _hoy, x1: _hoy, yref: "paper", y0: 0, y1: 1,
           line: { color: "#6B8CB4", width: 1.8, dash: "dot" } },
       ];
-      layout.annotations = [{ x: _hoy, yref: "paper", y: 1, yanchor: "bottom", xanchor: "left",
+      layout.annotations = [...(layout.annotations || []), { x: _hoy, yref: "paper", y: 1, yanchor: "bottom", xanchor: "left",
         text: "inicio pronóstico →", showarrow: false,
         font: { family: "IBM Plex Mono", size: 10, color: C.anot } }];
     }
@@ -849,6 +953,28 @@
       // siempre visibles al entrar (pedido del dueño); inocuo si no hay overflow.
       const sc = el.closest(".ml-plot-scroll");
       if (sc) sc.scrollLeft = sc.scrollWidth;
+      // Hover y selección solo realzan temporalmente la curva elegida; al salir se
+      // restaura la jerarquía objetiva determinada por skill.
+      if (typeof el.on === "function" && window.Plotly && typeof Plotly.restyle === "function") {
+        let seleccionada = null;
+        const curva = ev => (ev && ev.points && ev.points.length)
+          ? Number(ev.points[0].curveNumber) : null;
+        const aplicarRealce = indice => Plotly.restyle(el, {
+          opacity: opacidadesTrazas.map((alpha, i) => i === indice ? 1 : alpha),
+        });
+        el.on("plotly_hover", ev => aplicarRealce(curva(ev)));
+        el.on("plotly_unhover", () => aplicarRealce(seleccionada));
+        el.on("plotly_click", ev => {
+          const i = curva(ev);
+          seleccionada = seleccionada === i ? null : i;
+          aplicarRealce(seleccionada);
+        });
+        el.on("plotly_doubleclick", () => {
+          seleccionada = null;
+          aplicarRealce(null);
+          return false;
+        });
+      }
     });
 
     const leyEl = document.getElementById("ml-serie-leyenda");
@@ -861,10 +987,7 @@
     if (probsEl) {
       const pu = d.probs_umbral;
       if (esPrecip && pu && pu.fechas && pu.fechas.length) {
-        // MISMO eje temporal que las líneas (v18): el backend re-expande la matriz a la
-        // rejilla diaria completa [hoy−10, tope futuro] (_eje_comun) — una COLUMNA por
-        // CADA fecha de la serie, con "—" donde no hay producto. Tabla TRANSPUESTA:
-        // una fila por umbral, alineada 1:1 con el eje de la serie.
+        // La tabla probabilística respeta la misma ventana móvil que la gráfica.
         let idx = pu.fechas.map((_, i) => i);
         // Índice de la 1ª columna de pronóstico (>= hoy) para separar visualmente pasado/futuro,
         // coherente con la línea divisoria 'inicio pronóstico →' del gráfico.
@@ -873,7 +996,7 @@
         const celStyle = p => p == null
           ? "color:var(--faint)"
           : `background:rgba(43,93,170,${alfa(p).toFixed(2)});color:${p >= 75 ? "#fff" : "var(--ink)"}`;
-        const dd = f => `${f.slice(8, 10)}/${f.slice(5, 7)}`;
+        const dd = f => `${f.slice(8, 10)}/${f.slice(5, 7)}/${f.slice(0, 4)}`;
         const sep = i => i === iHoy ? " ml-pb-hoy" : "";   // borde que marca el inicio del pronóstico
         const cabFechas = idx.map(i => `<th class="ml-pb-f${sep(i)}">${dd(pu.fechas[i])}</th>`).join("");
         const filasU = (pu.umbrales || []).map((u, j) => {
@@ -884,10 +1007,10 @@
           return `<tr><th class="ml-pb-u">≥${u} mm</th>${celdas}</tr>`;
         }).join("");
         probsEl.innerHTML =
-          `<div class="ml-pb-tit">Probabilidad de lluvia por umbral</div>
+          `<div class="ml-pb-tit">Probabilidad de lluvia por umbral · ventana móvil</div>
            <div class="ml-pb-wrap"><table class="ml-pb-tabla"><thead><tr><th class="ml-pb-esq">Umbral</th>${cabFechas}</tr></thead>
            <tbody>${filasU}</tbody></table></div>
-           <div class="ml-pb-nota">Mismo horizonte que la serie (histórico + pronóstico); la línea vertical marca el inicio del pronóstico. Probabilidad calibrada (promedio de clasificadores). Ej.: “≥25 mm = 30 %” = 30 % de probabilidad de que llueva más de 25 mm ese día.</div>`;
+           <div class="ml-pb-nota">Últimos 10 días, presente y futuro disponible; la línea vertical marca el inicio del pronóstico vigente. Probabilidad calibrada (promedio de clasificadores). Ej.: “≥25 mm = 30 %” = 30 % de probabilidad de que llueva más de 25 mm ese día.</div>`;
         // v13: umbral FIJO (sticky) y el scroll de fechas arranca a la DERECHA (lo más reciente).
         const w = probsEl.querySelector(".ml-pb-wrap");
         if (w) w.scrollLeft = w.scrollWidth;
@@ -979,6 +1102,9 @@
   App.panel("glosario:modelos", (cont) => tabGlosario(cont));
 
   window.MLNWP = {
+    _opacidadPorSkill: opacidadPorSkill,
+    _indiceRecomendadoModelos: indiceRecomendadoModelos,
+    _filtrarModelosFamilia: filtrarModelosFamilia,
     async render(vista) {
       // La cabecera global ya la gestiona el módulo anfitrión (Pronóstico):
       // aquí no se toca #cabecera-vista.

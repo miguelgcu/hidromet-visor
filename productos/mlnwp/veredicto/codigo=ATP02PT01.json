@@ -1,0 +1,1 @@
+{"agg_precip":"sum_00_24","codigo":"ATP02PT01","dias":1,"fecha":"2026-07-18","hoy":"2026-07-17","lluvia":null,"nombre":"PT03 (Chamilco","sin_datos":false,"tendencia":{"delta":1.4,"referencia":"pronóstico de hoy","texto":"más cálido","tmax_hoy":9.3},"tmax":{"modelo":"BEST_OP_CV","q25":10.0,"q75":12.0,"valor":10.7},"tmin":{"modelo":"BEST_OP_CV","q25":-0.7,"q75":1.2,"valor":0.3}}

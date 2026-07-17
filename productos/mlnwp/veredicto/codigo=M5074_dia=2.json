@@ -1,0 +1,1 @@
+{"agg_precip":"sum_00_24","codigo":"M5074","dias":2,"fecha":"2026-07-19","hoy":"2026-07-17","lluvia":null,"nombre":"Puntas","sin_datos":false,"tendencia":{"delta":1.1,"referencia":"pronóstico de hoy","texto":"más cálido","tmax_hoy":10.0},"tmax":{"modelo":"BEST_OP_CV","q25":10.4,"q75":12.3,"valor":11.1},"tmin":{"modelo":"BEST_OP_CV","q25":0.0,"q75":2.0,"valor":1.1}}

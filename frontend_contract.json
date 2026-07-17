@@ -1,0 +1,21 @@
+{
+  "schema": "hidromet.frontend.v1",
+  "source": "ui/",
+  "source_sha256": "05d272cb099c7f8bbb0d8467909622c8d12353c3c2f9446bd1a7c41272edd78e",
+  "cache_version": "05d272cb099c",
+  "mode": "readonly-static",
+  "included_modules": [
+    "mlnwp",
+    "decisiones",
+    "cartas",
+    "sngr",
+    "geoglows",
+    "clima",
+    "glosario"
+  ],
+  "desktop_only_modules": [
+    "configuracion",
+    "datos"
+  ],
+  "auth_backend": false
+}

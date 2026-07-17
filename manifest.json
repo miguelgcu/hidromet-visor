@@ -1,6 +1,8 @@
 {
-  "generado": "2026-07-13 03:24",
-  "fuente": "HidroMet · INAMHI Ecuador",
+  "generado": "2026-07-17 14:26",
+  "fuente": "Actualización operativa",
   "ok": true,
+  "parcial": false,
+  "productos_con_fallback": 0,
   "fallos": []
 }

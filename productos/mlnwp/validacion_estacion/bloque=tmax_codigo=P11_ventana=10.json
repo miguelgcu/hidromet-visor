@@ -1,0 +1,1 @@
+{"altitud_m":3800.0,"aviso":null,"bloque":"tmax","codigo":"P11","familia":"Todos","lat":-0.16602,"lon":-78.524,"met_cols":["mae","rmse","bias","corr","mae_delta","corr_delta","sign_hit_active","flat_miss_rate"],"modelos":[],"modo":"continuous","nombre":"Antenas","region":"Interandina","resumen":null,"ventana":"10"}

@@ -1,0 +1,1 @@
+{"agg_precip":"sum_00_24","codigo":"C20","dias":4,"fecha":"2026-07-21","hoy":"2026-07-17","lluvia":null,"nombre":"Calderón","sin_datos":false,"tendencia":{"delta":-0.7,"referencia":"pronóstico de hoy","texto":"más frío","tmax_hoy":23.7},"tmax":{"modelo":"BEST_OP_CV","q25":22.3,"q75":24.2,"valor":23.0},"tmin":{"modelo":"BEST_OP_CV","q25":7.9,"q75":9.8,"valor":8.9}}

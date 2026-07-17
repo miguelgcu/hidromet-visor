@@ -1,0 +1,1 @@
+{"agg_precip":"sum_00_24","codigo":"C04","dias":5,"fecha":"2026-07-22","hoy":"2026-07-17","lluvia":null,"nombre":"Rumipamba","sin_datos":false,"tendencia":{"delta":-0.9,"referencia":"pronóstico de hoy","texto":"más frío","tmax_hoy":18.3},"tmax":{"modelo":"BEST_OP_CV","q25":16.7,"q75":18.6,"valor":17.4},"tmin":{"modelo":"BEST_OP_CV","q25":4.9,"q75":6.8,"valor":5.9}}

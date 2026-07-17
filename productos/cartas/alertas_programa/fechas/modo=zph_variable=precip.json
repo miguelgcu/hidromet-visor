@@ -1,1 +1,1 @@
-{"fechas":["2026-07-03","2026-07-04"],"modo":"zph","n":2,"nota":"Días con alertas emitidas","origen":"historico_estaciones (CONSENSO nivel_emitido>0)","variable":"precip","ventana_inicio":"2026-07-03"}
+{"fechas":[],"modo":"zph","n":0,"nota":"Días con alertas emitidas","origen":"historico_estaciones (CONSENSO nivel_emitido>0)","variable":"precip","ventana_inicio":"2026-07-07"}

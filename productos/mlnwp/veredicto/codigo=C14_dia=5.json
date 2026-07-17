@@ -1,0 +1,1 @@
+{"agg_precip":"sum_00_24","codigo":"C14","dias":5,"fecha":"2026-07-22","hoy":"2026-07-17","lluvia":null,"nombre":"Mindo Captación","sin_datos":false,"tendencia":{"delta":-0.6,"referencia":"pronóstico de hoy","texto":"más frío","tmax_hoy":16.0},"tmax":{"modelo":"BEST_OP_CV","q25":14.7,"q75":16.6,"valor":15.4},"tmin":{"modelo":"BEST_OP_CV","q25":2.5,"q75":4.5,"valor":3.6}}

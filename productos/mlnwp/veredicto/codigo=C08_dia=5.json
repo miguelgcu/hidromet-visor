@@ -1,0 +1,1 @@
+{"agg_precip":"sum_00_24","codigo":"C08","dias":5,"fecha":"2026-07-22","hoy":"2026-07-17","lluvia":null,"nombre":"IASA","sin_datos":false,"tendencia":{"delta":-0.7,"referencia":"pronóstico de hoy","texto":"más frío","tmax_hoy":23.4},"tmax":{"modelo":"BEST_OP_CV","q25":22.0,"q75":23.9,"valor":22.7},"tmin":{"modelo":"BEST_OP_CV","q25":8.7,"q75":10.6,"valor":9.8}}

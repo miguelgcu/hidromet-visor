@@ -1,1 +1,1 @@
-{"agg_precip":"sum_07_07","codigo":"M5190","dias":4,"fecha":"2026-07-17","hoy":"2026-07-13","lluvia":{"llueve":true,"prob":92,"prob_fuerte":36,"q25":0.3,"q75":16.0,"texto":"S\u00cd"},"nombre":"Captaci\u00f3n Central","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_07_07","codigo":"M5190","dias":4,"fecha":"2026-07-21","hoy":"2026-07-17","lluvia":{"llueve":true,"prob":93,"prob_fuerte":22,"q25":2.7,"q75":17.1,"texto":"SÍ"},"nombre":"Captación Central","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

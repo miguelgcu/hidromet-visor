@@ -1,0 +1,1 @@
+{"agg_precip":"sum_00_24","codigo":"M5180","dias":3,"fecha":"2026-07-20","hoy":"2026-07-17","lluvia":null,"nombre":"Atacazo","sin_datos":false,"tendencia":{"delta":0.7,"referencia":"pronóstico de hoy","texto":"más cálido","tmax_hoy":13.7},"tmax":{"modelo":"BEST_OP_CV","q25":13.7,"q75":15.6,"valor":14.4},"tmin":{"modelo":"BEST_OP_CV","q25":0.8,"q75":2.8,"valor":1.9}}

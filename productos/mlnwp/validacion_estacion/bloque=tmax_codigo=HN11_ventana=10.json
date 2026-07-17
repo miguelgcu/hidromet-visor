@@ -1,0 +1,1 @@
+{"altitud_m":211.0,"aviso":null,"bloque":"tmax","codigo":"HN11","familia":"Todos","lat":-0.76374,"lon":-79.80413,"met_cols":["mae","rmse","bias","corr","mae_delta","corr_delta","sign_hit_active","flat_miss_rate"],"modelos":[],"modo":"continuous","nombre":"Cerradora","region":"Litoral","resumen":null,"ventana":"10"}

@@ -1,0 +1,1 @@
+{"agg_precip":"sum_00_24","codigo":"M5024","dias":1,"fecha":"2026-07-18","hoy":"2026-07-17","lluvia":null,"nombre":"El Tambo","sin_datos":false,"tendencia":{"delta":0.5,"referencia":"pronóstico de hoy","texto":"más cálido","tmax_hoy":14.0},"tmax":{"modelo":"BEST_OP_CV","q25":13.8,"q75":15.7,"valor":14.5},"tmin":{"modelo":"BEST_OP_CV","q25":4.3,"q75":6.3,"valor":5.4}}

@@ -1,0 +1,1 @@
+{"agg_precip":"sum_00_24","codigo":"C23","dias":1,"fecha":"2026-07-18","hoy":"2026-07-17","lluvia":null,"nombre":"La Delicia","sin_datos":false,"tendencia":{"delta":0.7,"referencia":"pronóstico de hoy","texto":"más cálido","tmax_hoy":26.0},"tmax":{"modelo":"BEST_OP_CV","q25":26.0,"q75":27.9,"valor":26.7},"tmin":{"modelo":"BEST_OP_CV","q25":15.9,"q75":17.9,"valor":17.0}}

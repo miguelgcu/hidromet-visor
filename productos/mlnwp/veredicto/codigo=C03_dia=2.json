@@ -1,0 +1,1 @@
+{"agg_precip":"sum_00_24","codigo":"C03","dias":2,"fecha":"2026-07-19","hoy":"2026-07-17","lluvia":null,"nombre":"Rumihurco","sin_datos":false,"tendencia":{"delta":-0.6,"referencia":"pronóstico de hoy","texto":"más frío","tmax_hoy":21.1},"tmax":{"modelo":"BEST_OP_CV","q25":19.8,"q75":21.7,"valor":20.5},"tmin":{"modelo":"BEST_OP_CV","q25":7.0,"q75":9.0,"valor":8.1}}

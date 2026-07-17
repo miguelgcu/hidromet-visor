@@ -219,7 +219,8 @@
       lineColor.push(selec ? "#0F1B2D" : borde);
       lineWidth.push(selec ? 3 : 1.6);
 
-      let h = `<b>${esc(e.nombre)}</b> · ${esc(cod)}<br><span style="color:#5A6678">${esc(App.redEtiqueta(e.region) || "—")}${e.dependencia ? ` · ${esc(App.redEtiqueta(e.dependencia))}` : ""}</span>`;
+      const red = redEst(e);
+      let h = `<b>${esc(e.nombre)}</b> · ${esc(cod)}<br><span style="color:#5A6678">${esc(App.redEtiqueta(e.region) || "—")}${red ? ` · ${esc(red)}` : ""}</span>`;
       if (v === undefined) h += `<br>Cargando veredicto…`;
       else if (!v || v.sin_datos) h += `<br>Sin veredicto publicado`;
       else {
@@ -336,10 +337,12 @@
     return e ? `${e.codigo} · ${e.nombre} (${App.redEtiqueta(e.region)})` : "";
   }
 
+  const redEst = e => e ? (e.red_etiqueta || App.redEtiqueta(e.dependencia || e.red_id || "")) : "";
+
   function opcionesComboHTML(q) {
     const nq = normTxt(q);
     const visibles = S.ests.filter(e => !nq ||
-      normTxt(`${e.codigo} ${e.nombre} ${e.region} ${e.dependencia || ""}`).includes(nq));
+      normTxt(`${e.codigo} ${e.nombre} ${e.region} ${redEst(e)}`).includes(nq));
     if (!visibles.length) return `<div class="ml-combo-vacia">Sin coincidencias.</div>`;
     let html = "", region = null;
     for (const e of visibles) {
@@ -349,7 +352,7 @@
       }
       html += `<button type="button" class="ml-combo-op ${String(e.codigo) === String(S.sel) ? "activa" : ""}" data-cod="${esc(e.codigo)}">
         <span class="cod">${esc(e.codigo)}</span><span class="nom">${esc(e.nombre)}</span>
-        <span class="dep">${esc(App.redEtiqueta(e.dependencia || ""))}</span></button>`;
+        <span class="dep">${esc(redEst(e))}</span></button>`;
     }
     return html;
   }
@@ -456,7 +459,7 @@
     const fEsp = fechaISO(S.dia);              // fecha que el usuario está viendo
     const cab = `<div class="dec-verd-cab">
       <div class="dec-verd-est"><b>${esc(e.nombre || S.sel)}</b>
-        <span>${esc(S.sel)} · ${esc(App.redEtiqueta(e.region) || "—")}${e.dependencia ? ` · ${esc(App.redEtiqueta(e.dependencia))}` : ""}</span></div>
+        <span>${esc(S.sel)} · ${esc(App.redEtiqueta(e.region) || "—")}${redEst(e) ? ` · ${esc(redEst(e))}` : ""}</span></div>
       <div class="dec-verd-fecha">${esc(fmtFecha((v && v.fecha) || fEsp))}</div>
     </div>`;
     if (!v || v.sin_datos) {
