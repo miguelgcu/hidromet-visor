@@ -205,25 +205,25 @@ html[data-tema="oscuro"] .ml-tabla-modelos tbody tr { border-bottom-color: var(-
 .ml-serie-vacia .icono { font-size: 28px; color: var(--faint); }
 .ml-serie-vacia b { color: var(--ink-2); }
 .ml-serie-vacia span { max-width: 520px; font-size: 12px; }
-.ml-plot-scroll { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch;
-  overscroll-behavior-inline: contain; scrollbar-gutter: stable; }
+.ml-time-scroll { width: 100%; overflow-x: clip; }
+.ml-time-track { width: 100%; min-width: 0; }
 .ml-serie-plot { width: 100%; height: 380px; }
-/* Las etiquetas Plotly llevan un rectángulo SVG translúcido. La sombra difusa
-   separa la caja de barras/líneas sin ocultar el dato meteorológico de fondo. */
+/* Etiqueta mínima: solo el valor sobre un halo blanco tenue. Sin fecha, borde ni
+   sombra; la fecha completa permanece en el eje X y en el hover unificado. */
 .ml-serie-plot .annotation .bg {
-  fill: rgba(255,255,255,.95) !important;
-  /* Plotly recibe el color identificador de cada serie en bordercolor. */
-  stroke-width: 1.2px !important;
-  filter: drop-shadow(0 1px 4px rgba(18,32,55,.38));
+  fill: rgba(255,255,255,.82) !important;
+  stroke: none !important;
+  stroke-width: 0 !important;
+  filter: none !important;
 }
 .ml-serie-plot .annotation-text {
   fill: #071326 !important; font-weight: 700 !important;
 }
 html[data-tema="oscuro"] .ml-serie-plot .annotation .bg {
-  /* Mismo halo del modo claro: el fondo futuro no reduce su contraste. */
-  fill: rgba(255,255,255,.95) !important;
-  stroke-width: 1.2px !important;
-  filter: drop-shadow(0 1px 6px rgba(0,0,0,.92));
+  fill: rgba(255,255,255,.82) !important;
+  stroke: none !important;
+  stroke-width: 0 !important;
+  filter: none !important;
 }
 html[data-tema="oscuro"] .ml-serie-plot .annotation-text {
   fill: #071326 !important; font-weight: 750 !important;
@@ -282,14 +282,18 @@ html[data-tema="oscuro"] .ml-region-tabla td { border-top-color: var(--line-3); 
 /* Tabla de probabilidades por umbral (serie ML-NWP): TRANSPUESTA y a todo el ancho de la serie
    (una columna por fecha de pronóstico, una fila por umbral). Tokens → modo oscuro correcto. */
 .ml-pb-tit { margin: 12px 0 5px; font-weight: 600; font-size: 12px; color: var(--ink); }
-.ml-pb-tabla { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11px; }
-.ml-pb-tabla th, .ml-pb-tabla td { padding: 4px 5px; text-align: center; border-bottom: 1px solid var(--line-3); }
-.ml-pb-esq { text-align: left !important; color: var(--faint); font-weight: 600; width: 66px; }
+.ml-pb-wrap { width: 100%; overflow: visible; }
+.ml-pb-tabla { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 10.5px; }
+.ml-pb-tabla th, .ml-pb-tabla td { padding: 4px 2px; text-align: center; border-bottom: 1px solid var(--line-3); }
+.ml-pb-col-umbral { width: 58px; }
+.ml-pb-col-spacer { width: 20px; }
+.ml-pb-esq { text-align: left !important; color: var(--faint); font-weight: 600; }
 .ml-pb-f { color: var(--muted); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap;
   border-bottom: 1.5px solid var(--line) !important; }
 .ml-pb-u { text-align: left !important; color: var(--ink-2); font-weight: 600; white-space: nowrap;
   font-variant-numeric: tabular-nums; }
 .ml-pb-c { font-variant-numeric: tabular-nums; }
+.ml-pb-spacer { padding: 0 !important; border: 0 !important; background: transparent !important; }
 /* Borde punteado que marca el inicio del pronóstico (mismo criterio que la franja de la serie) */
 .ml-pb-hoy { border-left: 1.8px dotted #6B8CB4 !important; }
 .ml-pb-nota { font-size: 10.5px; color: var(--muted-2); margin-top: 6px; }
@@ -340,10 +344,17 @@ html[data-tema="oscuro"] .ml-region-tabla td { border-top-color: var(--line-3); 
   .ml-nav-botones { flex-wrap: wrap; }
   /* barra de color del mapa no desborda en pantallas estrechas */
   .ml-colorbar .barra, .ml-colorbar .ticks { width: min(260px, 72vw); }
-  /* v13 (pedido del dueño): serie ANCHA con scroll horizontal que ARRANCA en el
-     extremo DERECHO (lo más reciente + pronóstico siempre a la vista al entrar);
-     ejes fijos (el tacto desliza, no deforma) y popup unificado por fecha al tocar. */
-  .ml-serie-plot { height: 320px; min-width: 680px; }
+  /* Un solo carril móvil para gráfico + probabilidades. En escritorio el ancho
+     siempre es 100 % y no existe scroll horizontal. */
+  .ml-time-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch;
+    overscroll-behavior-inline: contain; scrollbar-gutter: stable; }
+  .ml-time-track { width: var(--ml-time-track-width, 720px);
+    min-width: var(--ml-time-track-width, 720px); }
+  .ml-serie-plot { width: 100%; min-width: 0; height: 320px; }
+  .ml-pb-wrap { overflow: visible; }
+  .ml-pb-tabla th.ml-pb-u, .ml-pb-tabla th.ml-pb-esq {
+    position: sticky; left: 0; z-index: 2; background: var(--surface);
+    box-shadow: inset -1px 0 0 var(--line-2); }
   /* tablas anchas → scroll horizontal (no hay envoltorio en el HTML). La tabla
      unificada .ml-uni y la de probabilidad .ml-pb-tabla quedan FUERA: ya tienen su
      envoltorio con columna sticky. */
@@ -370,23 +381,15 @@ html[data-tema="oscuro"] .ml-region-tabla td { border-top-color: var(--line-3); 
 .ml-tabla-modelos.ml-uni thead tr:last-child th:nth-child(10) { border-left: 1px solid var(--line-3); }
 .ml-uni-idx { display: inline-block; min-width: 17px; color: var(--muted-2); font: 600 10.5px var(--mono); }
 
-/* ===== v13: tabla de probabilidad por umbral — umbral FIJO + fechas deslizables =====
-   El envoltorio .ml-pb-wrap da el scroll-X (arranca a la derecha, mlnwp.js) y la
-   columna del umbral queda sticky con fondo sólido sobre las celdas coloreadas. */
-.ml-pb-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-/* nowrap en TODAS las celdas: la tabla crece más allá del envoltorio y se desliza
-   (sin esto las ~30 columnas de fecha se aplastaban unas sobre otras). */
-.ml-pb-wrap .ml-pb-tabla { width: max-content; min-width: 100%; }
+/* Las fechas conservan una línea y, en móvil, el carril exterior proporciona el
+   desplazamiento compartido. */
 .ml-pb-tabla th, .ml-pb-tabla td { white-space: nowrap; }
-.ml-pb-tabla th.ml-pb-u, .ml-pb-tabla th.ml-pb-esq {
-  position: sticky; left: 0; z-index: 2; background: var(--surface);
-  box-shadow: inset -1px 0 0 var(--line-2); }
 
 /* ===== v16: el DEDO desliza el carril de la serie AUNQUE arrastre sobre el gráfico.
    Plotly pone touch-action:none en su capa de arrastre y capturaba el gesto (el
    usuario no podía navegar); pan-x/pan-y devuelve el gesto al navegador y el TAP
    sigue llegando a Plotly (popup por fecha). ===== */
-.ml-plot-scroll .js-plotly-plot .draglayer,
-.ml-plot-scroll .js-plotly-plot .nsewdrag {
+.ml-time-scroll .js-plotly-plot .draglayer,
+.ml-time-scroll .js-plotly-plot .nsewdrag {
   touch-action: pan-x pan-y !important;
 }

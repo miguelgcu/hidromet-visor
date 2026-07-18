@@ -122,106 +122,27 @@
 /* ---------- panel de validación de desempeño ---------- */
 .ct-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 13px;
   padding: 18px; box-shadow: var(--shadow-card); }
-/* §P18: el mapa FFR aparte se retiró (las zonas van SOBRE las cartas de alerta de
-   lluvia); su validación vive en .ct-vp-bloque dentro del panel de desempeño. */
 .ct-panel-cab { display: flex; align-items: baseline; justify-content: space-between;
   flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
 .ct-panel-cab h3 { margin: 0; font-size: 15px; font-weight: 650; }
 .ct-panel-cab h3 .suave { font-weight: 500; color: var(--muted-2); font-size: 12.5px; }
 .ct-nota { font-size: 12px; color: var(--muted-2); line-height: 1.55; margin: 13px 0 0; }
 
-/* ---------- desenlaces (5 tarjetas de color) ---------- */
-.ct-desenlaces { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
-.ct-des { border-radius: 10px; padding: 13px; }
-.ct-des .pct { font: 700 22px var(--mono); }
-.ct-des .pct small { font-size: 13px; }
-.ct-des .et { font: 600 10.5px var(--fuente); color: var(--ink-2); margin-top: 4px; line-height: 1.3; }
-.ct-des .et span { color: var(--faint); font-weight: 500; }
-.ct-des.ok    { background: var(--ok-bg);    border: 1px solid var(--ok-bd); }
-.ct-des.ok .pct    { color: var(--ok); }
-.ct-des.danger{ background: var(--danger-bg); border: 1px solid var(--danger-bd); }
-.ct-des.danger .pct{ color: var(--danger); }
-.ct-des.warn  { background: var(--warn-bg);  border: 1px solid var(--warn-bd); }
-.ct-des.warn .pct  { color: var(--warn); }
-.ct-des.slate { background: var(--surface-3); border: 1px solid var(--line-2); }
+/* La validación pública de advertencias contiene únicamente evidencia causal y
+   dos gráficos de desempeño. No mezcla mapas ni resúmenes retrospectivos. */
+.ct-evidencia-causal { margin: 0 0 10px; padding: 10px 12px; border-radius: 9px;
+  border: 1px solid var(--line); background: var(--surface-2); }
+.ct-evidencia-causal.insuficiente { color: var(--warn); background: var(--warn-bg); border-color: var(--warn-bd); }
+.ct-evidencia-causal.suficiente { color: var(--ok); background: var(--ok-bg); border-color: var(--ok-bd); }
+.ct-desempeno-comparativo, .ct-desempeno-temporal { width: 100%; min-height: 180px; }
 
-/* ---------- desempeño por modelo (puntaje graduado + CSI/POD/HSS) ---------- */
-.ct-ranking-modelos { margin-top: 14px; }
-.ct-ranking-modelos:empty { display: none; }
-.rm-tit { font-size: 11px; color: var(--muted-2); margin-bottom: 7px; letter-spacing: .02em; }
-.rm-tabla { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-.rm-tabla th { text-align: right; font: 600 10.5px var(--mono); color: var(--muted-2);
-  padding: 5px 10px; border-bottom: 1px solid var(--line-2); }
-.rm-tabla th:first-child { text-align: left; }
-.rm-tabla td { text-align: right; padding: 5px 10px; border-bottom: 1px solid var(--line); color: var(--ink-2); }
-.rm-tabla td:first-child { text-align: left; font-weight: 600; color: var(--ink); }
-.rm-tabla tr.rm-best td { background: var(--ok-bg); color: var(--ink); }
-.rm-tabla tr.rm-best td:first-child { color: var(--ok); }
-.rm-tabla td.rm-alerta { color: var(--warn); font-weight: 700; }  /* FBI fuera de [0.7, 1.3]: sobre/sub-aviso */
-.rm-pie { font-size: 10px; color: var(--faint); margin-top: 7px; line-height: 1.5; }
-.ct-des.slate .pct { color: var(--slate); }
-
-/* ---------- titular del Puntaje global (resumen real, reconcilia con desenlaces) ---------- */
-.ct-puntaje-headline { display: flex; align-items: center; gap: 16px; margin: 4px 0 14px;
-  padding: 14px 16px; border-radius: 12px; background: var(--ok-bg); border: 1px solid var(--ok-bd); }
-.ct-puntaje-headline:empty { display: none; }
-.ct-puntaje-headline .pg-num { font: 800 34px var(--mono); color: var(--ok); line-height: 1; flex: none; }
-.ct-puntaje-headline .pg-num small { font-size: 16px; font-weight: 700; }
-.ct-puntaje-headline .pg-txt { font-size: 12px; color: var(--ink-2); line-height: 1.5; }
-/* color por VALOR del puntaje global (no siempre verde): medio=ámbar, bajo=rojo */
-.ct-puntaje-headline.pg-medio { background: var(--warn-bg); border-color: var(--warn-bd); }
-.ct-puntaje-headline.pg-medio .pg-num { color: var(--warn); }
-.ct-puntaje-headline.pg-bajo { background: var(--danger-bg); border-color: var(--danger-bd); }
-.ct-puntaje-headline.pg-bajo .pg-num { color: var(--danger); }
-
-/* ============== paneles de validación (subtítulos, stats, mapas de detalle) ============== */
-.ct-buscador { display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-  background: var(--surface); border: 1px solid var(--line); border-radius: 11px;
-  padding: 13px 15px; margin-bottom: 14px; box-shadow: var(--shadow-card); }
-.ct-buscador label { flex: 1; min-width: 280px; }
-.ct-buscador label .et { font: 600 10px var(--mono); letter-spacing: .08em; color: var(--faint);
-  text-transform: uppercase; margin-bottom: 6px; display: block; }
-.ct-buscador select { width: 100%; }
-.ct-buscador .conteo { font-size: 12px; color: var(--muted-2); }
-
-.ct-subtitulo { margin: 0 0 12px; font-size: 14px; font-weight: 650; color: var(--ink); }
-.ct-subtitulo .suave { font-weight: 500; color: var(--muted-2); font-size: 12px; }
-
-/* panel de detalle (cabecera/stats; .ct-det-mapa lo usa el FFR del programa) */
-.ct-det-cab { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
-.ct-det-cab h3 { margin: 0; font-size: 16px; font-weight: 650; }
-.ct-det-cab .meta { font-size: 12.5px; color: var(--muted-2); }
-.ct-det-intro { font-size: 13px; color: var(--ink-2); line-height: 1.6; margin: 8px 0 16px; max-width: 840px; }
-
-.ct-stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 11px; margin-bottom: 14px; }
-.ct-stat { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 13px; }
-.ct-stat .v { font: 700 22px var(--mono); color: var(--ink); }
-.ct-stat .v small { font-size: 12px; }
-.ct-stat .v.ok { color: var(--ok); } .ct-stat .v.warn { color: var(--warn); }
-.ct-stat .v.danger { color: var(--danger); }
-.ct-stat .k { font: 600 10px var(--mono); letter-spacing: .05em; color: var(--faint);
-  text-transform: uppercase; margin-top: 5px; }
-.ct-veredicto { font: 600 14px var(--mono); display: inline-block; padding: 2px 10px; border-radius: 999px; }
-.ct-veredicto.ok { color: var(--ok); background: var(--ok-bg); border: 1px solid var(--ok-bd); }
-.ct-veredicto.warn { color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn-bd); }
-.ct-veredicto.danger { color: var(--danger); background: var(--danger-bg); border: 1px solid var(--danger-bd); }
-
-.ct-det-cuerpo { display: grid; grid-template-columns: 1.3fr 1fr; gap: 14px; align-items: start; }
-.ct-det-mapa { margin: 0; border: 1px solid var(--line-2); border-radius: 10px; overflow: hidden;
-  background: linear-gradient(180deg, var(--sea-top), var(--sea-bottom)); }
-.ct-det-mapa img { width: 100%; height: auto; max-height: 500px; object-fit: contain; display: block; }
-
-.ct-lecturas { display: flex; flex-direction: column; gap: 9px; }
-.ct-lectura { display: flex; gap: 10px; padding: 9px 11px; background: var(--surface-2);
-  border: 1px solid var(--line); border-radius: 9px; }
-.ct-lectura .n { flex: none; width: 22px; height: 22px; border-radius: 6px; background: var(--blue-50);
-  color: var(--blue); font: 700 11px var(--mono); display: flex; align-items: center; justify-content: center; }
-.ct-lectura .tx { font-size: 12.5px; color: var(--ink-2); line-height: 1.45; }
-.ct-lectura.miss .n { background: var(--danger-bg); color: var(--danger); }
-.ct-lectura.final { background: var(--warn-bg); border-color: var(--warn-bd); }
-.ct-lectura.final .n { background: var(--warn); color: #fff; }
-.ct-lectura.final.ok { background: var(--ok-bg); border-color: var(--ok-bd); }
-.ct-lectura.final.ok .n { background: var(--ok); color: #fff; }
+/* Disponibilidad y acreditación son estados distintos: una capa calibrada puede
+   verse como diagnóstico sin participar todavía en el consenso operativo. */
+.ct-fuente-estado { display: inline-flex; align-items: center; margin-left: 7px; padding: 2px 6px;
+  border-radius: 999px; vertical-align: 2px; font: 700 9px/1.25 var(--fuente);
+  letter-spacing: .01em; white-space: nowrap; }
+.ct-fuente-estado.diagnostico { color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn-bd); }
+.ct-fuente-estado.acreditada { color: var(--ok); background: var(--ok-bg); border: 1px solid var(--ok-bd); }
 
 /* ---------- §P9: validación de hidroestimadores (pestaña Hidroestimadores) ---------- */
 .ct-hv { margin-top: 2px; }
@@ -242,23 +163,9 @@
 .ct-hv-met td.mono { color: var(--ink); font-weight: 600; }
 .ct-hv-met tr.activa td { background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .ct-hv-met tr:last-child td { border-bottom: 0; }
+.ct-hv-muestra { padding: 7px 5px 2px; color: var(--muted-2); font-size: 10px; }
 .ct-hv-fuente { color: var(--hv-color); font-weight: 750; }
 .ct-hv-fuente::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 50%; background: var(--hv-color); }
-
-/* ---------- §P18: bloques del panel de validación integrado (Advertencias) ---------- */
-.ct-vp-bloque { margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--line-2); }
-.ct-vp-cab { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
-.ct-vp-cab h4 { margin: 0; font-size: 13.5px; font-weight: 650; color: var(--ink); }
-.ct-vp-cab h4 .suave { font-weight: 500; color: var(--muted-2); font-size: 11.5px; }
-.ct-vp-ctrl { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
-.ct-vp-ctrl label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
-.ct-vp-ctrl .et { font: 600 10px var(--mono); letter-spacing: .06em; color: var(--faint); text-transform: uppercase; }
-.ct-vp-ctrl select { padding: 6px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); }
-/* botón SHP en línea (no flotante sobre un mapa): mismo look que .ct-dl-shp */
-.ct-dl.ct-dl-inline { position: static; height: 30px; align-self: flex-end; }
-.ct-vp-img { text-align: center; min-height: 60px; border: 1px solid var(--line-2); border-radius: 10px;
-  background: linear-gradient(180deg, var(--sea-top), var(--sea-bottom)); overflow: hidden; }
-.ct-vp-img img { width: 100%; height: auto; max-height: 560px; object-fit: contain; display: block; }
 
 /* ---------- editor de umbrales (modal) ---------- */
 .ct-umbrales-tabla { width: 100%; border-collapse: collapse; font-size: 12.5px; }
@@ -270,8 +177,7 @@
 
 /* ---------- responsive (área de trabajo estrecha) ---------- */
 @media (max-width: 980px) {
-  .ct-grid, .ct-det-cuerpo { grid-template-columns: 1fr; }
-  .ct-desenlaces, .ct-stats { grid-template-columns: repeat(2, 1fr); }
+  .ct-grid { grid-template-columns: 1fr; }
   .ct-hv .ct-panel-cab { align-items: stretch; }
   .ct-hv-controles { margin-left: 0; flex-wrap: wrap; }
   .ct-hv-controles label:first-child { min-width: min(100%, 360px); flex: 1; }
@@ -283,24 +189,17 @@
   /* cabecera propia a columna */
   .ct-cabecera { flex-direction: column; align-items: flex-start; gap: 10px; }
   .ct-cabecera h1 { font-size: 19px; }
-  /* barras de control / buscador: menos padding, sin divisor vertical */
-  .ct-barra, .ct-barra.cols, .ct-buscador { padding: 10px 12px; gap: 9px 12px; }
+  /* barras de control: menos padding, sin divisor vertical */
+  .ct-barra, .ct-barra.cols { padding: 10px 12px; gap: 9px 12px; }
   .ct-div { display: none; }
   .ct-derecha, .ct-capas { margin-left: 0; }
   .ct-inst-nav, .ct-derecha { flex-wrap: wrap; }
-  /* el buscador de advertencias deja de forzar 280px */
-  .ct-buscador label { min-width: 0; flex: 1 1 100%; }
   /* controles de instante cómodos al tacto (40px = no revertir el target de base.css) */
   .ct-nav { width: 40px; height: 40px; }
-  /* grillas de cartas → 1 columna; desenlaces/stats → 2 */
+  /* grillas de cartas → 1 columna */
   .ct-grid, .ct-grid.cuencas { grid-template-columns: 1fr; }
-  .ct-desenlaces, .ct-stats { grid-template-columns: repeat(2, 1fr); }
   /* paneles y tarjetas con menos padding */
   .ct-panel { padding: 14px; }
-  .ct-puntaje-headline { flex-wrap: wrap; gap: 10px; padding: 12px 13px; }
-  .ct-puntaje-headline .pg-num { font-size: 28px; }
   /* tabla de umbrales (modal) con scroll horizontal */
   .ct-umbrales-tabla { display: block; overflow-x: auto; }
-  /* tablas de ranking por modelo y de validación FFR: scroll horizontal (8 col no caben) */
-  .rm-tabla { display: block; overflow-x: auto; white-space: nowrap; }
 }

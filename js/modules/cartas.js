@@ -5,8 +5,7 @@
    Alertas" del diseño (Diseño/HANDOFF/diseno/HidroMet.dc.html) con DATOS REALES:
    · /cartas/productos            → árbol tipo→variable→período→{fuentes,instantes}
    · /cartas/carta.png            → imagen real (matplotlib) por archivo+capa+record
-   · /cartas/alertas_programa     → desenlaces (5 lecturas) de la validación
-   · /cartas/alertas_programa/fechas + /validacion.png
+   · /cartas/alertas_programa     → métricas y series de desempeño causal
    · /cartas/umbrales_fijos       → editor Fijos/ZPH (GET/POST)
    · /cartas/actualizar           → tarea de regeneración (botón oscuro)
    Las cartas NO se dibujan a mano: son <img src="/api/cartas/carta.png?...">.
@@ -98,18 +97,6 @@
     { id: "galapagos", et: "Galápagos", on: 1 }, { id: "interpolar", et: "Interpolar", on: 1 },
     { id: "isolineas", et: "Isolíneas", on: 1 }, { id: "grilla", et: "Grilla", on: 1 },
     { id: "estaciones", et: "Estaciones", on: 1 },
-  ];
-
-  // Desenlaces de la validación de alertas (clave del backend → tono de tarjeta).
-  // Los 4 primeros son sobre CASOS ACTIVOS (evento o alerta); el último es la línea
-  // base sobre el total. "Acierto exacto" = nivel justo (estricto); el resumen real
-  // del desempeño es el Puntaje graduado del titular.
-  const DESENLACES = [
-    { clave: "aciertos",           etiqueta: "Acierto exacto",     tono: "ok",     nota: "al nivel justo" },
-    { clave: "no_alertados",       etiqueta: "Evento no alertado", tono: "danger", nota: "no detectado" },
-    { clave: "insuficientes",      etiqueta: "Nivel insuficiente", tono: "warn",   nota: "subestimado" },
-    { clave: "sobredimensionadas", etiqueta: "Sobredimensionada",  tono: "warn",   nota: "sobre-aviso" },
-    { clave: "correcto_sin_alerta",etiqueta: "Correcto sin alerta",tono: "slate",  nota: "días sin evento" },
   ];
 
   const fmtNum = (n) => (n == null ? "—" : Number(n).toLocaleString("es-EC"));
@@ -1214,18 +1201,24 @@
 
     // Grilla 2×2: hasta 4 fuentes ÚNICAS del período (cada una con su capa/archivo).
     const cartas = fuentes4.map(f => {
+      const rotuloFuente = tipoId === "hidro"
+        ? ({ PDIR: "PERSIANN-PDIR", CCS: "PERSIANN-CCS" }[f.fuente] || f.fuente)
+        : f.fuente;
+      const metaFuente = tipoId === "hidro" && f.fuente === "CCS"
+        ? "Diagnóstico · fuera del consenso"
+        : figcap;
       const descriptor = descriptorCarta(p, inst, f);
       if (!descriptor) {
-        return `<figure class="ct-carta"><div class="ct-carta-cab"><span class="titulo">${esc(f.fuente)}</span>
-          <span class="meta">${esc(figcap)}</span></div>
+        return `<figure class="ct-carta"><div class="ct-carta-cab"><span class="titulo">${esc(rotuloFuente)}</span>
+          <span class="meta">${esc(metaFuente)}</span></div>
           <div class="ct-lienzo"><div class="fallo"><div class="icono">🗺️</div>Sin dato en este instante</div></div></figure>`;
       }
       const params = paramsDescriptor(descriptor);
       // §P3: el nombre de descarga lleva la FECHA del instante (fuente_fecha_producto).
       return `<figure class="ct-carta">
-        <div class="ct-carta-cab"><span class="titulo">${esc(f.fuente)}</span>
-          <span class="meta">${esc(figcap)}</span></div>
-        ${lienzoCarta(params, f.fuente + " · " + fechaLocalISO(inst.inicio) + " · " + figcap)}
+        <div class="ct-carta-cab"><span class="titulo">${esc(rotuloFuente)}</span>
+          <span class="meta">${esc(metaFuente)}</span></div>
+        ${lienzoCarta(params, rotuloFuente + " · " + fechaLocalISO(inst.inicio) + " · " + figcap)}
         <div class="ct-ley-card" data-rol="ley-card"></div>
       </figure>`;
     }).join("");
@@ -1271,9 +1264,10 @@
           </div>
         </div>
         <div class="ct-hv-grid" data-rol="hv-grid"><span class="suave" style="font-size:12px">Cargando validación…</span></div>
-        <p class="ct-nota">La serie y las métricas usan la misma ventana física <b>07:00–07:00</b> y todos los pares
-          estación×día disponibles. <b>CCS está en sombra</b>: se descarga y evalúa, pero todavía no participa en el
-          consenso ni en alertas. GMAP no aparece aquí porque es lluvia media areal por cuenca, no un píxel independiente.</p>
+        <p class="ct-nota">La serie y las métricas usan la misma ventana física <b>07:00–07:00</b> y la intersección exacta
+          de pares estación×día común a todas las fuentes. <b>PERSIANN-CCS es diagnóstico no acreditado</b>: su mapa se
+          puede inspeccionar, pero todavía no participa en el consenso ni en alertas. GMAP no aparece porque es lluvia
+          media areal por cuenca, no un píxel independiente.</p>
       </div>`;
   }
   const _hvFmt = (v, suf = "") => (v == null ? "—" : (+v).toLocaleString("es-EC", { maximumFractionDigits: 2 }) + suf);
@@ -1321,9 +1315,10 @@
     const filas = prods.flatMap(p => ventanas.map(ventana => {
       const m = (p.metricas_ventanas || {})[String(ventana)];
       const d = (m && m.deteccion) || {};
-      const estado = p.fuente === "CCS" ? "Sombra" : ((p.motor || {}).apto_ponderacion ? "Apto" : "Muestra insuficiente");
+      const estado = p.fuente === "CCS" ? "Diagnóstico" : ((p.motor || {}).apto_ponderacion ? "Apto" : "Muestra insuficiente");
+      const rotulo = ({ PDIR: "PERSIANN-PDIR", CCS: "PERSIANN-CCS" }[p.fuente] || p.fuente);
       return `<tr class="${ventana === _hvEstado.dias ? "activa" : ""}">
-        <td><span class="ct-hv-fuente" style="--hv-color:${esc(HV_COLOR[p.fuente] || "#4c78a8")}">${esc(p.fuente)}</span></td>
+        <td><span class="ct-hv-fuente" style="--hv-color:${esc(HV_COLOR[p.fuente] || "#4c78a8")}">${esc(rotulo)}</span></td>
         <td class="mono">${ventana} d</td><td class="mono">${_hvFmt(m && m.mae)}</td>
         <td class="mono">${_hvFmt(m && m.rmse)}</td><td class="mono">${_hvFmt(m && m.bias)}</td>
         <td class="mono">${_hvFmt(m && m.corr)}</td>
@@ -1331,10 +1326,12 @@
         <td class="mono">${_hvFmt(d.csi)}</td><td class="mono">${m ? fmtNum(m.n) : "—"}</td>
         <td class="mono">${m ? fmtNum(m.dias) : "—"}</td><td>${esc(estado)}</td></tr>`;
     }));
+    const comun = datos.muestra_comun || {};
     host.innerHTML = `<div class="ct-hv-plot" data-hv-plot="comparacion"></div>
       <div class="ct-hv-tabla-wrap"><table class="ct-hv-met"><thead><tr>
         <th>Fuente</th><th>Ventana</th><th>MAE</th><th>RMSE</th><th>Sesgo</th><th>r</th><th>POD</th><th>FAR</th><th>CSI</th><th>Pares</th><th>Días</th><th>Estado</th>
-      </tr></thead><tbody>${filas.join("")}</tbody></table></div>`;
+      </tr></thead><tbody>${filas.join("")}</tbody></table>
+      <div class="ct-hv-muestra">Muestra común: ${fmtNum(comun.pares || 0)} pares estación×día · ${(comun.fuentes || []).map(esc).join(" / ")}</div></div>`;
     if (!window.Plotly) return;
     const oscuro = temaOscuro();
     const tinta = oscuro ? "#9DAABF" : "#58667A", rejilla = oscuro ? "rgba(223,230,247,.10)" : "rgba(70,89,122,.12)";
@@ -1354,11 +1351,12 @@
     prods.forEach(p => {
       const s = p.serie || {};
       const col = HV_COLOR[p.fuente] || "#4c78a8";
-      trazas.push({ type: "scatter", mode: "lines+markers", name: p.fuente,
+      const rotulo = ({ PDIR: "PERSIANN-PDIR", CCS: "PERSIANN-CCS" }[p.fuente] || p.fuente);
+      trazas.push({ type: "scatter", mode: "lines+markers", name: rotulo,
         x: s.fechas, y: s.estimado, connectgaps: false,
         line: { color: col, width: 2.2, dash: p.fuente === "CCS" ? "dot" : "solid" },
         marker: { size: 5, color: col }, customdata: s.n_pares,
-        hovertemplate: "%{x} · " + p.fuente + " <b>%{y:.2f} mm</b> · %{customdata} pares<extra></extra>" });
+        hovertemplate: "%{x} · " + rotulo + " <b>%{y:.2f} mm</b> · %{customdata} pares comunes<extra></extra>" });
     });
     Plotly.newPlot(div, trazas, {
       height: 325, margin: { l: 42, r: 10, t: 12, b: 48 },
@@ -1731,17 +1729,22 @@
     // Grilla: una carta por fuente PRESENTE (Consenso + pronóstico + CALIBRADOS),
     // ordenada según ALERTA_FUENTES; oculta las capas meta (Confianza/Referencia).
     let _fdisp = p ? (p.fuentes || []).map(f => f.fuente).filter(s => !ALERTA_FUENTE_OCULTA.has(s)) : [];
-    // En el visor estático el árbol base corresponde al modo fijo, pero ZPH
-    // puede acreditar menos fuentes. El exportador adjunta el inventario real
-    // de cada modo; ocultar las excluidas evita tarjetas vacías o engañosas.
+    // Cada modo adjunta su inventario REAL de capas. Una calibrada no acreditada
+    // permanece visible como diagnóstico; disponibilidad no implica consenso.
     const _porModo = E.productos && E.productos.fuentes_alerta_por_modo;
     const _permitidas = _porModo && _porModo[a.modo] && _porModo[a.modo][a.varId];
     if (window.HIDROMET_VISOR && Array.isArray(_permitidas))
       _fdisp = _fdisp.filter(s => _permitidas.includes(s));
     let _lista = ALERTA_FUENTES.filter(s => _fdisp.includes(s)).concat(_fdisp.filter(s => !ALERTA_FUENTES.includes(s)));
     if (!_lista.length) _lista = ALERTA_FUENTES.slice(0, 4);
+    const _estados = (((E.productos || {}).alertas_meta || {}).estados_fuente || {})[a.varId] || {};
     const cartas = _lista.map(fuente => {
       const rotulo = ALERTA_FUENTE_ROTULO[fuente] || fuente;
+      const estado = _estados[fuente] || {};
+      const badge = estado.estado === "diagnostica_no_acreditada"
+        ? `<span class="ct-fuente-estado diagnostico" title="${esc(estado.motivo || "Muestra causal insuficiente")}">Diagnóstico · no acreditado</span>`
+        : estado.estado === "acreditada"
+          ? `<span class="ct-fuente-estado acreditada">Acreditada</span>` : "";
       // localizar la fuente real dentro del período (los nombres del árbol son
       // CONSENSO/GFS/ICON/IFS, "IFS" se rotula "IFS HRES").
       let f = null, descriptor = null;
@@ -1753,8 +1756,8 @@
       const meta = `Riesgo 24 h${inst ? " · " + esc(inst.rango || inst.etiqueta) : ""}`;
       if (!f || !descriptor) {
         return `<figure class="ct-carta">
-          <div class="ct-carta-cab"><span class="titulo">${esc(rotulo)}</span><span class="meta">${meta}</span></div>
-          <div class="ct-lienzo"><div class="fallo"><div class="icono">⚠️</div>Sin alerta para ${esc(rotulo)}</div></div></figure>`;
+          <div class="ct-carta-cab"><span class="titulo">${esc(rotulo)}${badge}</span><span class="meta">${meta}</span></div>
+          <div class="ct-lienzo"><div class="fallo"><div class="icono">⚠️</div>Sin producto disponible para ${esc(rotulo)}</div></div></figure>`;
       }
       const params = paramsDescriptor(descriptor);
       // VISOR en modo ZPH: pedir la variante congelada &modo=zph (solo capas de
@@ -1764,14 +1767,14 @@
       // (FFR) se dibujan SOBRE la carta si el FFR cubre la fecha de este instante.
       if (a.varId === "alerta_lluvia" && inst) params.ffr = fechaLocalISO(inst.inicio);
       return `<figure class="ct-carta">
-        <div class="ct-carta-cab"><span class="titulo">${esc(rotulo)}</span><span class="meta">${meta}</span></div>
+        <div class="ct-carta-cab"><span class="titulo">${esc(rotulo)}${badge}</span><span class="meta">${meta}</span></div>
         ${lienzoCarta(params, "Alerta " + rotulo + " · " + fechaLocalISO(inst.inicio))}
         <div class="ct-ley-card" data-rol="ley-card"></div>
       </figure>`;
     }).join("");
 
     const sinArbol = tieneArbol ? "" :
-      `<div class="vacio" style="padding:24px"><span class="suave">No hay alertas vigentes en disco; el panel de desempeño usa la validación histórica del programa.</span></div>`;
+      `<div class="vacio" style="padding:24px"><span class="suave">No hay alertas vigentes en disco; el panel muestra el desempeño causal de emisiones realmente realizadas.</span></div>`;
 
     // §P18a: la nota del overlay FFR SOLO aplica a precipitación.
     const esLluvia = a.varId === "alerta_lluvia";
@@ -1802,65 +1805,12 @@
       ${notaFFR}
       <div class="ct-panel" id="ct-desempeno">
         <div class="ct-panel-cab">
-          <h3>Validación del programa <span class="suave" data-rol="dsub">· cargando…</span></h3>
+          <h3>Desempeño causal de las advertencias <span class="suave" data-rol="dsub">· cargando…</span></h3>
         </div>
-        <div class="ct-puntaje-headline" data-rol="puntaje-headline"></div>
-        <div class="ct-desenlaces" data-rol="desenlaces">
-          ${DESENLACES.map(d => `<div class="ct-des ${d.tono}"><div class="pct mono">—</div>
-            <div class="et">${esc(d.etiqueta)}<br><span>—</span></div></div>`).join("")}
-        </div>
-        <div class="ct-ranking-modelos" data-rol="ranking-modelos"></div>
-        <div class="ct-serie" data-rol="serie"></div>
-        ${esLluvia ? htmlCrucePrograma() : ""}
-        ${esLluvia ? htmlFFRBloque() : ""}
-        <p class="ct-nota" data-rol="dnota">Las alertas se construyen por <b>consenso de modelos</b> y traen su desempeño documentado contra lo observado (ventana 24 h, 7-7).</p>
-      </div>`;
-  }
-
-  /* §P18b — bloque CRUCE POR ÁREA: la intensidad se juzga con estaciones (tabla de
-     arriba); el ÁREA de lluvia se juzga contra el hidroestimador 7-7 observado.
-     Reusa el endpoint /alertas_programa/validacion.png (fondo hidro + zonas del
-     programa + estaciones por las 5 lecturas), que existía sin consumidor en la UI. */
-  function htmlCrucePrograma() {
-    const opts = ALERTA_FUENTES.map(f =>
-      `<option value="${esc(f)}">${esc(ALERTA_FUENTE_ROTULO[f] || f)}</option>`).join("");
-    return `
-      <div class="ct-vp-bloque" data-rol="cruce-bloque">
-        <div class="ct-vp-cab">
-          <h4>Área de lluvia — cruce alerta ↔ hidroestimador 7-7 <span class="suave">(verdad espacial)</span></h4>
-          <div class="ct-vp-ctrl">
-            <label><span class="et">Versión</span><select data-rol="cx-fuente">${opts}</select></label>
-            <label><span class="et">Fecha</span><select data-rol="cx-fecha"></select></label>
-            <label><span class="et">Fondo</span><select data-rol="cx-prod"><option value="IMERG">IMERG</option></select></label>
-          </div>
-        </div>
-        <div class="ct-vp-img" data-rol="cx-img"><span class="suave" style="font-size:12px">Cargando fechas con histórico…</span></div>
-      </div>`;
-  }
-
-  /* §P18c — bloque FFR ↔ SNGR: el indicador de susceptibilidad no tiene carta
-     aparte (va SOBRE las cartas de lluvia); aquí queda su VALIDACIÓN contra los
-     desbordamientos/crecidas observados (eventos SNGR) + la descarga SHP oficial. */
-  function htmlFFRBloque() {
-    return `
-      <div class="ct-vp-bloque" data-rol="ffr-bloque">
-        <div class="ct-vp-cab">
-          <h4>Indicador FFR de susceptibilidad ↔ eventos SNGR <span class="suave">(evaluación exploratoria)</span></h4>
-          <div class="ct-vp-ctrl">
-            <label><span class="et">Fecha</span><select data-rol="ffr-fecha"><option value="-1">vigente</option></select></label>
-            <label><span class="et">Buffer</span>
-              <select data-rol="ffr-buffer">
-                <option value="ninguno">Sin buffer (cuencas exactas)</option>
-                <option value="cuencas">Margen sobre cuencas</option>
-                <option value="rios">Corredor fluvial</option>
-                <option value="ambos" selected>Ambos</option>
-              </select></label>
-            <a class="ct-dl ct-dl-shp ct-dl-inline" role="button" tabindex="0" data-rol="ffr-shp"
-               title="Descargar shapefile de la zona (.shp + .qml QGIS)" aria-label="Descargar shapefile FFR">SHP</a>
-          </div>
-        </div>
-        <div class="ct-ffr-valida" data-rol="ffr-valida"></div>
-        <div class="ct-ffr-serie" data-rol="ffr-serie"></div>
+        <p class="ct-nota ct-evidencia-causal" data-rol="evidencia-causal">Verificando emisiones previas contra observaciones de la misma ventana…</p>
+        <div class="ct-serie ct-desempeno-comparativo" data-rol="comparativa"></div>
+        <div class="ct-serie ct-desempeno-temporal" data-rol="serie"></div>
+        <p class="ct-nota" data-rol="dnota"></p>
       </div>`;
   }
 
@@ -1868,8 +1818,7 @@
     const a = E.alerta;
     const re = () => pintarCuerpo();
     // No llamamos cargarDesempeno() aquí: re()→pintarCuerpo()→conectarAlertas ya
-    // lo invoca (línea final). Sólo encadenamos cargarFechas() (otro endpoint).
-    cont.querySelector('[data-rol="avar"]').onchange = (e) => { a.varId = e.target.value; a.inst = null; re(); cargarFechas(); };
+    cont.querySelector('[data-rol="avar"]').onchange = (e) => { a.varId = e.target.value; a.inst = null; re(); };
     cont.querySelectorAll('[data-rol="umbral"] button').forEach(b =>
       b.onclick = async () => {
         a.modo = b.dataset.modo;
@@ -1883,7 +1832,7 @@
           catch (e) { App.aviso(e.message, "error"); }
         }
         limpiarCacheDatos();   // §P14: el swap fija/zph cambió el .nc → la caché de mallas caduca
-        re(); cargarFechas();
+        re();
       });
     cont.querySelector('[data-rol="editar"]').onclick = abrirEditorUmbrales;
 
@@ -1896,12 +1845,9 @@
     cont.querySelectorAll('.ct-toggle[data-capa]').forEach(b => b.onclick = () => { E.capas[b.dataset.capa] = !E.capas[b.dataset.capa]; re(); });
 
     cargarDesempeno();
-    conectarCruce(cont);      // §P18b: cruce por área (solo precip; el bloque no existe en temp)
-    conectarFFRBloque(cont);  // §P18c: validación FFR ↔ SNGR (solo precip)
   }
 
-  // §P18b — datos de desempeño CACHEADOS por variable+modo (una petición por clave);
-  // los usan cargarDesempeno (tarjetas/ranking/serie) y conectarCruce (fechas_cruce).
+  // Datos de desempeño causal cacheados por variable+modo.
   async function datosDesempeno() {
     const a = E.alerta;
     const varVal = (VAR_ALERTA.find(x => x.id === a.varId) || VAR_ALERTA[0]).val;
@@ -1910,110 +1856,6 @@
     const r = await App.api("/cartas/alertas_programa?" + qs({ variable: varVal, modo: a.modo }));
     a._desClave = clave; a._desDatos = r;
     return r;
-  }
-
-  // Validación de desempeño real del programa (5 desenlaces de consenso).
-  async function cargarDesempeno() {
-    const panel = document.getElementById("ct-desempeno");
-    if (!panel) return;
-    const a = E.alerta;
-    // El desempeño SÓLO depende de variable+modo (no del instante ni de los
-    // toggles). datosDesempeno() cachea la respuesta por esa clave: cada toggle/
-    // navegación re-pinta desde caché sin repetir la petición. La caché se
-    // invalida tras una actualización (recargar() la limpia).
-    try {
-      const r = await datosDesempeno();
-      if (!document.getElementById("ct-desempeno")) return;
-      const porClave = {};
-      (r.lecturas || []).forEach(l => { porClave[l.clave] = l; });
-      const cont = panel.querySelector('[data-rol="desenlaces"]');
-      cont.innerHTML = DESENLACES.map(d => {
-        const l = porClave[d.clave] || {};
-        const pct = l.pct == null ? "—" : `${fmtPct(l.pct)}<small> %</small>`;
-        const n = l.n == null ? "—" : `${fmtNum(l.n)} ${d.nota}`;
-        return `<div class="ct-des ${d.tono}"><div class="pct mono">${pct}</div>
-          <div class="et">${esc(d.etiqueta)}<br><span>${esc(n)}</span></div></div>`;
-      }).join("");
-      // Tabla de DESEMPEÑO POR MODELO: puntaje graduado + habilidad (CSI/POD/HSS).
-      // Mayor CSI = mejor (balancea fallos y falsas alarmas). Intensidad = estación.
-      const rk = panel.querySelector('[data-rol="ranking-modelos"]');
-      const filas = (r.filas || []).filter(f => f.tot);
-      if (rk && filas.length) {
-        let mejor = 0;
-        filas.forEach((f, i) => { if ((f.tot.CSI ?? -1) > (filas[mejor].tot.CSI ?? -1)) mejor = i; });
-        const fmt = (v, d = 2) => (v == null ? "—" : (+v).toFixed(d));
-        rk.innerHTML = `
-          <div class="rm-tit mono">Desempeño por modelo · habilidad de alerta (mayor CSI = mejor)</div>
-          <table class="rm-tabla"><thead><tr>
-            <th>Modelo</th><th>Puntaje</th><th>CSI</th><th>POD</th><th>FAR</th><th>FBI</th><th>HSS</th><th>Fechas</th>
-          </tr></thead><tbody>${filas.map((f, i) => {
-            const t = f.tot;
-            const fbiCls = (t.FBI == null) ? "" : (t.FBI > 1.3 || t.FBI < 0.7 ? " rm-alerta" : "");
-            return `<tr${i === mejor ? ' class="rm-best"' : ""}><td>${esc(f.fuente)}${i === mejor ? " ★" : ""}</td>
-              <td class="mono">${t.puntaje_pct == null ? "—" : fmtPct(t.puntaje_pct) + "%"}</td>
-              <td class="mono">${fmt(t.CSI)}</td><td class="mono">${fmt(t.POD)}</td>
-              <td class="mono">${fmt(t.FAR)}</td><td class="mono${fbiCls}">${fmt(t.FBI)}</td>
-              <td class="mono">${fmt(t.HSS)}</td><td class="mono suave">${fmtNum(t.n_eval || 0)}</td></tr>`;
-          }).join("")}</tbody></table>
-          <div class="rm-pie mono">Mayor CSI = mejor (balancea detección y falsas alarmas). <b>POD</b> = detección de eventos · <b>FAR</b> = fracción de alertas que no ocurrieron (menor mejor) · <b>FBI</b> = sesgo de frecuencia (1 ideal; &gt;1 sobre-avisa, &lt;1 sub-avisa) · <b>HSS</b> = habilidad frente al azar · <b>Puntaje</b> = calificación graduada. Ojo con <b>Fechas</b> pequeñas: pocos casos = ranking poco fiable.</div>`;
-      } else if (rk) { rk.innerHTML = ""; }
-      // §serie: GRÁFICO TEMPORAL de habilidad (CSI) por modelo — ver cuál va mejor en el tiempo.
-      const sdiv = panel.querySelector('[data-rol="serie"]');
-      const serie = (r.serie || []).filter(s => (s.puntos || []).some(p => p.CSI != null));
-      if (sdiv && serie.length && window.Plotly) {
-        const oscuro = !!(App.tema && App.tema() === "oscuro");
-        const COL = { CONSENSO: "#e45756", GFS: "#4c78a8", ICON: "#f58518", IFS: "#54a24b",
-                      BIAS: "#b279a2", RF: "#9d755d", GB: "#72b7b2", CAT: "#eeca3b", LSTM: "#bab0ac" };
-        const trazas = serie.map(s => ({
-          type: "scatter", mode: "lines+markers", name: ALERTA_FUENTE_ROTULO[s.fuente] || s.fuente,
-          x: s.puntos.map(p => p.fecha), y: s.puntos.map(p => p.CSI), connectgaps: true, marker: { size: 4 },
-          line: { width: s.fuente === "CONSENSO" ? 3 : 1.4, color: COL[s.fuente] || "#888" },
-          hovertemplate: `%{x} · CSI %{y:.2f}<extra>${esc(ALERTA_FUENTE_ROTULO[s.fuente] || s.fuente)}</extra>`,
-        }));
-        const tinta = oscuro ? "#9DAABF" : "#58667A", rejilla = oscuro ? "rgba(223,230,247,.10)" : "rgba(70,89,122,.12)";
-        Plotly.react(sdiv, trazas, {
-          height: 250, margin: { l: 38, r: 12, t: 28, b: 42 }, paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
-          title: { text: "Habilidad (CSI) por fecha — mayor es mejor", font: { size: 12, color: tinta } },
-          showlegend: true, legend: { orientation: "h", y: -0.22, font: { size: 10, color: tinta } },
-          xaxis: { type: "category", nticks: 8, tickfont: { size: 9, color: tinta }, showgrid: false },
-          yaxis: { range: [0, 1], tickfont: { size: 9, color: tinta }, gridcolor: rejilla, zeroline: false },
-          font: { color: tinta },
-        }, { displayModeBar: false, responsive: true });
-      } else if (sdiv) { sdiv.innerHTML = ""; }
-      const ph = panel.querySelector('[data-rol="puntaje-headline"]');
-      if (ph) {
-        const pg = r.puntaje_global;
-        // color por VALOR (no siempre verde): ≥70 bueno · 45–70 medio · <45 flojo
-        const tono = (pg == null) ? "" : (pg >= 70 ? " pg-alto" : (pg >= 45 ? " pg-medio" : " pg-bajo"));
-        ph.className = "ct-puntaje-headline" + tono;
-        ph.innerHTML = (pg == null) ? "" :
-          `<div class="pg-num mono">${fmtPct(pg)}<small>%</small></div>
-           <div class="pg-txt"><b>Puntaje global del consenso</b> — calificación graduada, el resumen real del desempeño.
-           Los desenlaces de abajo se miden sobre <b>${fmtNum(r.activos || 0)} casos con evento o alerta</b>; aparte,
-           <b>${fmtNum(r.correcto_sin_alerta_n || 0)}</b> días sin evento se resolvieron correctamente sin alerta.</div>`;
-      }
-      const varEt = (VAR_ALERTA.find(x => x.id === a.varId) || VAR_ALERTA[0]).etiqueta.toLowerCase();
-      const fuente = r.fuente_lecturas || "consenso";
-      panel.querySelector('[data-rol="dsub"]').textContent =
-        `· ${varEt} · ${fuente} · ${fmtNum(r.n_eval || 0)} evaluaciones (estación × día)`;
-      // Nota canónica del MÉTODO (una sola vez; la base 'casos activos' va en el titular).
-      panel.querySelector('[data-rol="dnota"]').innerHTML =
-        `<b>Acierto exacto</b> = el nivel emitido coincide justo con el observado (estricto); el <b>Puntaje</b> da crédito parcial ` +
-        `(pasarse penaliza menos que quedarse corto). Intensidad por <b>estación</b>, área por <b>hidroestimador</b>; ventana 24 h (7-7).`;
-    } catch (e) {
-      const sub = panel.querySelector('[data-rol="dsub"]');
-      if (sub) sub.textContent = "· sin datos de validación";
-    }
-  }
-
-  // Refresca los instantes de Alertas con SOLO las fechas que emitieron alerta.
-  async function cargarFechas() {
-    const a = E.alerta;
-    const varVal = (VAR_ALERTA.find(x => x.id === a.varId) || VAR_ALERTA[0]).val;
-    try {
-      const r = await App.api("/cartas/alertas_programa/fechas?" + qs({ variable: varVal, modo: a.modo }));
-      a.fechasEmitidas = r.fechas || [];
-    } catch (e) { /* el navegador sigue usando los instantes del árbol */ }
   }
 
   /* ============================================================
@@ -2107,216 +1949,6 @@
     };
   }
 
-  /* §P18b — CRUCE POR ÁREA: imagen del cruce real (fondo hidro 7-7 + zonas del
-     programa + estaciones por lectura). Selectores: versión (consenso/modelos/
-     calibrados) · fecha con histórico · producto de fondo (IMERG/PDIR/consenso). */
-  function conectarCruce(cont) {
-    const bloque = cont.querySelector('[data-rol="cruce-bloque"]');
-    if (!bloque) return;
-    const a = E.alerta;
-    const selFu = bloque.querySelector('[data-rol="cx-fuente"]');
-    const selFe = bloque.querySelector('[data-rol="cx-fecha"]');
-    const selPr = bloque.querySelector('[data-rol="cx-prod"]');
-    const host = bloque.querySelector('[data-rol="cx-img"]');
-    const cargarProductos = async () => {
-      // hidroestimadores CON dato 7-7 para la fecha elegida + "Consenso multifuente".
-      if (!selFe.value) return;
-      try {
-        const r = await App.api("/cartas/hidroestimador/opciones?" + qs({ fecha: selFe.value }));
-        const ops = (r.opciones && r.opciones.length) ? r.opciones : [{ id: "IMERG", etiqueta: "IMERG" }];
-        const previo = selPr.value;
-        selPr.innerHTML = ops.map(o => `<option value="${esc(o.id)}">${esc(o.etiqueta)}</option>`).join("");
-        if ([...selPr.options].some(o => o.value === previo)) selPr.value = previo;
-        else if ([...selPr.options].some(o => o.value === "consenso")) selPr.value = "consenso";
-      } catch (e) { /* se queda IMERG */ }
-    };
-    let solicitudCruce = 0;
-    const pintar = () => {
-      const solicitud = ++solicitudCruce;
-      if (!selFe.value) {
-        host.innerHTML = `<span class="suave" style="font-size:12px">Aún no hay fechas con histórico de validación para esta variable.</span>`;
-        return;
-      }
-      // VISOR: el cruce se sirve del PNG PRE-CONGELADO (App.rutaAProducto → productos/…),
-      // no de /api (que no existe en GitHub Pages). El visor solo tiene el cruce CANÓNICO
-      // (fondo IMERG, modo por defecto) → se omiten modo/producto para casar el slug con el
-      // que congela exportar_web.py. En la app viva se pide en vivo con todos los filtros.
-      const _rc = "/cartas/alertas_programa/validacion.png?" + (window.HIDROMET_VISOR
-        ? qs({ fuente: selFu.value, variable: "precip", fecha: selFe.value })
-        : qs({ fuente: selFu.value, variable: "precip", modo: a.modo,
-               fecha: selFe.value, producto: selPr.value || "IMERG" }));
-      const url = window.HIDROMET_VISOR ? App.rutaAProducto(_rc) : api(_rc);
-      host.innerHTML = `<div class="cargando mono" style="position:static;padding:26px 0">Generando cruce…</div>`;
-      const im = new Image();
-      im.alt = "Cruce de validación del programa";
-      let objetoUrl = "";
-      im.onload = () => {
-        if (solicitud === solicitudCruce && host.isConnected) {
-          host.innerHTML = ""; host.appendChild(im);
-        }
-        if (objetoUrl) URL.revokeObjectURL(objetoUrl);
-      };
-      im.onerror = () => {
-        if (objetoUrl) URL.revokeObjectURL(objetoUrl);
-        if (solicitud === solicitudCruce && host.isConnected) host.innerHTML =
-          `<span class="suave" style="font-size:12px">Cruce no disponible${window.HIDROMET_VISOR ? " en el visor" : ""} para esa fecha/producto.</span>`;
-      };
-      if (!window.HIDROMET_VISOR) {
-        im.src = url;
-      } else {
-        // Los PNG con parámetros conservan un slug físico legado terminado en
-        // .json. Leerlos como bytes y fijar image/png evita depender del MIME
-        // inferido por GitHub Pages/proxies o de content sniffing permisivo.
-        fetch(url, { cache: "no-cache" }).then(async resp => {
-          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-          objetoUrl = URL.createObjectURL(new Blob([await resp.arrayBuffer()], { type: "image/png" }));
-          im.src = objetoUrl;
-        }).catch(() => im.onerror());
-      }
-    };
-    selFu.onchange = pintar;
-    selFe.onchange = async () => { await cargarProductos(); pintar(); };
-    selPr.onchange = pintar;
-    (async () => {
-      let fechas = [];
-      try { fechas = (await datosDesempeno()).fechas_cruce || []; } catch (e) { /* sin histórico */ }
-      if (!bloque.isConnected) return;
-      // más reciente PRIMERO (lo habitual es revisar la última fecha validada).
-      selFe.innerHTML = fechas.slice().reverse().map(f => `<option>${esc(f)}</option>`).join("");
-      await cargarProductos();
-      pintar();
-    })();
-  }
-
-  /* §P18c — VALIDACIÓN FFR ↔ SNGR (las zonas van SOBRE las cartas; aquí solo la
-     evidencia): KPIs de la fecha elegida + métricas del historial + descarga SHP. */
-  function conectarFFRBloque(cont) {
-    const bloque = cont.querySelector('[data-rol="ffr-bloque"]');
-    if (!bloque) return;
-    const sel = bloque.querySelector('[data-rol="ffr-buffer"]');
-    const selF = bloque.querySelector('[data-rol="ffr-fecha"]');
-    const valida = bloque.querySelector('[data-rol="ffr-valida"]');
-    const serieHost = bloque.querySelector('[data-rol="ffr-serie"]');
-    const shpBtn = bloque.querySelector('[data-rol="ffr-shp"]');
-    if (!sel) return;
-    const rec = () => (selF && selF.value) || "-1";
-    // ── MÉTRICAS del historial FFR ↔ eventos SNGR (una fila por fecha del histórico F1;
-    //    POD agregado micro-promedio). Estados: las fechas que el feed SNGR aún no cubre
-    //    se ATENÚAN — "0 eventos" real ≠ "feed desactualizado". Depende solo del buffer.
-    const ESTADO_FFR = { ok: "OK", sin_zona: "Sin superación", sin_dato_ffr: "Sin dato FFR",
-      sin_datos_eventos: "Sin datos SNGR", pendiente: "Pendiente" };
-    const cargarSerie = async () => {
-      if (!serieHost) return;
-      serieHost.innerHTML = `<span class="suave" style="font-size:12px">Calculando métricas del historial…</span>`;
-      try {
-        const s = await App.api("/cartas/riesgo_ffr/validacion_serie?" + qs({ buffer: sel.value }));
-        const ag = s.agregado || {}, feed = s.feed_eventos || {}, serie = s.serie || [];
-        if (s.estado_dato === "sin_dato" && !serie.length) {
-          serieHost.innerHTML = `<div style="margin:8px 0 10px;padding:9px 12px;border-radius:9px;font-size:12px;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-bd)">
-            <b>FFR SIN DATO:</b> no hay un F1FFR24 legible para evaluar. La susceptibilidad es desconocida; esto no significa ausencia de riesgo.</div>`;
-          return;
-        }
-        if (!serie.length) { serieHost.innerHTML = ""; return; }
-        const ultimaFFR = serie[serie.length - 1].fecha || "";
-        const banner = (feed.max_fecha && ultimaFFR && feed.max_fecha < ultimaFFR)
-          ? `<div style="margin:8px 0 10px;padding:9px 12px;border-radius:9px;font-size:12px;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-bd)">
-               Eventos SNGR disponibles hasta <b>${esc(feed.max_fecha)}</b> — las fechas FFR posteriores figuran como «Sin datos SNGR» hasta que el feed se actualice${feed.actualizado ? ` (feed leído el ${esc(feed.actualizado)})` : ""}.</div>`
-          : "";
-        // Fail-closed: el servidor solo publica POD/FAR cuando existe solape y se cumplen
-        // TODOS los mínimos. Una muestra de cero no es evidencia de desempeño cero.
-        const _nEv = ag.eventos || 0, _mins = s.minimos || {};
-        const _noValidable = s.apto_metricas !== true;
-        const _detalleGate = s.estado_validacion === "sin_dato_ffr"
-          ? "F1FFR24 no está disponible o no es legible; la susceptibilidad queda desconocida"
-          : s.estado_validacion === "sin_solape_temporal_ffr_sngr"
-            ? "el historial FFR empieza después del último evento cubierto por SNGR; el solape temporal es 0 fechas"
-            : `muestra disponible: ${fmtNum(ag.fechas_validables || 0)} fechas validables, ${fmtNum(ag.fechas_con_eventos || 0)} fechas con eventos y ${fmtNum(_nEv)} eventos; mínimos: ${fmtNum(_mins.fechas || 0)}, ${fmtNum(_mins.fechas_con_eventos || 0)} y ${fmtNum(_mins.eventos || 0)}`;
-        const bannerMuestra = _noValidable
-          ? `<div style="margin:8px 0 10px;padding:9px 12px;border-radius:9px;font-size:12px;color:var(--danger);background:var(--danger-bg);border:1px solid var(--danger-bd)">
-               <b>NO VALIDABLE:</b> ${esc(_detalleGate)}. <b>POD y FAR no se calculan ni se publican</b> hasta superar el gate metodológico.</div>`
-          : "";
-        // §P18: tabla COMPACTA — últimas 14 fechas (el POD global sí agrega todo el historial).
-        const filas = serie.slice(-14).reverse().map(f => {
-          const aten = (f.estado === "sin_datos_eventos" || f.estado === "pendiente") ? ' style="opacity:.45"' : "";
-          return `<tr${aten}><td>${esc(f.fecha)}</td>
-            <td class="mono">${f.eventos == null ? "—" : fmtNum(f.eventos)}</td>
-            <td class="mono">${f.cubiertos == null ? "—" : fmtNum(f.cubiertos)}</td>
-            <td class="mono">${f.pod_pct == null ? "—" : fmtPct(f.pod_pct) + " %"}</td>
-            <td class="mono">${esc(ESTADO_FFR[f.estado] || f.estado || "—")}</td></tr>`;
-        }).join("");
-        serieHost.innerHTML = `
-          <h3 class="ct-subtitulo" style="margin:16px 0 8px">Métricas por fecha del historial <span class="suave">(FFR histórico F1 · WRF 3 km ↔ eventos SNGR)</span></h3>
-          ${banner}${bannerMuestra}
-          <div class="ct-stats" style="margin:0 0 10px">
-            <div class="ct-stat"><div class="v ok">${ag.pod_pct != null ? fmtPct(ag.pod_pct) + "<small> %</small>" : "—"}</div><div class="k">POD global${_noValidable ? " (bloqueado)" : " (Σcubiertos/Σeventos)"}</div></div>
-            <div class="ct-stat"><div class="v">${ag.far_dia_pct != null ? fmtPct(ag.far_dia_pct) + "<small> %</small>" : "—"}</div><div class="k">FAR diaria${_noValidable ? " (bloqueada)" : " (avisos sin evento / avisos)"}</div></div>
-            <div class="ct-stat"><div class="v">${fmtNum(ag.cubiertos || 0)}/${fmtNum(ag.eventos || 0)}</div><div class="k">Eventos cubiertos / observados</div></div>
-            <div class="ct-stat"><div class="v">${fmtNum(ag.fechas_con_eventos || 0)}<small> de ${fmtNum(ag.fechas || 0)}</small></div><div class="k">Fechas con eventos</div></div>
-            <div class="ct-stat"><div class="v">${ag.area_km2_mediana != null ? fmtNum(Math.round(ag.area_km2_mediana)) : "—"}</div><div class="k">Área mediana de la zona (km²)</div></div>
-          </div>
-          <table class="rm-tabla"><thead><tr><th>Fecha</th><th>Eventos</th><th>Cubiertos</th><th>POD</th><th>Estado</th></tr></thead><tbody>${filas}</tbody></table>
-          <div class="rm-pie mono">${_noValidable ? "NO VALIDABLE: la tabla es diagnóstico de cobertura, no una estimación de habilidad. " : ""}POD por fecha = eventos SNGR dentro del área indicativa FFR de ese día. FAR diaria = días con indicador y sin evento observado (no es FAR gridded). «Sin superación» = hubo dato FFR, pero ningún valor superó los cortes provisionales; «Sin dato FFR» = resultado desconocido, no «Sin riesgo»; «Sin datos SNGR» = el feed aún no cubre esa fecha.</div>`;
-      } catch (e) { serieHost.innerHTML = `<span class="suave" style="font-size:12px">Métricas del historial no disponibles${window.HIDROMET_VISOR ? " en el visor" : ""}.</span>`; }
-    };
-    const cargarValida = async () => {
-      if (!valida) return;
-      if (_ffrEstado !== "disponible") {
-        valida.innerHTML = `<div style="margin:8px 0 10px;padding:9px 12px;border-radius:9px;font-size:12px;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-bd)">
-          <b>F1FFR24 SIN DATO:</b> susceptibilidad desconocida; no equivale a «Sin riesgo».</div>`;
-        return;
-      }
-      valida.innerHTML = `<span class="suave" style="font-size:12px">Validando vs eventos de río…</span>`;
-      try {
-        const v = await App.api("/cartas/riesgo_ffr/validacion?" + qs({ buffer: sel.value, record: rec() }));
-        if (v.estado_dato && v.estado_dato !== "disponible") {
-          _ffrEstado = "sin_dato";
-          if (shpBtn) { delete shpBtn.dataset.shp; shpBtn.setAttribute("aria-disabled", "true"); }
-          valida.innerHTML = `<div style="margin:8px 0 10px;padding:9px 12px;border-radius:9px;font-size:12px;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-bd)">
-            <b>F1FFR24 SIN DATO:</b> susceptibilidad desconocida; no equivale a «Sin riesgo».</div>`;
-          return;
-        }
-        valida.innerHTML = `<div class="ct-stats" style="margin-top:8px">
-          <div class="ct-stat"><div class="v">${fmtNum(v.n_cuencas || 0)}</div><div class="k">Sobre umbral provisional</div></div>
-          <div class="ct-stat"><div class="v">${fmtNum(v.eventos || 0)}</div><div class="k">Desbordes/crecidas ese día</div></div>
-          <div class="ct-stat"><div class="v ok">${v.pct != null ? fmtPct(v.pct) + " %" : "—"}</div><div class="k">Cubiertos (${fmtNum(v.cubiertos || 0)})</div></div>
-          <div class="ct-stat"><div class="v danger">${fmtNum(v.no_cubiertos || 0)}</div><div class="k">No cubiertos</div></div>
-        </div>`;
-      } catch (e) { valida.innerHTML = `<span class="suave" style="font-size:12px">Validación no disponible.</span>`; }
-    };
-    const pinta = () => {
-      // El botón SHP usa el handler genérico [data-shp]: app = lo guarda el servidor;
-      // visor = baja el .zip PRE-CONGELADO. SIN fecha, para que la ruta calce con el
-      // .zip congelado por (buffer+record). El mapa aparte se retiró (§P18a: las
-      // zonas se dibujan SOBRE las cartas de alerta de lluvia).
-      if (shpBtn) {
-        if (_ffrEstado === "disponible") {
-          shpBtn.dataset.shp = "/cartas/riesgo_ffr/descarga?" + qs({ buffer: sel.value, record: rec() });
-          shpBtn.removeAttribute("aria-disabled");
-        } else {
-          delete shpBtn.dataset.shp;
-          shpBtn.setAttribute("aria-disabled", "true");
-        }
-      }
-      cargarValida();
-    };
-    sel.onchange = () => { pinta(); cargarSerie(); };   // la serie depende del buffer, no de la fecha
-    if (selF) selF.onchange = pinta;
-    // Poblar el selector con las fechas FFR disponibles y pintar la última.
-    (async () => {
-      try {
-        const r = await App.api("/cartas/riesgo_ffr/fechas");
-        const fs = r.fechas || [];
-        _ffrEstado = r.estado_dato || (fs.length ? "disponible" : "sin_dato");
-        if (selF && fs.length) selF.innerHTML = fs.map((f, i) =>
-          `<option value="${f.record}" ${i === fs.length - 1 ? "selected" : ""}>${esc(f.fecha)}</option>`).join("");
-        else if (selF) selF.innerHTML = `<option value="-1">FFR sin dato</option>`;
-      } catch (e) { /* deja "vigente" */ }
-      if (!bloque.isConnected) return;
-      pinta();
-      cargarSerie();
-    })();
-  }
-
   /* ============================================================
      Render del cuerpo según el tipo activo
      ============================================================ */
@@ -2361,7 +1993,6 @@
         E.tipo = b.dataset.tipo;
         document.getElementById("ct-tipos").innerHTML = chipsTipos();
         conectarTipos();
-        if (E.tipo === "alertas") cargarFechas();
         pintarCuerpo();
       });
   }
@@ -2386,7 +2017,7 @@
             // §P4: los cuatro toggles de capa inician ACTIVOS en todas las cartas.
             capas: { grilla: true, isolineas: true, galapagos: true, estaciones: true },
             alerta: { varId: "alerta_lluvia", modo: "fija", inst: null,
-                      opts: Object.fromEntries(TOGGLES.map(t => [t.id, t.on])), fechasEmitidas: [] } };
+                      opts: Object.fromEntries(TOGGLES.map(t => [t.id, t.on])) } };
     }
     if (!(E.productos.tipos || []).length || E._stale) {
       try {
@@ -2406,7 +2037,7 @@
   }
   async function panelAlertas(cont) {
     await asegurarEstado(); purgarCartas(); E.tipo = "alertas";
-    cont.innerHTML = cuerpoAlertas(); conectarAlertas(cont); montarMapasCarta(cont); cargarFechas();
+    cont.innerHTML = cuerpoAlertas(); conectarAlertas(cont); montarMapasCarta(cont);
   }
   async function panelFFGS(cont) {
     await asegurarEstado(); purgarCartas(); E.tipo = "ffgs";
@@ -2766,6 +2397,102 @@
         cerrar(); App.modalTarea("Actualizar cartas y alertas", id);
       } catch (e) { App.aviso(e.message, "error"); }
     };
+  }
+
+  // Dos gráficos y una nota metodológica: sin mapas, cruces ni rankings cuando
+  // la muestra causal todavía no supera las puertas operativas.
+  async function cargarDesempeno() {
+    const panel = document.getElementById("ct-desempeno");
+    if (!panel) return;
+    const a = E.alerta;
+    const comparativa = panel.querySelector('[data-rol="comparativa"]');
+    const temporal = panel.querySelector('[data-rol="serie"]');
+    const evidenciaHost = panel.querySelector('[data-rol="evidencia-causal"]');
+    const nota = panel.querySelector('[data-rol="dnota"]');
+    try {
+      const r = await datosDesempeno();
+      if (!panel.isConnected) return;
+      const evidencia = r.evidencia || {};
+      const suficiente = r.muestra_suficiente === true;
+      const avisos = (r.advertencias || []).map(esc).join(" ");
+      evidenciaHost.className = "ct-nota ct-evidencia-causal " + (suficiente ? "suficiente" : "insuficiente");
+      evidenciaHost.innerHTML = `<b>${suficiente ? "Evidencia causal suficiente" : "Muestra causal insuficiente"}</b> · ` +
+        `${fmtNum(evidencia.casos_estacion_fecha || 0)} casos estación×día · ` +
+        `${fmtNum(evidencia.fechas_validas || 0)} fechas válidas · ` +
+        `${fmtNum(evidencia.fechas_emision || 0)} emisiones. ${avisos}`;
+
+      const filas = (r.filas || []).filter(f => f.tot);
+      const oscuro = !!(App.tema && App.tema() === "oscuro");
+      const tinta = oscuro ? "#9DAABF" : "#58667A";
+      const rejilla = oscuro ? "rgba(223,230,247,.10)" : "rgba(70,89,122,.12)";
+      const fuentes = filas.map(f => ALERTA_FUENTE_ROTULO[f.fuente] || f.fuente);
+      const colores = { CSI: "#4c78a8", POD: "#54a24b", FAR: "#e45756", HSS: "#b279a2" };
+      if (comparativa && filas.length && window.Plotly) {
+        const traces = ["CSI", "POD", "FAR", "HSS"].map(metrica => ({
+          type: "bar", name: metrica, x: fuentes,
+          y: filas.map(f => f.tot[metrica] == null ? null : +f.tot[metrica]),
+          marker: { color: colores[metrica] },
+          text: filas.map(f => f.tot[metrica] == null ? "" : (+f.tot[metrica]).toFixed(2)),
+          textposition: "outside", cliponaxis: false,
+          hovertemplate: `%{x}<br>${metrica}: %{y:.3f}<extra></extra>`,
+        }));
+        Plotly.react(comparativa, traces, {
+          height: 390, barmode: "group", margin: { l: 42, r: 14, t: 48, b: 72 },
+          paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+          title: { text: suficiente ? "Métricas causales por fuente" : "Métricas causales descriptivas · evidencia aún insuficiente", font: { size: 13, color: tinta } },
+          legend: { orientation: "h", y: 1.12, font: { size: 10, color: tinta } },
+          xaxis: { tickfont: { size: 10, color: tinta }, showgrid: false },
+          yaxis: { range: [-1, 1], tickfont: { size: 9, color: tinta }, gridcolor: rejilla, zeroline: true },
+          font: { color: tinta },
+        }, { displayModeBar: false, responsive: true });
+      } else if (comparativa) {
+        comparativa.innerHTML = `<span class="suave">Aún no hay emisiones verificables para comparar.</span>`;
+      }
+
+      const serie = (r.serie || []).filter(s => (s.puntos || []).length);
+      if (temporal && serie.length && window.Plotly) {
+        const paleta = { CONSENSO: "#e45756", GFS: "#4c78a8", ICON: "#f58518", IFS: "#54a24b",
+          BIAS: "#b279a2", RF: "#9d755d", GB: "#72b7b2", CAT: "#eeca3b", LSTM: "#bab0ac" };
+        const metricas = ["CSI", "POD", "FAR"];
+        const traces = [];
+        metricas.forEach((metrica, mi) => serie.forEach(s => traces.push({
+          type: "scatter", mode: "lines+markers", name: ALERTA_FUENTE_ROTULO[s.fuente] || s.fuente,
+          legendgroup: s.fuente, showlegend: mi === 0,
+          x: s.puntos.map(p => p.fecha), y: s.puntos.map(p => p[metrica]),
+          xaxis: `x${mi + 1}`, yaxis: `y${mi + 1}`, connectgaps: false,
+          marker: { size: 4 }, line: { width: s.fuente === "CONSENSO" ? 2.8 : 1.3, color: paleta[s.fuente] || "#888" },
+          hovertemplate: `%{x} · ${metrica} %{y:.3f}<extra>${esc(ALERTA_FUENTE_ROTULO[s.fuente] || s.fuente)}</extra>`,
+        })));
+        Plotly.react(temporal, traces, {
+          height: 650, margin: { l: 44, r: 14, t: 58, b: 46 },
+          paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+          title: { text: "Evolución temporal causal · CSI / POD / FAR", font: { size: 13, color: tinta } },
+          grid: { rows: 3, columns: 1, pattern: "independent" },
+          legend: { orientation: "h", y: 1.08, font: { size: 9, color: tinta } },
+          xaxis: { type: "category", showticklabels: false, showgrid: false },
+          xaxis2: { type: "category", showticklabels: false, showgrid: false },
+          xaxis3: { type: "category", tickfont: { size: 9, color: tinta }, showgrid: false },
+          yaxis: { title: "CSI", range: [0, 1], gridcolor: rejilla },
+          yaxis2: { title: "POD", range: [0, 1], gridcolor: rejilla },
+          yaxis3: { title: "FAR", range: [0, 1], gridcolor: rejilla },
+          font: { color: tinta },
+        }, { displayModeBar: false, responsive: true });
+      } else if (temporal) {
+        temporal.innerHTML = `<span class="suave">La serie causal crecerá con cada nueva emisión verificada.</span>`;
+      }
+
+      const varEt = (VAR_ALERTA.find(x => x.id === a.varId) || VAR_ALERTA[0]).etiqueta.toLowerCase();
+      panel.querySelector('[data-rol="dsub"]').textContent =
+        `· ${varEt} · ${fmtNum(r.n_eval || 0)} evaluaciones causales`;
+      nota.innerHTML = `Referencia: <b>observación canónica con QC y ventana exacta</b>. ` +
+        `Solo se verifica si la fecha válida es posterior a la emisión; la reconstrucción retrospectiva no se usa como habilidad operativa.`;
+    } catch (e) {
+      panel.querySelector('[data-rol="dsub"]').textContent = "· sin evidencia causal verificable";
+      if (comparativa) comparativa.innerHTML = "";
+      if (temporal) temporal.innerHTML = "";
+      evidenciaHost.textContent = "No fue posible leer las emisiones causales verificadas.";
+      nota.textContent = "";
+    }
   }
 
   // Superficie pura para las pruebas Node del contrato FFGS. En navegador no se

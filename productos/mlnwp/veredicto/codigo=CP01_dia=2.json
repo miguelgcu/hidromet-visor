@@ -1,1 +1,1 @@
-{"agg_precip":"sum_07_07","codigo":"CP01","dias":2,"fecha":"2026-07-19","hoy":"2026-07-17","lluvia":{"llueve":true,"prob":67,"prob_fuerte":15,"q25":3.1,"q75":20.3,"texto":"SÍ"},"nombre":"Arenales","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_07_07","codigo":"CP01","dias":2,"fecha":"2026-07-19","hoy":"2026-07-17","lluvia":{"llueve":true,"prob":67,"prob_fuerte":15,"q25":3.0,"q75":20.2,"texto":"SÍ"},"nombre":"Arenales","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

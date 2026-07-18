@@ -16,19 +16,14 @@
   const num = (v, nd = 1) => (v === null || v === undefined || Number.isNaN(v)) ? "—" : Number(v).toFixed(nd);
   const sgn = v => (v === null || v === undefined || Number.isNaN(v)) ? "—"
     : (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(Number(v)).toFixed(1);
-  const fechaBreve = fecha => {
-    const f = String(fecha ?? "");
-    return /^\d{4}-\d{2}-\d{2}/.test(f)
-      ? `${f.slice(8, 10)}/${f.slice(5, 7)}/${f.slice(2, 4)}` : f;
-  };
-  const etiquetaFechaValor = (fecha, valor, unidad) =>
-    `${esc(fechaBreve(fecha))}<br><b>${num(valor, 1)} ${esc(unidad)}</b>`;
-  // Halo único para pasado/presente/futuro y para OBS/modelos. El color de la
-  // serie queda en el borde; el fondo no cambia con el tema ni con el skill.
-  const ETIQUETA_BG = "rgba(255,255,255,.95)";
+  // La fecha ya se lee en el eje X y en el hover unificado. Repetirla en cada
+  // punto convertía el gráfico en una nube de recuadros; la etiqueta estática
+  // muestra únicamente el valor. La unidad permanece en el eje Y y el hover.
+  const etiquetaValor = valor => `<b>${num(valor, 1)}</b>`;
+  // Halo blanco tenue, sin borde ni sombra: contraste suficiente sobre barras y
+  // franja futura sin parecer una tarjeta superpuesta.
+  const ETIQUETA_BG = "rgba(255,255,255,.82)";
   const ETIQUETA_TEXTO = "#071326";
-  const ETIQUETA_BORDE = "rgba(20,42,72,.70)";
-  const ETIQUETA_OBS_BORDE = "#0F1B2D";
   const OPACIDAD_SKILL_MIN = 0.28;
   const OPACIDAD_SKILL_MAX = 0.92;
   function opacidadPorSkill(rating, score = null, oscuro = false) {
@@ -785,17 +780,23 @@
     }
     card.innerHTML = `
       ${cabecera}
-      <div class="ml-plot-scroll"><div class="ml-serie-plot" id="ml-plot-serie"></div></div>
+      <div class="ml-time-scroll" aria-label="Serie y probabilidades alineadas por fecha">
+        <div class="ml-time-track">
+          <div class="ml-serie-plot" id="ml-plot-serie"></div>
+          <div class="ml-serie-probs" id="ml-serie-probs"></div>
+        </div>
+      </div>
       <div class="ml-serie-leyenda" id="ml-serie-leyenda"></div>
-      <div class="ml-serie-probs" id="ml-serie-probs"></div>
       <p class="ml-serie-pie">Observado vs. pronóstico (la franja sombreada de la derecha es el horizonte futuro). Los modelos se atenúan según su calificación.${esPrecip ? " Detalle probabilístico por umbral en la tabla inferior." : ""}</p>`;
 
     const el = document.getElementById("ml-plot-serie");
     if (!window.Plotly || !el) return;
-    // v12 (pedido del dueño): en pantallas angostas la serie CABE en el ancho (sin
-    // zoom/scroll); el detalle por fecha se lee con el popup unificado al TOCAR.
-    // Ejes fijos → el gesto táctil no deforma; ticks automáticos → legibles a 390px.
-    const angosto = (card.clientWidth || window.innerWidth || 999) < 560;
+    // Escritorio muestra todo el eje sin scroll. Solo el teléfono usa un carril
+    // temporal horizontal compartido por gráfico y probabilidades.
+    // Debe usar exactamente el mismo breakpoint que la hoja de estilos; medir la
+    // tarjeta podía activar el modo móvil dentro de un escritorio angosto sin que
+    // existiera el carril desplazable correspondiente.
+    const angosto = !!(window.matchMedia && window.matchMedia("(max-width: 560px)").matches);
 
     const traces = [];
     const opacidadesTrazas = [];
@@ -813,7 +814,7 @@
       [0, 13], [-36, 26], [36, 26], [-24, -18], [24, -18],
       [-42, 48], [42, 48], [-12, -38], [12, -38],
     ];
-    const agregarEtiquetaPunto = (fecha, valor, borde) => {
+    const agregarEtiquetaPunto = (fecha, valor) => {
       if (!fecha || valor === null || valor === undefined || !Number.isFinite(Number(valor))) return;
       fechasGrafico.add(fecha);
       const turno = turnosPorFecha.get(fecha) || 0;
@@ -825,20 +826,18 @@
       const yshift = yshiftBase + signo * vuelta * 18;
       etiquetasPuntos.push({
         x: fecha, y: Number(valor), xref: "x", yref: "y",
-        text: etiquetaFechaValor(fecha, valor, unidad), showarrow: false,
+        text: etiquetaValor(valor), showarrow: false,
         xanchor: "center", yanchor: yshift >= 0 ? "bottom" : "top",
         xshift, yshift, align: "center", captureevents: false,
-        bgcolor: ETIQUETA_BG, bordercolor: borde || ETIQUETA_BORDE,
-        borderwidth: 1.2, borderpad: 3, opacity: 1,
-        font: { family: "IBM Plex Mono, monospace", size: 9, color: ETIQUETA_TEXTO },
+        bgcolor: ETIQUETA_BG, borderwidth: 0, borderpad: 1, opacity: 1,
+        font: { family: "IBM Plex Mono, monospace", size: 9.5, color: ETIQUETA_TEXTO },
       });
     };
 
-    // El observado reserva el primer carril y se etiqueta fecha+valor en TODOS sus
-    // puntos, incluido 0 mm. Los pronósticos se acomodan después alrededor de él.
+    // El observado reserva el primer carril y etiqueta cada valor, incluido 0 mm.
     if (d.observado && d.observado.fechas && d.observado.fechas.length) {
       d.observado.fechas.forEach((fecha, i) =>
-        agregarEtiquetaPunto(fecha, (d.observado.valores || [])[i], ETIQUETA_OBS_BORDE));
+        agregarEtiquetaPunto(fecha, (d.observado.valores || [])[i]));
     }
 
     // BANDA INTERCUARTIL RETIRADA (pedido del dueño 2026-07-11): el abanico P25–P75 /
@@ -849,8 +848,9 @@
 
     // Modelos atenuados por calificación verificada. En oscuro la misma escala
     // monótona recibe +0.10 de contraste (sin piso arbitrario ni inversión de skill).
-    // Cada modelo visible muestra fecha+valor en todos sus puntos de presente/futuro.
-    // El pasado de la gráfica queda rotulado por el observado.
+    // Todas las curvas siguen disponibles y el hover muestra fecha+valor. Para no
+    // tapar la serie, las etiquetas estáticas futuras se reservan a los productos
+    // operativos; los comparadores se consultan mediante hover/clic.
     const leyenda = [];
     const _hoyEt = (App.hoyEC ? App.hoyEC() : d.hoy);
     // El backend antepone los productos operativos que alimentan alertas/cartas;
@@ -874,7 +874,9 @@
       (m.fechas || []).forEach((fecha, i) => {
         fechasGrafico.add(fecha);
         // 0 es válido: solo se excluyen nulos y fechas estrictamente pasadas.
-        if (_hoyEt && fecha >= _hoyEt) agregarEtiquetaPunto(fecha, (m.valores || [])[i], color);
+        if ((m.operacional || esRecomendado) && _hoyEt && fecha >= _hoyEt) {
+          agregarEtiquetaPunto(fecha, (m.valores || [])[i]);
+        }
       });
       if (esPrecip && !m.dash) {
         traces.push({ type: "bar", x: fx(m.fechas), y: m.valores, name: `${m.modelo}${otxt}${rtxt}`,
@@ -896,6 +898,7 @@
     // Observado: línea con marcadores. Sus etiquetas son anotaciones con fondo
     // translúcido, creadas arriba para reservar el primer carril de cada fecha.
     if (d.observado && d.observado.fechas && d.observado.fechas.length) {
+      d.observado.fechas.forEach(fecha => fechasGrafico.add(fecha));
       traces.push({ type: "scatter", mode: "lines+markers", x: d.observado.fechas, y: d.observado.valores,
         name: "Observado", opacity: 1, line: { color: C.obs, width: 3.2 }, connectgaps: false,
         marker: { color: C.obs, size: 8, symbol: "circle" },
@@ -903,9 +906,24 @@
       opacidadesTrazas.push(1);
     }
 
-    // Ancho proporcional al número real de días: escritorio y móvil conservan espacio
-    // para cada etiqueta y usan el mismo carril horizontal desplazable.
-    el.style.minWidth = `${Math.max(680, fechasGrafico.size * 112)}px`;
+    // Eje canónico compartido. Las probabilidades se reindexan más abajo a estas
+    // mismas fechas, por lo que una fecha faltante queda como “—” y no desplaza
+    // todas las columnas siguientes.
+    const pu = d.probs_umbral;
+    if (esPrecip && pu && Array.isArray(pu.fechas)) {
+      pu.fechas.forEach(fecha => fechasGrafico.add(fecha));
+    }
+    const ejeFechas = [...fechasGrafico].filter(Boolean).sort();
+    const timeTrack = card.querySelector(".ml-time-track");
+    if (timeTrack) {
+      timeTrack.style.setProperty("--ml-time-track-width",
+        `${Math.max(720, 78 + ejeFechas.length * 56)}px`);
+    }
+    el.style.minWidth = "0";
+    const rangoX = ejeFechas.length ? [
+      new Date(`${ejeFechas[0]}T00:00:00Z`).getTime() - 43200000,
+      new Date(`${ejeFechas[ejeFechas.length - 1]}T00:00:00Z`).getTime() + 43200000,
+    ] : null;
 
     const layout = App.plotlyLayoutSerie("", {
       // barmode "overlay": los hietogramas de modelos se superponen y se atenúan por
@@ -922,6 +940,7 @@
       // van FIJOS: el gesto táctil desliza el contenedor y el tap abre el popup.
       xaxis: { type: "date", tickformat: "%d/%m", tickmode: "linear", dtick: 86400000,
                tickangle: -45, tickfont: { size: 9 }, automargin: true,
+               ...(rangoX ? { range: rangoX } : {}),
                ...(angosto ? { fixedrange: true } : {}) },
     });
     // Distinción HISTORIA vs PRONÓSTICO: franja de fondo desde HOY hasta el final +
@@ -945,14 +964,20 @@
           line: { color: "#6B8CB4", width: 1.8, dash: "dot" } },
       ];
       layout.annotations = [...(layout.annotations || []), { x: _hoy, yref: "paper", y: 1, yanchor: "bottom", xanchor: "left",
-        text: "inicio pronóstico →", showarrow: false,
+        text: "Pronóstico", showarrow: false,
         font: { family: "IBM Plex Mono", size: 10, color: C.anot } }];
     }
     Plotly.newPlot(el, traces, layout, App.plotlyConfig(angosto ? { displayModeBar: false } : {})).then(() => {
-      // v13: el scroll ARRANCA en el extremo derecho — lo más reciente + pronóstico
-      // siempre visibles al entrar (pedido del dueño); inocuo si no hay overflow.
-      const sc = el.closest(".ml-plot-scroll");
-      if (sc) sc.scrollLeft = sc.scrollWidth;
+      // En móvil, ubica el presente con dos días de contexto histórico. Escritorio
+      // no tiene desplazamiento horizontal y siempre muestra el eje completo.
+      const sc = el.closest(".ml-time-scroll");
+      if (sc && angosto && ejeFechas.length) {
+        const iHoyMovil = _hoy ? Math.max(0, ejeFechas.findIndex(f => f >= _hoy)) : 0;
+        const anchoFecha = Math.max(1, ((timeTrack && timeTrack.scrollWidth) || 720) - 78) / ejeFechas.length;
+        sc.scrollLeft = Math.max(0, 58 + Math.max(0, iHoyMovil - 2) * anchoFecha);
+      } else if (sc) {
+        sc.scrollLeft = 0;
+      }
       // Hover y selección solo realzan temporalmente la curva elegida; al salir se
       // restaura la jerarquía objetiva determinada por skill.
       if (typeof el.on === "function" && window.Plotly && typeof Plotly.restyle === "function") {
@@ -987,33 +1012,35 @@
     if (probsEl) {
       const pu = d.probs_umbral;
       if (esPrecip && pu && pu.fechas && pu.fechas.length) {
-        // La tabla probabilística respeta la misma ventana móvil que la gráfica.
-        let idx = pu.fechas.map((_, i) => i);
-        // Índice de la 1ª columna de pronóstico (>= hoy) para separar visualmente pasado/futuro,
-        // coherente con la línea divisoria 'inicio pronóstico →' del gráfico.
-        const iHoy = _hoy ? idx.find(i => pu.fechas[i] >= _hoy) : undefined;
+        // Reindexación explícita al eje del gráfico. Si el probabilístico no trae
+        // una fecha intermedia, se conserva la columna y se pinta “—”; nunca se
+        // corre el resto de la tabla respecto de la precipitación diaria.
+        const probabilidadesPorFecha = new Map(
+          pu.fechas.map((fecha, i) => [fecha, (pu.probs || [])[i] || []]));
+        const fechasTabla = ejeFechas;
+        const iHoy = _hoy ? fechasTabla.findIndex(fecha => fecha >= _hoy) : -1;
         const alfa = p => p < 20 ? 0.08 : p < 50 ? 0.20 : p < 75 ? 0.38 : 0.58;
         const celStyle = p => p == null
           ? "color:var(--faint)"
           : `background:rgba(43,93,170,${alfa(p).toFixed(2)});color:${p >= 75 ? "#fff" : "var(--ink)"}`;
-        const dd = f => `${f.slice(8, 10)}/${f.slice(5, 7)}/${f.slice(0, 4)}`;
+        const dd = f => `${f.slice(8, 10)}/${f.slice(5, 7)}`;
         const sep = i => i === iHoy ? " ml-pb-hoy" : "";   // borde que marca el inicio del pronóstico
-        const cabFechas = idx.map(i => `<th class="ml-pb-f${sep(i)}">${dd(pu.fechas[i])}</th>`).join("");
+        const cabFechas = fechasTabla.map((fecha, i) =>
+          `<th class="ml-pb-f${sep(i)}" aria-label="${esc(fecha)}">${dd(fecha)}</th>`).join("");
         const filasU = (pu.umbrales || []).map((u, j) => {
-          const celdas = idx.map(i => {
-            const p = (pu.probs[i] || [])[j];
+          const celdas = fechasTabla.map((fecha, i) => {
+            const p = (probabilidadesPorFecha.get(fecha) || [])[j];
             return `<td class="ml-pb-c${sep(i)}" style="${celStyle(p)}">${p == null ? "—" : p + "%"}</td>`;
           }).join("");
-          return `<tr><th class="ml-pb-u">≥${u} mm</th>${celdas}</tr>`;
+          return `<tr><th class="ml-pb-u">≥${u} mm</th>${celdas}<td class="ml-pb-spacer" aria-hidden="true"></td></tr>`;
         }).join("");
+        const columnas = `<col class="ml-pb-col-umbral">${fechasTabla.map(() =>
+          '<col class="ml-pb-col-fecha">').join("")}<col class="ml-pb-col-spacer">`;
         probsEl.innerHTML =
           `<div class="ml-pb-tit">Probabilidad de lluvia por umbral · ventana móvil</div>
-           <div class="ml-pb-wrap"><table class="ml-pb-tabla"><thead><tr><th class="ml-pb-esq">Umbral</th>${cabFechas}</tr></thead>
+           <div class="ml-pb-wrap"><table class="ml-pb-tabla"><colgroup>${columnas}</colgroup><thead><tr><th class="ml-pb-esq">Umbral</th>${cabFechas}<th class="ml-pb-spacer" aria-hidden="true"></th></tr></thead>
            <tbody>${filasU}</tbody></table></div>
-           <div class="ml-pb-nota">Últimos 10 días, presente y futuro disponible; la línea vertical marca el inicio del pronóstico vigente. Probabilidad calibrada (promedio de clasificadores). Ej.: “≥25 mm = 30 %” = 30 % de probabilidad de que llueva más de 25 mm ese día.</div>`;
-        // v13: umbral FIJO (sticky) y el scroll de fechas arranca a la DERECHA (lo más reciente).
-        const w = probsEl.querySelector(".ml-pb-wrap");
-        if (w) w.scrollLeft = w.scrollWidth;
+           <div class="ml-pb-nota">Mismo eje diario de la serie; “—” identifica una fecha sin probabilidad emitida. La línea vertical marca el inicio del pronóstico. Ej.: “≥25 mm = 30 %” significa 30 % de probabilidad de superar 25 mm ese día.</div>`;
       } else {
         probsEl.innerHTML = "";
       }
