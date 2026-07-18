@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"P70","dias":5,"fecha":"2026-07-22","hoy":"2026-07-17","lluvia":null,"nombre":"CC El Bosque","sin_datos":true,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"P70","dias":5,"fecha":"2026-07-23","hoy":"2026-07-18","lluvia":{"llueve":false,"prob":19,"prob_fuerte":null,"q25":0.0,"q75":1.1,"texto":"NO"},"nombre":"CC El Bosque","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"P22","dias":1,"fecha":"2026-07-18","hoy":"2026-07-17","lluvia":null,"nombre":"Chillogallo","sin_datos":true,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"P22","dias":1,"fecha":"2026-07-19","hoy":"2026-07-18","lluvia":{"llueve":false,"prob":23,"prob_fuerte":null,"q25":2.7,"q75":4.0,"texto":"NO"},"nombre":"Chillogallo","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

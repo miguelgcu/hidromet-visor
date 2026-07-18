@@ -62,6 +62,66 @@
   const LOOKBACK_SERIE = 10;
   const VENTANA_VALID = "10";
 
+  // El eje visible es una ventana DIARIA continua. La base local puede conservar
+  // historia probabilística anterior, pero mezclar esas fechas con los 10 días
+  // operativos comprimía meses vacíos en la gráfica y desalineaba las columnas
+  // de la tabla. Se conserva el archivo completo; solo se recorta su presentación.
+  const FECHA_ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
+  // Deben coincidir con --ml-axis-left/right de mlnwp.css: son también los
+  // márgenes del área cartesiana de Plotly y las columnas de encaje de la tabla.
+  const MARGEN_EJE_IZQ_PX = 58;
+  const MARGEN_EJE_DER_PX = 20;
+  function moverFechaISO(fecha, dias) {
+    if (!FECHA_ISO_RE.test(String(fecha || ""))) return null;
+    const d = new Date(`${fecha}T12:00:00Z`);
+    if (!Number.isFinite(d.getTime())) return null;
+    d.setUTCDate(d.getUTCDate() + Number(dias || 0));
+    return d.toISOString().slice(0, 10);
+  }
+  function construirEjeDiarioVentana(fechas, hoy, lookback = LOOKBACK_SERIE) {
+    const validas = [...new Set((fechas || [])
+      .map(fecha => String(fecha || "").slice(0, 10))
+      .filter(fecha => FECHA_ISO_RE.test(fecha)))].sort();
+    const nPasado = Math.max(0, Number.isFinite(Number(lookback)) ? Number(lookback) : LOOKBACK_SERIE);
+    const corte = moverFechaISO(hoy, -nPasado);
+    const visibles = corte ? validas.filter(fecha => fecha >= corte) : validas;
+    if (!visibles.length) return [];
+    // Incluir el inicio exacto de la ventana hace visibles también los vacíos:
+    // una fecha sin emisión ocupa su columna y muestra "—".
+    const inicio = corte || visibles[0];
+    const fin = visibles[visibles.length - 1];
+    const salida = [];
+    for (let fecha = inicio; fecha && fecha <= fin; fecha = moverFechaISO(fecha, 1)) {
+      salida.push(fecha);
+    }
+    return salida;
+  }
+  function margenesEjeDesdeTicks(posiciones, ancho) {
+    const xs = (posiciones || []).map(Number).filter(Number.isFinite).sort((a, b) => a - b);
+    const total = Number(ancho);
+    if (xs.length < 2 || !Number.isFinite(total) || total <= 0) return null;
+    const pasos = xs.slice(1).map((x, i) => x - xs[i]).filter(paso => paso > 0);
+    if (!pasos.length) return null;
+    pasos.sort((a, b) => a - b);
+    const paso = pasos[Math.floor(pasos.length / 2)];
+    const izquierda = xs[0] - paso / 2;
+    const derecha = total - (xs[xs.length - 1] + paso / 2);
+    if (![izquierda, derecha].every(v => Number.isFinite(v) && v >= 0)) return null;
+    return { izquierda, derecha };
+  }
+  function sincronizarMargenesTabla(el, timeTrack) {
+    if (!el || !timeTrack) return;
+    const posiciones = [...el.querySelectorAll(".xtick")].map(tick => {
+      const match = String(tick.getAttribute("transform") || "")
+        .match(/translate\(([-+0-9.eE]+)/);
+      return match ? Number(match[1]) : NaN;
+    });
+    const margenes = margenesEjeDesdeTicks(posiciones, el.clientWidth);
+    if (!margenes) return;
+    timeTrack.style.setProperty("--ml-axis-left", `${margenes.izquierda}px`);
+    timeTrack.style.setProperty("--ml-axis-right", `${margenes.derecha}px`);
+  }
+
   // Filtro de FAMILIA de modelo. valor = el que entiende el backend
   // (productos.FAMILIAS); etiqueta = texto del chip. "Todos" = sin filtro.
   const FAMILIAS_UI = [
@@ -780,7 +840,8 @@
     }
     card.innerHTML = `
       ${cabecera}
-      <div class="ml-time-scroll" aria-label="Serie y probabilidades alineadas por fecha">
+      <div class="ml-time-scroll" role="region" tabindex="0"
+           aria-label="Serie y probabilidades alineadas por fecha">
         <div class="ml-time-track">
           <div class="ml-serie-plot" id="ml-plot-serie"></div>
           <div class="ml-serie-probs" id="ml-serie-probs"></div>
@@ -791,12 +852,27 @@
 
     const el = document.getElementById("ml-plot-serie");
     if (!window.Plotly || !el) return;
+    const timeScroll = card.querySelector(".ml-time-scroll");
+    if (timeScroll) timeScroll.onkeydown = ev => {
+      const delta = ({ ArrowLeft: -56, ArrowRight: 56,
+        PageUp: -timeScroll.clientWidth, PageDown: timeScroll.clientWidth })[ev.key];
+      if (delta !== undefined) {
+        ev.preventDefault();
+        timeScroll.scrollLeft += delta;
+      } else if (ev.key === "Home" || ev.key === "End") {
+        ev.preventDefault();
+        timeScroll.scrollLeft = ev.key === "Home" ? 0 : timeScroll.scrollWidth;
+      }
+    };
     // Escritorio muestra todo el eje sin scroll. Solo el teléfono usa un carril
     // temporal horizontal compartido por gráfico y probabilidades.
     // Debe usar exactamente el mismo breakpoint que la hoja de estilos; medir la
     // tarjeta podía activar el modo móvil dentro de un escritorio angosto sin que
     // existiera el carril desplazable correspondiente.
     const angosto = !!(window.matchMedia && window.matchMedia("(max-width: 560px)").matches);
+    const hoyVisual = (App.hoyEC ? App.hoyEC() : d.hoy);
+    const lookbackVisual = Number.isFinite(Number(d.lookback)) ? Number(d.lookback) : LOOKBACK_SERIE;
+    const desdeVisual = moverFechaISO(hoyVisual, -Math.max(0, lookbackVisual));
 
     const traces = [];
     const opacidadesTrazas = [];
@@ -814,9 +890,14 @@
       [0, 13], [-36, 26], [36, 26], [-24, -18], [24, -18],
       [-42, 48], [42, 48], [-12, -38], [12, -38],
     ];
+    const registrarFecha = fecha => {
+      if (!fecha || (desdeVisual && fecha < desdeVisual)) return false;
+      fechasGrafico.add(fecha);
+      return true;
+    };
     const agregarEtiquetaPunto = (fecha, valor) => {
       if (!fecha || valor === null || valor === undefined || !Number.isFinite(Number(valor))) return;
-      fechasGrafico.add(fecha);
+      if (!registrarFecha(fecha)) return;
       const turno = turnosPorFecha.get(fecha) || 0;
       turnosPorFecha.set(fecha, turno + 1);
       const carriles = esPrecip ? carrilesPrecip : carrilesTemp;
@@ -852,7 +933,7 @@
     // tapar la serie, las etiquetas estáticas futuras se reservan a los productos
     // operativos; los comparadores se consultan mediante hover/clic.
     const leyenda = [];
-    const _hoyEt = (App.hoyEC ? App.hoyEC() : d.hoy);
+    const _hoyEt = hoyVisual;
     // El backend antepone los productos operativos que alimentan alertas/cartas;
     // el cupo restante muestra los comparadores con mayor skill.
     const modelosVisibles = modelosRespuesta.slice(0, 8);
@@ -872,7 +953,7 @@
       const rtxt = m.sin_entrenar ? "" : ` (${num(m.rating, 1)})`;
       const otxt = esRecomendado ? " · recomendado" : (m.operacional ? " · operativo" : "");
       (m.fechas || []).forEach((fecha, i) => {
-        fechasGrafico.add(fecha);
+        registrarFecha(fecha);
         // 0 es válido: solo se excluyen nulos y fechas estrictamente pasadas.
         if ((m.operacional || esRecomendado) && _hoyEt && fecha >= _hoyEt) {
           agregarEtiquetaPunto(fecha, (m.valores || [])[i]);
@@ -898,7 +979,7 @@
     // Observado: línea con marcadores. Sus etiquetas son anotaciones con fondo
     // translúcido, creadas arriba para reservar el primer carril de cada fecha.
     if (d.observado && d.observado.fechas && d.observado.fechas.length) {
-      d.observado.fechas.forEach(fecha => fechasGrafico.add(fecha));
+      d.observado.fechas.forEach(registrarFecha);
       traces.push({ type: "scatter", mode: "lines+markers", x: d.observado.fechas, y: d.observado.valores,
         name: "Observado", opacity: 1, line: { color: C.obs, width: 3.2 }, connectgaps: false,
         marker: { color: C.obs, size: 8, symbol: "circle" },
@@ -911,13 +992,15 @@
     // todas las columnas siguientes.
     const pu = d.probs_umbral;
     if (esPrecip && pu && Array.isArray(pu.fechas)) {
-      pu.fechas.forEach(fecha => fechasGrafico.add(fecha));
+      pu.fechas.forEach(registrarFecha);
     }
-    const ejeFechas = [...fechasGrafico].filter(Boolean).sort();
+    const ejeFechas = construirEjeDiarioVentana(
+      [...fechasGrafico], hoyVisual, lookbackVisual);
     const timeTrack = card.querySelector(".ml-time-track");
     if (timeTrack) {
       timeTrack.style.setProperty("--ml-time-track-width",
-        `${Math.max(720, 78 + ejeFechas.length * 56)}px`);
+        `${Math.max(720, MARGEN_EJE_IZQ_PX + MARGEN_EJE_DER_PX
+          + ejeFechas.length * 56)}px`);
     }
     el.style.minWidth = "0";
     const rangoX = ejeFechas.length ? [
@@ -933,6 +1016,7 @@
       barmode: "overlay",
       showlegend: false,   // única leyenda = la HTML (ml-serie-leyenda); evita leyenda doble
       annotations: etiquetasPuntos,
+      margin: { l: MARGEN_EJE_IZQ_PX, r: MARGEN_EJE_DER_PX, t: 50, b: 56 },
       yaxis: { title: { text: unidad, font: { size: 11 } }, rangemode: esPrecip ? "tozero" : "normal",
                ...(angosto ? { fixedrange: true } : {}) },
       // Eje X: TODAS las fechas (un tick por día, rotadas -45°) — el lienzo tiene ancho
@@ -946,7 +1030,7 @@
     // Distinción HISTORIA vs PRONÓSTICO: franja de fondo desde HOY hasta el final +
     // línea divisoria. F5: "hoy" se calcula en el CLIENTE (TZ Ecuador) — el visor
     // congela los JSON y el 'hoy' del backend envejece; d.hoy queda de fallback.
-    const _hoy = (App.hoyEC ? App.hoyEC() : d.hoy);
+    const _hoy = hoyVisual;
     if (_hoy) {
       // finX = la fecha MÁS TARDÍA entre banda y modelos (no solo la banda): banda y
       // líneas salen de bases distintas y solo comparten el 'desde'; tomar el máximo
@@ -968,6 +1052,10 @@
         font: { family: "IBM Plex Mono", size: 10, color: C.anot } }];
     }
     Plotly.newPlot(el, traces, layout, App.plotlyConfig(angosto ? { displayModeBar: false } : {})).then(() => {
+      // Plotly puede redistribuir l/r para acomodar el título del eje Y. La tabla
+      // lee el dominio efectivamente renderizado, no el margen solicitado, y así
+      // cada centro de columna coincide con su tick incluso tras un resize.
+      sincronizarMargenesTabla(el, timeTrack);
       // En móvil, ubica el presente con dos días de contexto histórico. Escritorio
       // no tiene desplazamiento horizontal y siempre muestra el eje completo.
       const sc = el.closest(".ml-time-scroll");
@@ -1026,11 +1114,11 @@
         const dd = f => `${f.slice(8, 10)}/${f.slice(5, 7)}`;
         const sep = i => i === iHoy ? " ml-pb-hoy" : "";   // borde que marca el inicio del pronóstico
         const cabFechas = fechasTabla.map((fecha, i) =>
-          `<th class="ml-pb-f${sep(i)}" aria-label="${esc(fecha)}">${dd(fecha)}</th>`).join("");
+          `<th class="ml-pb-f${sep(i)}" data-fecha="${esc(fecha)}" aria-label="${esc(fecha)}">${dd(fecha)}</th>`).join("");
         const filasU = (pu.umbrales || []).map((u, j) => {
           const celdas = fechasTabla.map((fecha, i) => {
             const p = (probabilidadesPorFecha.get(fecha) || [])[j];
-            return `<td class="ml-pb-c${sep(i)}" style="${celStyle(p)}">${p == null ? "—" : p + "%"}</td>`;
+            return `<td class="ml-pb-c${sep(i)}" data-fecha="${esc(fecha)}" style="${celStyle(p)}">${p == null ? "—" : p + "%"}</td>`;
           }).join("");
           return `<tr><th class="ml-pb-u">≥${u} mm</th>${celdas}<td class="ml-pb-spacer" aria-hidden="true"></td></tr>`;
         }).join("");
@@ -1132,6 +1220,8 @@
     _opacidadPorSkill: opacidadPorSkill,
     _indiceRecomendadoModelos: indiceRecomendadoModelos,
     _filtrarModelosFamilia: filtrarModelosFamilia,
+    _construirEjeDiarioVentana: construirEjeDiarioVentana,
+    _margenesEjeDesdeTicks: margenesEjeDesdeTicks,
     async render(vista) {
       // La cabecera global ya la gestiona el módulo anfitrión (Pronóstico):
       // aquí no se toca #cabecera-vista.

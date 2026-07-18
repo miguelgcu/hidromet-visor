@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"P73","dias":4,"fecha":"2026-07-21","hoy":"2026-07-17","lluvia":null,"nombre":"Rayocucho","sin_datos":true,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"P73","dias":4,"fecha":"2026-07-22","hoy":"2026-07-18","lluvia":{"llueve":false,"prob":23,"prob_fuerte":null,"q25":3.4,"q75":4.6,"texto":"NO"},"nombre":"Rayocucho","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

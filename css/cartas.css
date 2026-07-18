@@ -152,14 +152,15 @@
 .ct-hv-controles label:first-child { min-width: min(360px, 38vw); }
 .ct-hv-controles span { color: var(--muted-2); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
 .ct-hv-controles select { min-height: 34px; }
-.ct-hv-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(470px, .95fr); gap: 14px; align-items: stretch; }
+.ct-hv-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: stretch; }
 .ct-hv-plot, .ct-hv-tabla-wrap { min-width: 0; background: var(--surface-2); border: 1px solid var(--line); border-radius: 11px; }
-.ct-hv-tabla-wrap { overflow: auto; padding: 7px; }
-.ct-hv-met { width: 100%; border-collapse: collapse; font-size: 11px; white-space: nowrap; }
-.ct-hv-met th { padding: 6px 7px; color: var(--muted-2); text-align: right; border-bottom: 1px solid var(--line); font-size: 9.5px; text-transform: uppercase; letter-spacing: .035em; }
+.ct-hv-tabla-wrap { overflow-x: clip; overflow-y: visible; padding: 7px; }
+.ct-hv-met { width: 100%; border-collapse: collapse; font-size: 10.5px; white-space: nowrap; }
+.ct-hv-met th { padding: 6px 5px; color: var(--muted-2); text-align: right; border-bottom: 1px solid var(--line); font-size: 9px; text-transform: uppercase; letter-spacing: .025em; }
 .ct-hv-met th:first-child, .ct-hv-met th:last-child { text-align: left; }
-.ct-hv-met td { padding: 5px 7px; border-bottom: 1px solid var(--line-3); color: var(--muted); text-align: right; }
+.ct-hv-met td { padding: 5px; border-bottom: 1px solid var(--line-3); color: var(--muted); text-align: right; }
 .ct-hv-met td:first-child, .ct-hv-met td:last-child { text-align: left; }
+.ct-hv-met th:last-child, .ct-hv-met td:last-child { white-space: normal; min-width: 92px; }
 .ct-hv-met td.mono { color: var(--ink); font-weight: 600; }
 .ct-hv-met tr.activa td { background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .ct-hv-met tr:last-child td { border-bottom: 0; }
@@ -202,4 +203,8 @@
   .ct-panel { padding: 14px; }
   /* tabla de umbrales (modal) con scroll horizontal */
   .ct-umbrales-tabla { display: block; overflow-x: auto; }
+  /* En teléfono se conserva el desplazamiento deliberado; en escritorio la
+     tabla de hidroestimadores ocupa una fila completa y nunca se recorta. */
+  .ct-hv-tabla-wrap { overflow-x: auto; }
+  .ct-hv-met { min-width: 780px; }
 }

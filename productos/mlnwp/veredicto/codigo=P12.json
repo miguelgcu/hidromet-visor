@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"P12","dias":1,"fecha":"2026-07-18","hoy":"2026-07-17","lluvia":null,"nombre":"Toctiuco","sin_datos":true,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"P12","dias":1,"fecha":"2026-07-19","hoy":"2026-07-18","lluvia":{"llueve":false,"prob":23,"prob_fuerte":null,"q25":2.6,"q75":3.9,"texto":"NO"},"nombre":"Toctiuco","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"P41","dias":5,"fecha":"2026-07-22","hoy":"2026-07-17","lluvia":null,"nombre":"Guayllabamba Hacienda","sin_datos":true,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"P41","dias":5,"fecha":"2026-07-23","hoy":"2026-07-18","lluvia":{"llueve":false,"prob":18,"prob_fuerte":null,"q25":0.0,"q75":0.9,"texto":"NO"},"nombre":"Guayllabamba Hacienda","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

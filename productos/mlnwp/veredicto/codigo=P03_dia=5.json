@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"P03","dias":5,"fecha":"2026-07-22","hoy":"2026-07-17","lluvia":null,"nombre":"Rumihurco Machángara","sin_datos":true,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"P03","dias":5,"fecha":"2026-07-23","hoy":"2026-07-18","lluvia":{"llueve":false,"prob":22,"prob_fuerte":null,"q25":2.5,"q75":3.7,"texto":"NO"},"nombre":"Rumihurco Machángara","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

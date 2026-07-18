@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"P35","dias":2,"fecha":"2026-07-19","hoy":"2026-07-17","lluvia":null,"nombre":"Bocatoma Pita","sin_datos":true,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"P35","dias":2,"fecha":"2026-07-20","hoy":"2026-07-18","lluvia":{"llueve":false,"prob":18,"prob_fuerte":null,"q25":2.2,"q75":3.4,"texto":"NO"},"nombre":"Bocatoma Pita","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

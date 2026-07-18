@@ -402,7 +402,9 @@
             ${(typeof r.lat === "number" && typeof r.lon === "number")
               ? `<span class="gg-tag">${r.lat.toFixed(3)}°, ${r.lon.toFixed(3)}°</span>` : ""}
             <span class="gg-tag">${esc(r.fuente || "GEOGLOWS ECMWF v2")}</span>
-            ${r.emitido ? `<span class="gg-tag">emitido <b>${esc(String(r.emitido).slice(0, 10))}</b></span>` : ""}
+            ${(r.inicio_pronostico || r.emitido)
+              ? `<span class="gg-tag">inicio <b>${esc(String(r.inicio_pronostico || r.emitido).slice(0, 10))}</b></span>`
+              : ""}
           </div>
         </div>
         <span class="gg-chip" style="--c:${colorNivel(na)}">${esc(na.etiqueta || "—")}</span>

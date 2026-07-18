@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"P30","dias":2,"fecha":"2026-07-19","hoy":"2026-07-17","lluvia":null,"nombre":"Santa Rosa","sin_datos":true,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"P30","dias":2,"fecha":"2026-07-20","hoy":"2026-07-18","lluvia":{"llueve":false,"prob":24,"prob_fuerte":null,"q25":4.2,"q75":5.5,"texto":"NO"},"nombre":"Santa Rosa","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

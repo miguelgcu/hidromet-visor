@@ -2464,11 +2464,15 @@
           hovertemplate: `%{x} · ${metrica} %{y:.3f}<extra>${esc(ALERTA_FUENTE_ROTULO[s.fuente] || s.fuente)}</extra>`,
         })));
         Plotly.react(temporal, traces, {
-          height: 650, margin: { l: 44, r: 14, t: 58, b: 46 },
+          height: 690, margin: { l: 44, r: 14, t: 54, b: 92 },
           paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
           title: { text: "Evolución temporal causal · CSI / POD / FAR", font: { size: 13, color: tinta } },
           grid: { rows: 3, columns: 1, pattern: "independent" },
-          legend: { orientation: "h", y: 1.08, font: { size: 9, color: tinta } },
+          // Nueve fuentes no caben junto al título sin solaparse. La leyenda va
+          // debajo de los tres paneles: mantiene todos los modelos visibles y el
+          // encabezado queda legible tanto en escritorio como en el visor.
+          legend: { orientation: "h", x: 0, xanchor: "left", y: -0.12,
+            yanchor: "top", font: { size: 9, color: tinta } },
           xaxis: { type: "category", showticklabels: false, showgrid: false },
           xaxis2: { type: "category", showticklabels: false, showgrid: false },
           xaxis3: { type: "category", tickfont: { size: 9, color: tinta }, showgrid: false },

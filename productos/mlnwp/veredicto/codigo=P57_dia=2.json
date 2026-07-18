@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"P57","dias":2,"fecha":"2026-07-19","hoy":"2026-07-17","lluvia":null,"nombre":"Quijos Campamento","sin_datos":true,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"P57","dias":2,"fecha":"2026-07-20","hoy":"2026-07-18","lluvia":{"llueve":false,"prob":10,"prob_fuerte":null,"q25":2.7,"q75":4.0,"texto":"NO"},"nombre":"Quijos Campamento","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

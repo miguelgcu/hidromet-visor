@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"P77","dias":2,"fecha":"2026-07-19","hoy":"2026-07-17","lluvia":null,"nombre":"Las Islas","sin_datos":true,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"P77","dias":2,"fecha":"2026-07-20","hoy":"2026-07-18","lluvia":{"llueve":false,"prob":14,"prob_fuerte":null,"q25":12.8,"q75":14.1,"texto":"NO"},"nombre":"Las Islas","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

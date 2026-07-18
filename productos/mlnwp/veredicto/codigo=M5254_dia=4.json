@@ -1,1 +1,1 @@
-{"agg_precip":"sum_07_07","codigo":"M5254","dias":4,"fecha":"2026-07-21","hoy":"2026-07-17","lluvia":{"llueve":true,"prob":83,"prob_fuerte":7,"q25":0.0,"q75":7.7,"texto":"SÍ"},"nombre":"Salve Faccha","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_07_07","codigo":"M5254","dias":4,"fecha":"2026-07-22","hoy":"2026-07-18","lluvia":{"llueve":true,"prob":89,"prob_fuerte":11,"q25":0.0,"q75":8.5,"texto":"SÍ"},"nombre":"Salve Faccha","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

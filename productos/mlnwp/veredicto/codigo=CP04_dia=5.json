@@ -1,1 +1,1 @@
-{"agg_precip":"sum_07_07","codigo":"CP04","dias":5,"fecha":"2026-07-22","hoy":"2026-07-17","lluvia":{"llueve":true,"prob":82,"prob_fuerte":7,"q25":0.0,"q75":4.0,"texto":"SÍ"},"nombre":"Sevilla","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_07_07","codigo":"CP04","dias":5,"fecha":"2026-07-23","hoy":"2026-07-18","lluvia":{"llueve":true,"prob":66,"prob_fuerte":6,"q25":0.0,"q75":3.4,"texto":"SÍ"},"nombre":"Sevilla","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

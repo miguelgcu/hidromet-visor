@@ -1,8 +1,8 @@
 {
-  "generado": "2026-07-17 23:49",
+  "generado": "2026-07-18 04:08",
   "fuente": "Actualización operativa",
   "ok": true,
-  "parcial": false,
-  "productos_con_fallback": 0,
+  "parcial": true,
+  "productos_con_fallback": 3,
   "fallos": []
 }

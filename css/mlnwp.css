@@ -206,7 +206,12 @@ html[data-tema="oscuro"] .ml-tabla-modelos tbody tr { border-bottom-color: var(-
 .ml-serie-vacia b { color: var(--ink-2); }
 .ml-serie-vacia span { max-width: 520px; font-size: 12px; }
 .ml-time-scroll { width: 100%; overflow-x: clip; }
-.ml-time-track { width: 100%; min-width: 0; }
+.ml-time-scroll:focus-visible { outline: 2px solid var(--ml-purple);
+  outline-offset: 3px; border-radius: 6px; }
+.ml-time-track { width: 100%; min-width: 0;
+  /* Contrato compartido con Plotly: estas dos columnas absorben exactamente
+     sus márgenes y dejan cada fecha de la tabla bajo el tick correspondiente. */
+  --ml-axis-left: 58px; --ml-axis-right: 20px; }
 .ml-serie-plot { width: 100%; height: 380px; }
 /* Etiqueta mínima: solo el valor sobre un halo blanco tenue. Sin fecha, borde ni
    sombra; la fecha completa permanece en el eje X y en el hover unificado. */
@@ -285,8 +290,8 @@ html[data-tema="oscuro"] .ml-region-tabla td { border-top-color: var(--line-3); 
 .ml-pb-wrap { width: 100%; overflow: visible; }
 .ml-pb-tabla { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 10.5px; }
 .ml-pb-tabla th, .ml-pb-tabla td { padding: 4px 2px; text-align: center; border-bottom: 1px solid var(--line-3); }
-.ml-pb-col-umbral { width: 58px; }
-.ml-pb-col-spacer { width: 20px; }
+.ml-pb-col-umbral { width: var(--ml-axis-left); }
+.ml-pb-col-spacer { width: var(--ml-axis-right); }
 .ml-pb-esq { text-align: left !important; color: var(--faint); font-weight: 600; }
 .ml-pb-f { color: var(--muted); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap;
   border-bottom: 1.5px solid var(--line) !important; }

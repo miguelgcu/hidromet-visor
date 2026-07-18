@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"P76","dias":3,"fecha":"2026-07-20","hoy":"2026-07-17","lluvia":null,"nombre":"Nanegal Redondo","sin_datos":true,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"P76","dias":3,"fecha":"2026-07-21","hoy":"2026-07-18","lluvia":{"llueve":false,"prob":9,"prob_fuerte":null,"q25":10.1,"q75":11.4,"texto":"NO"},"nombre":"Nanegal Redondo","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

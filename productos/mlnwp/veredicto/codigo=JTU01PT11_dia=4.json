@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"JTU01PT11","dias":4,"fecha":"2026-07-21","hoy":"2026-07-17","lluvia":null,"nombre":"Jatunhuaycu11","sin_datos":true,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"JTU01PT11","dias":4,"fecha":"2026-07-22","hoy":"2026-07-18","lluvia":{"llueve":false,"prob":19,"prob_fuerte":null,"q25":2.3,"q75":3.5,"texto":"NO"},"nombre":"Jatunhuaycu11","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
