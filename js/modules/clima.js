@@ -24,6 +24,13 @@
     if (host) { delete host._clickEst; delete host._clickRank; }
   }
 
+  function quitarPlaceholder(host) {
+    if (!host) return;
+    Array.from(host.children || []).forEach(child => {
+      if (child.classList && child.classList.contains("cl-vacio")) child.remove();
+    });
+  }
+
   // c = color representativo de la variable (≈ su paleta en el mapa); alimenta el
   // swatch del pill (--pc) para que el control enseñe el color del campo.
   const VARS = [
@@ -133,6 +140,7 @@
         range: [-81.2, -75.1] },
       yaxis: { visible: false, fixedrange: false, range: [-5.1, 1.6] },
     });
+    quitarPlaceholder(host);
     Plotly.react(host, [heat, ...contorno(), ...trazaEstaciones(ce, d)], layout, App.plotlyConfig());
     if (App.pinchZoomMapa) App.pinchZoomMapa(host);   // v17: pinza = zoom del mapa
     const ley = host.parentElement && host.parentElement.querySelector('[data-rol="leyenda"]');
@@ -729,6 +737,7 @@
       yaxis: { title: d.unidad || "", rangemode: d.variable === "precip" ? "tozero" : "normal",
         gridcolor: "rgba(120,130,150,.14)", zeroline: false },
     });
+    quitarPlaceholder(host);
     Plotly.react(host, traces, layout, App.plotlyConfig());
   }
 
