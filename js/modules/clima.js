@@ -117,11 +117,29 @@
       `<div class="ct-leyenda-ticks">${tk}</div>`;
   }
 
+  function observarTamanoMapa(host) {
+    if (!host || host._clResizeObserver || typeof ResizeObserver !== "function") return;
+    let timer = null, lastWidth = Math.round(host.clientWidth || 0);
+    host._clResizeObserver = new ResizeObserver(entries => {
+      const width = Math.round((entries[0] && entries[0].contentRect.width) || host.clientWidth || 0);
+      if (!width || Math.abs(width - lastWidth) < 3) return;
+      lastWidth = width;
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (!host.isConnected || !window.Plotly || !host.classList.contains("js-plotly-plot")) return;
+        const height = Math.max(380, Math.min(640, Math.round(width * 1.08)));
+        try { Plotly.relayout(host, { height }); Plotly.Plots.resize(host); } catch (e) {}
+      }, 90);
+    });
+    host._clResizeObserver.observe(host);
+  }
+
   // Mapa de una normal --------------------------------------------------------
   function pintarMapa(host, d, ce) {
     if (!window.Plotly || !host) return;
     if (!d || d.error) { limpiarPlot(host); host.innerHTML = vacio("🗺️", esc(d && d.error || "Sin datos")); return; }
-    const dec = (d.variable === "tmax" || d.variable === "tmin") ? 1 : (d.variable === "aridez" ? 2 : 0);
+    const dec = (d.variable === "tmax" || d.variable === "tmin" || d.operacion === "anomalia_mm")
+      ? 1 : (d.variable === "aridez" ? 2 : 0);
     const heat = {
       type: "heatmap", x: d.lon, y: d.lat, z: d.campo, colorscale: d.colorscale,
       zmin: d.vmin, zmax: d.vmax, zsmooth: "best", hoverongaps: false,
@@ -142,6 +160,7 @@
     });
     quitarPlaceholder(host);
     Plotly.react(host, [heat, ...contorno(), ...trazaEstaciones(ce, d)], layout, App.plotlyConfig());
+    observarTamanoMapa(host);
     if (App.pinchZoomMapa) App.pinchZoomMapa(host);   // v17: pinza = zoom del mapa
     const ley = host.parentElement && host.parentElement.querySelector('[data-rol="leyenda"]');
     if (ley) ley.innerHTML = leyendaMapa(d, dec);
@@ -271,6 +290,25 @@
     </div>`;
   }
 
+  function tarjetaArea(p) {
+    if (!p || p.error) return vacio("⚠️", esc(p && p.error || "Sin datos areales"));
+    const V = p.vars || {};
+    const kpi = (e, v, u, d, c) => `<div class="cl-kpi" style="--kc:${c}"><div class="v">${num(v, d)} <small>${esc(u)}</small></div><div class="e">${esc(e)}</div></div>`;
+    const cobertura = ["precip", "tmax", "tmin", "pet"].filter(k => V[k]).map(k =>
+      `${V[k].etiqueta}: ${num(V[k].cobertura_pct, 1)}% (${num(V[k].pixeles_validos)} píxeles)`).join(" · ");
+    return `<div class="cl-card">
+      <p class="cl-maptit">${esc(p.nombre)}${p.region ? ` · ${esc(App.redEtiqueta(p.region))}` : ""}</p>
+      <div class="cl-kpis">
+        ${kpi("Lluvia media areal anual", V.precip && V.precip.anual, "mm", 0, COL.precip)}
+        ${kpi("PET media areal anual", V.pet && V.pet.anual, "mm", 0, COL.pet)}
+        ${kpi("Tmáx media areal", V.tmax && V.tmax.anual, "°C", 1, COL.tmax)}
+        ${kpi("Tmín media areal", V.tmin && V.tmin.anual, "°C", 1, COL.tmin)}
+      </div>
+      <div class="cl-tabla-scroll">${tablaMensual(p)}</div>
+      <p class="cl-nota">Promedio por superficie de los centros de píxel dentro del polígono (${num(p.area_malla_km2, 0)} km² de malla). Los faltantes no valen cero. Cobertura anual completa: ${esc(cobertura || "no disponible")}.</p>
+    </div>`;
+  }
+
   // PESTAÑA 1 — MAPAS ---------------------------------------------------------
   const E = { mapVar: "precip", mapEsc: "anual", mapEst: true, mapaCache: {}, estCache: {},
     tabs: null, estSel: null };
@@ -296,12 +334,15 @@
         <div class="cl-card cl-mapa-card"><h3 class="cl-maptit" data-rol="tit">Cargando…</h3><div class="cl-plot cl-plot-mapa" data-rol="plot"></div>
           <div class="ct-leyenda-carta cl-leyenda" data-rol="leyenda"></div>
           <p class="cl-nota">Referencia mensual 1991–2020 (~5 km) de la generación climática activa. Pasa el cursor para leer lat/lon y valor; los puntos muestran observaciones disponibles (clic → su ficha).</p></div>
-        <div class="cl-card cl-est-card"><h3 class="cl-maptit" data-rol="mini-tit">Ficha de estación</h3>
+        <div class="cl-card cl-est-card"><h3 class="cl-maptit" data-rol="mini-tit">Resumen por área o estación</h3>
+          <div class="cl-mini-sel">
+            <select data-rol="mini-area" class="cl-mini-select"><option value="">Provincia (promedio areal)…</option></select>
+          </div>
           <div class="cl-mini-sel">
             <input class="cl-buscar" data-rol="mini-buscar" type="search" placeholder="Buscar por nombre, código o región…" autocomplete="off">
             <select data-rol="mini-est" class="cl-mini-select"></select>
           </div>
-          <div class="cl-est-cuerpo" data-rol="mini">${vacio("📍", "Toca una estación en el mapa (o búscala aquí) para ver su climograma, sus normales mensuales y su serie observada.")}</div></div>
+          <div class="cl-est-cuerpo" data-rol="mini">${vacio("📍", "Elige una provincia para su climatología ponderada por superficie, o toca una estación para consultar su punto y observaciones.")}</div></div>
       </div>
     </div>`;
     const plot = c.querySelector('[data-rol="plot"]'), tit = c.querySelector('[data-rol="tit"]');
@@ -314,6 +355,8 @@
     // ahora la ficha: climograma + normales mensuales + serie observada, apilados).
     async function miniFicha(cod, nom) {
       miniTit.textContent = `Ficha — ${nom || cod}`;
+      const selArea = c.querySelector('[data-rol="mini-area"]');
+      if (selArea) selArea.value = "";
       const selEst = c.querySelector('[data-rol="mini-est"]');
       if (selEst && selEst.value !== String(cod)) selEst.value = String(cod);
       miniEl.innerHTML = cargando();
@@ -329,6 +372,20 @@
         pintarClimograma(miniEl.querySelector('[data-rol="mini-climo"]'), p);
       }
       miniUlt = { p, nom, cod };
+    }
+    async function miniArea(nombre) {
+      if (!nombre) return;
+      miniTit.textContent = `Climatología areal — ${nombre}`;
+      const selEst = c.querySelector('[data-rol="mini-est"]');
+      if (selEst) selEst.value = "";
+      miniEl.innerHTML = cargando("Calculando promedio por superficie…");
+      let p;
+      try { p = await App.api(`/clima/area?nombre=${encodeURIComponent(nombre)}`); }
+      catch (e) { miniEl.innerHTML = vacio("⚠️", esc(e.message)); return; }
+      if (p.error) { miniEl.innerHTML = vacio("⚠️", esc(p.error)); return; }
+      miniEl.innerHTML = `<div class="cl-ficha-pila"><div class="cl-plot" data-rol="mini-climo"></div>${tarjetaArea(p)}</div>`;
+      pintarClimograma(miniEl.querySelector('[data-rol="mini-climo"]'), p);
+      miniUlt = { p, area: nombre };
     }
     // Selector de estación del panel (buscador + lista agrupada por región).
     (async () => {
@@ -360,6 +417,15 @@
         if (lista.some(e => String(e.codigo) === String(previa))) selEst.value = previa;
         else if (lista.length === 1) { selEst.value = String(lista[0].codigo); selEst.onchange(); }
       };
+    })();
+    (async () => {
+      const selArea = c.querySelector('[data-rol="mini-area"]');
+      if (!selArea) return;
+      let lista = [];
+      try { lista = (await App.api("/clima/areas")).areas || []; } catch (e) {}
+      selArea.innerHTML = `<option value="">Provincia (promedio areal)…</option>` + lista.map(a =>
+        `<option value="${esc(a.nombre)}">${esc(a.nombre)}${a.region ? " · " + esc(App.redEtiqueta(a.region)) : ""}</option>`).join("");
+      selArea.onchange = () => miniArea(selArea.value);
     })();
     async function dibujar() {
       const v = VARS.find(x => x.id === E.mapVar);
@@ -845,6 +911,7 @@
   }
   async function mapaDesdeChunks(manifest, desde, hasta, operation) {
     const start = fechaUTC(desde), end = fechaUTC(hasta), chunks = [];
+    const anomaly = operation === "anomalia_mm" || operation === "anomalia_pct";
     if (manifest.schema === "hidromet.clima-diario.v2") {
       const windowStart = fechaUTC(manifest.window.desde), windowEnd = fechaUTC(manifest.window.hasta);
       if (start < windowStart || end > windowEnd || start > end) throw new Error("Rango fuera de la ventana móvil publicada.");
@@ -858,23 +925,44 @@
     const buffers = await Promise.all(chunks.map(c => leerBinGzip(`productos/clima/diario/${c.file}`)));
     const cells = manifest.grid.ny * manifest.grid.nx, totalDays = Math.round((end - start) / diaMs) + 1;
     const sum = new Float64Array(cells), count = new Uint32Array(cells), selected = [];
+    let climateValues = null, climateSum = null, climateCount = null, climateStart = null;
+    if (anomaly) {
+      if (!(manifest.climatology && manifest.climatology.file))
+        throw new Error("La normal diaria 1991–2020 aún no está publicada.");
+      climateValues = new Uint16Array(await leerBinGzip(`productos/clima/diario/${manifest.climatology.file}`));
+      climateStart = fechaUTC(manifest.window.desde);
+      const climateDays = Number(manifest.window.dias || (Math.round((fechaUTC(manifest.window.hasta) - climateStart) / diaMs) + 1));
+      if (climateValues.length !== climateDays * cells) throw new Error("Chunk climatológico inconsistente.");
+      climateSum = new Float64Array(cells); climateCount = new Uint32Array(cells);
+    }
     chunks.forEach((chunk, yi) => {
       const days = Math.round((chunk.hasta - chunk.desde) / diaMs) + 1, values = new Uint16Array(buffers[yi]);
       if (values.length !== days * cells) throw new Error(`Chunk cartográfico ${chunk.year || "móvil"} inconsistente.`);
       const a = Math.max(start.getTime(), chunk.desde.getTime()), b = Math.min(end.getTime(), chunk.hasta.getTime());
       for (let time = a; time <= b; time += diaMs) {
         const day = Math.round((time - chunk.desde.getTime()) / diaMs), base = day * cells;
+        const climateBase = anomaly ? Math.round((time - climateStart.getTime()) / diaMs) * cells : 0;
         selected.push([values, base]);
-        for (let i = 0; i < cells; i++) if (values[base + i] !== manifest.missing_u16) { sum[i] += values[base + i] / manifest.scale; count[i]++; }
+        for (let i = 0; i < cells; i++) {
+          if (values[base + i] !== manifest.missing_u16) { sum[i] += values[base + i] / manifest.scale; count[i]++; }
+          if (anomaly && climateValues[climateBase + i] !== manifest.missing_u16) {
+            climateSum[i] += climateValues[climateBase + i] / manifest.scale; climateCount[i]++;
+          }
+        }
       }
     });
     if (selected.length !== totalDays) throw new Error(`Cobertura incompleta: ${selected.length} de ${totalDays} días.`);
     if (operation === "mediana" && totalDays > 3660) throw new Error("La mediana exacta admite hasta 10 años.");
     const field = new Array(cells).fill(null), finite = [], scratch = operation === "mediana" ? new Float32Array(totalDays) : null;
     for (let i = 0; i < cells; i++) {
-      if (count[i] !== totalDays) continue;
+      if (count[i] !== totalDays || (anomaly && climateCount[i] !== totalDays)) continue;
       let value;
-      if (operation === "acumulado") value = sum[i];
+      if (operation === "anomalia_mm") value = sum[i] - climateSum[i];
+      else if (operation === "anomalia_pct") {
+        if (climateSum[i] < 1) continue;
+        value = 100 * (sum[i] - climateSum[i]) / climateSum[i];
+      }
+      else if (operation === "acumulado") value = sum[i];
       else if (operation === "media") value = sum[i] / totalDays;
       else {
         for (let d = 0; d < selected.length; d++) scratch[d] = selected[d][0][selected[d][1] + i] / manifest.scale;
@@ -883,15 +971,22 @@
       }
       field[i] = Math.round(value * 10) / 10; finite.push(value);
     }
-    finite.sort((a, b) => a - b); const vmax = Math.max(1, finite[Math.floor((finite.length - 1) * .98)] || 1);
-    const palette = ["#ffffd9", "#edf8b1", "#c7e9b4", "#7fcdbb", "#41b6c4", "#1d91c0", "#225ea8", "#0c2c84"];
+    const extentValues = anomaly ? finite.map(Math.abs) : finite.slice();
+    extentValues.sort((a, b) => a - b); const vmax = Math.max(1, extentValues[Math.floor((extentValues.length - 1) * .98)] || 1);
+    const palette = anomaly
+      ? ["#543005", "#8c510a", "#bf812d", "#dfc27d", "#f5f5f5", "#80cdc1", "#35978f", "#01665e", "#003c30"]
+      : ["#ffffd9", "#edf8b1", "#c7e9b4", "#7fcdbb", "#41b6c4", "#1d91c0", "#225ea8", "#0c2c84"];
     const colorscale = []; palette.forEach((color, i) => { colorscale.push([i / palette.length, color], [(i + 1) / palette.length, color]); });
     const rows = []; for (let y = 0; y < manifest.grid.ny; y++) rows.push(field.slice(y * manifest.grid.nx, (y + 1) * manifest.grid.nx));
-    const label = { acumulado: "Lluvia acumulada", media: "Lluvia media diaria", mediana: "Mediana diaria de lluvia" }[operation];
-    return { lon: manifest.grid.lon, lat: manifest.grid.lat, campo: rows, colorscale, vmin: 0, vmax: Math.round(vmax * 10) / 10,
-      unidad: "mm", variable: "precip", operacion: operation, desde, hasta, dias: totalDays,
+    const label = { acumulado: "Lluvia acumulada", media: "Lluvia media diaria", mediana: "Mediana diaria de lluvia",
+      anomalia_mm: "Anomalía de lluvia vs 1991–2020", anomalia_pct: "Anomalía relativa de lluvia vs 1991–2020" }[operation];
+    return { lon: manifest.grid.lon, lat: manifest.grid.lat, campo: rows, colorscale,
+      vmin: anomaly ? -Math.round(vmax * 10) / 10 : 0, vmax: Math.round(vmax * 10) / 10,
+      unidad: operation === "anomalia_pct" ? "%" : "mm", variable: "precip", operacion: operation, desde, hasta, dias: totalDays,
       cobertura: { dias_solicitados: totalDays, dias_usados: totalDays, completa: true },
-      titulo: `${label} — ${desde} a ${hasta}`, leyenda_sub: `${totalDays} días · ${desde} a ${hasta}` };
+      titulo: `${label} — ${desde} a ${hasta}`, referencia: anomaly ? "1991-2020" : null,
+      metodologia: anomaly ? "Mismos días calendario de 1991–2020; ≥24 años válidos por día y píxel." : null,
+      leyenda_sub: anomaly ? `vs 1991–2020 · ${totalDays} días` : `${totalDays} días · ${desde} a ${hasta}` };
   }
 
   async function tabDiario(c) {
@@ -914,13 +1009,16 @@
     const mapInv = availability.mapa_precip || {};
     const end0 = mapInv.hasta || new Date().toISOString().slice(0, 10);
     const startDate = new Date(`${end0}T12:00:00`); startDate.setDate(startDate.getDate() - 10);
-    const start0 = mapInv.desde || startDate.toISOString().slice(0, 10);
+    const recentStart = startDate.toISOString().slice(0, 10);
+    // El histórico completo permanece consultable en local, pero abrir la pestaña
+    // nunca debe agregar de oficio varias décadas ni dibujar una serie ilegible.
+    const start0 = mapInv.desde && mapInv.desde > recentStart ? mapInv.desde : recentStart;
     const options = stations.map(e => `<option value="${esc(e.codigo)}">${esc(e.nombre || e.codigo)} (${esc(e.codigo)}) · ${esc(App.redEtiqueta(e.dependencia || e.region || ""))}</option>`).join("");
     c.innerHTML = `<div class="cl-wrap cl-diario-wrap">
       <div class="cl-toolbar cl-diario-toolbar">
         <div class="cl-grupo"><span>Desde</span><input type="date" data-rol="desde" min="${esc(mapInv.desde || "1990-01-01")}" max="${esc(end0)}" value="${esc(start0)}"></div>
         <div class="cl-grupo"><span>Hasta</span><input type="date" data-rol="hasta" min="${esc(mapInv.desde || "1990-01-01")}" max="${esc(end0)}" value="${esc(end0)}"></div>
-        <div class="cl-grupo"><span>Mapa de lluvia</span><select data-rol="operacion"><option value="acumulado">Acumulado</option><option value="media">Promedio diario</option><option value="mediana">Mediana diaria</option></select></div>
+        <div class="cl-grupo"><span>Mapa de lluvia</span><select data-rol="operacion"><option value="acumulado">Acumulado</option><option value="media">Promedio diario</option><option value="mediana">Mediana diaria</option><option value="anomalia_mm">Anomalía (mm)</option><option value="anomalia_pct">Anomalía (%)</option></select></div>
         <div class="cl-grupo"><button class="cl-btn" data-rol="actualizar">Actualizar producto</button></div>
       </div>
       <div class="cl-card cl-rango-card"><h3 class="cl-maptit" data-rol="map-tit">Mapa de lluvia por rango</h3>
@@ -937,16 +1035,20 @@
       mapTitle = c.querySelector('[data-rol="map-tit"]'), station = c.querySelector('[data-rol="est"]'),
       variable = c.querySelector('[data-rol="variable"]'), seriesHost = c.querySelector('[data-rol="serie"]'),
       metricsHost = c.querySelector('[data-rol="metricas"]'), method = c.querySelector('[data-rol="metodo"]'),
-      search = c.querySelector('[data-rol="buscar"]');
+      search = c.querySelector('[data-rol="buscar"]'), mapNote = c.querySelector('[data-rol="map-nota"]');
     let lastMap = null, lastSeries = null;
     async function loadMap() {
       limpiarPlot(mapHost); mapHost.innerHTML = cargando("Agregando grillas diarias…");
       try {
+        const isAnomaly = operation.value === "anomalia_mm" || operation.value === "anomalia_pct";
         const d = dailyManifest
           ? await mapaDesdeChunks(dailyManifest, desde.value, hasta.value, operation.value)
-          : await App.api(`/clima/mapa_rango?desde=${desde.value}&hasta=${hasta.value}&operacion=${operation.value}`);
+          : await App.api(isAnomaly
+            ? `/clima/mapa_anomalia?desde=${desde.value}&hasta=${hasta.value}&modo=${operation.value}`
+            : `/clima/mapa_rango?desde=${desde.value}&hasta=${hasta.value}&operacion=${operation.value}`);
         if (d.error) throw new Error(d.error);
-        d.leyenda_sub = `${d.dias} días · ${d.desde} a ${d.hasta}`;
+        d.leyenda_sub = isAnomaly ? `vs 1991–2020 · ${d.dias} días` : `${d.dias} días · ${d.desde} a ${d.hasta}`;
+        mapNote.textContent = d.metodologia || "Se exige cobertura completa en cada píxel para el período seleccionado.";
         mapTitle.textContent = d.titulo || "Mapa por rango"; lastMap = d; pintarMapa(mapHost, d, null);
       } catch (e) { limpiarPlot(mapHost); mapHost.innerHTML = vacio("⚠️", esc(e.message)); }
     }
@@ -990,7 +1092,7 @@
       E.tabs = App.vistaPestanas(vista, {
         kicker: "Normales 1991–2020 · grilla 0.05° de Ecuador",
         titulo: "Climatología",
-        sub: "Climatologías grilladas de Ecuador (~5 km) corregidas con observaciones",
+        sub: "Mallas climáticas calibradas (~5 km) · Ecuador",
         acento: "var(--cyan)",
         inicial: "mapas",
         pestanas: [

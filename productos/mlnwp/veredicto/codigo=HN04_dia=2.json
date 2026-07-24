@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"HN04","dias":2,"fecha":"2026-07-20","hoy":"2026-07-18","lluvia":null,"nombre":"La Cocha","sin_datos":true,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"HN04","dias":2,"fecha":"2026-07-25","hoy":"2026-07-23","lluvia":{"llueve":true,"prob":71,"prob_fuerte":6,"q25":2.3,"q75":3.3,"texto":"SÍ"},"nombre":"La Cocha","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

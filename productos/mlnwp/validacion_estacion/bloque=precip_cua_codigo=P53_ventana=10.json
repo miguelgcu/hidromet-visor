@@ -1,1 +1,1 @@
-{"altitud_m":2969.0,"aviso":null,"bloque":"precip_cua","codigo":"P53","familia":"Todos","lat":-0.26742,"lon":-78.28711,"met_cols":["mae","rmse","bias","corr"],"modelos":[],"modo":"quantification","nombre":"Paluguillo","region":"Interandina","resumen":null,"ventana":"10"}
+{"altitud_m":2969,"aviso":null,"bloque":"precip_cua","codigo":"P53","familia":"Todos","lat":-0.26765,"lon":-78.28696,"met_cols":["mae","rmse","bias","corr"],"modelos":[],"modo":"quantification","nombre":"Paluguillo","region":"Interandina","resumen":null,"ventana":"10"}

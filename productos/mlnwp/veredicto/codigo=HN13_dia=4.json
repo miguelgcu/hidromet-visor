@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"HN13","dias":4,"fecha":"2026-07-22","hoy":"2026-07-18","lluvia":null,"nombre":"Flavio Alfaro","sin_datos":true,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"HN13","dias":4,"fecha":"2026-07-27","hoy":"2026-07-23","lluvia":{"llueve":false,"prob":29,"prob_fuerte":6,"q25":0.3,"q75":3.0,"texto":"NO"},"nombre":"Flavio Alfaro","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

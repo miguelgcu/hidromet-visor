@@ -1,1 +1,1 @@
-{"altitud_m":3100.0,"aviso":null,"bloque":"precip_cua","codigo":"M5023","familia":"Todos","lat":-0.37781,"lon":-78.14144,"met_cols":["mae","rmse","bias","corr"],"modelos":[],"modo":"quantification","nombre":"Papallacta","region":"Interandina","resumen":null,"ventana":"10"}
+{"altitud_m":3100,"aviso":null,"bloque":"precip_cua","codigo":"M5023","familia":"Todos","lat":-0.37814,"lon":-78.14117,"met_cols":["mae","rmse","bias","corr"],"modelos":[],"modo":"quantification","nombre":"Papallacta","region":"Interandina","resumen":null,"ventana":"10"}

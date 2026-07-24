@@ -1,1 +1,1 @@
-{"altitud_m":4047.0,"aviso":null,"bloque":"precip_det","codigo":"M5261","familia":"Todos","lat":-0.5109,"lon":-78.21377,"met_cols":["pod","far","csi"],"modelos":[],"modo":"detection","nombre":"Meteorológica HUMBOLDT","region":"Interandina","resumen":null,"ventana":"10"}
+{"altitud_m":4047,"aviso":null,"bloque":"precip_det","codigo":"M5261","familia":"Todos","lat":-0.51134,"lon":-78.21356,"met_cols":["pod","far","csi"],"modelos":[],"modo":"detection","nombre":"Meteorológica HUMBOLDT","region":"Interandina","resumen":null,"ventana":"10"}

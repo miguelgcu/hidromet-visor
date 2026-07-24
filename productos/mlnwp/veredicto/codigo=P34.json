@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"P34","dias":1,"fecha":"2026-07-19","hoy":"2026-07-18","lluvia":{"llueve":false,"prob":9,"prob_fuerte":null,"q25":0.6,"q75":1.8,"texto":"NO"},"nombre":"Papallacta","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"P34","dias":1,"fecha":"2026-07-24","hoy":"2026-07-23","lluvia":{"llueve":true,"prob":83,"prob_fuerte":40,"q25":9.8,"q75":10.8,"texto":"SÍ"},"nombre":"Papallacta","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

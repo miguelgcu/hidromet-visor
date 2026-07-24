@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"JTU01PT53","dias":4,"fecha":"2026-07-22","hoy":"2026-07-18","lluvia":{"llueve":false,"prob":23,"prob_fuerte":null,"q25":1.5,"q75":2.7,"texto":"NO"},"nombre":"Jatunhuaycu53","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"JTU01PT53","dias":4,"fecha":"2026-07-27","hoy":"2026-07-23","lluvia":{"llueve":false,"prob":15,"prob_fuerte":7,"q25":0.2,"q75":1.2,"texto":"NO"},"nombre":"Jatunhuaycu53","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

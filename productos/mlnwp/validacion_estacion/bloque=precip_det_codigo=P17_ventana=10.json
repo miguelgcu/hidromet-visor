@@ -1,1 +1,1 @@
-{"altitud_m":2483.0,"aviso":null,"bloque":"precip_det","codigo":"P17","familia":"Todos","lat":-0.29372,"lon":-78.4431,"met_cols":["pod","far","csi"],"modelos":[],"modo":"detection","nombre":"El Tingo","region":"Interandina","resumen":null,"ventana":"10"}
+{"altitud_m":2483,"aviso":null,"bloque":"precip_det","codigo":"P17","familia":"Todos","lat":-0.29397,"lon":-78.44309,"met_cols":["pod","far","csi"],"modelos":[],"modo":"detection","nombre":"El Tingo","region":"Interandina","resumen":null,"ventana":"10"}

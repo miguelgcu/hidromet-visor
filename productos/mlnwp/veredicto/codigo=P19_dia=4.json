@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"P19","dias":4,"fecha":"2026-07-22","hoy":"2026-07-18","lluvia":{"llueve":false,"prob":20,"prob_fuerte":null,"q25":1.1,"q75":2.3,"texto":"NO"},"nombre":"La Tola (Tumbaco","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"P19","dias":4,"fecha":"2026-07-27","hoy":"2026-07-23","lluvia":{"llueve":false,"prob":9,"prob_fuerte":1,"q25":0.0,"q75":0.3,"texto":"NO"},"nombre":"La Tola (Tumbaco","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

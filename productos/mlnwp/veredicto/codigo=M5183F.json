@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"M5183F","dias":1,"fecha":"2026-07-19","hoy":"2026-07-18","lluvia":{"llueve":false,"prob":10,"prob_fuerte":null,"q25":6.0,"q75":7.2,"texto":"NO"},"nombre":"Bellavista- Casa","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"M5183F","dias":1,"fecha":"2026-07-24","hoy":"2026-07-23","lluvia":{"llueve":true,"prob":87,"prob_fuerte":29,"q25":8.2,"q75":9.2,"texto":"SÍ"},"nombre":"Bellavista- Casa","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

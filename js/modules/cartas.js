@@ -1265,8 +1265,8 @@
         </div>
         <div class="ct-hv-grid" data-rol="hv-grid"><span class="suave" style="font-size:12px">Cargando validación…</span></div>
         <p class="ct-nota">La serie y las métricas usan la misma ventana física <b>07:00–07:00</b> y la intersección exacta
-          de pares estación×día común a todas las fuentes. <b>PERSIANN-CCS es diagnóstico no acreditado</b>: su mapa se
-          puede inspeccionar, pero todavía no participa en el consenso ni en alertas. GMAP no aparece porque es lluvia
+          de pares estación×día común a todas las fuentes. <b>PERSIANN-CCS se evalúa primero en modo diagnóstico</b> y
+          solo participa en el consenso cuando acredita al menos 30 fechas comunes, 100 pares y 10 estaciones. GMAP no aparece porque es lluvia
           media areal por cuenca, no un píxel independiente.</p>
       </div>`;
   }
@@ -1315,7 +1315,13 @@
     const filas = prods.flatMap(p => ventanas.map(ventana => {
       const m = (p.metricas_ventanas || {})[String(ventana)];
       const d = (m && m.deteccion) || {};
-      const estado = p.fuente === "CCS" ? "Diagnóstico" : ((p.motor || {}).apto_ponderacion ? "Apto" : "Muestra insuficiente");
+      const motor = p.motor || {};
+      const fechasPareadas = Number(motor.fechas_pareadas || 0);
+      const estado = motor.apto_ponderacion
+        ? "Apto"
+        : (p.fuente === "CCS"
+          ? `Diagnóstico · ${fechasPareadas}/30 d`
+          : "Muestra insuficiente");
       const rotulo = ({ PDIR: "PERSIANN-PDIR", CCS: "PERSIANN-CCS" }[p.fuente] || p.fuente);
       return `<tr class="${ventana === _hvEstado.dias ? "activa" : ""}">
         <td><span class="ct-hv-fuente" style="--hv-color:${esc(HV_COLOR[p.fuente] || "#4c78a8")}">${esc(rotulo)}</span></td>
@@ -2399,8 +2405,9 @@
     };
   }
 
-  // Dos gráficos y una nota metodológica: sin mapas, cruces ni rankings cuando
-  // la muestra causal todavía no supera las puertas operativas.
+  // Dos gráficos de desempeño estricto: contingencia areal e intensidad contra
+  // observaciones. Nunca se sustituyen por el diagnóstico estación×día ni por
+  // una reconstrucción retrospectiva cuando aún no cerró la verdad diaria.
   async function cargarDesempeno() {
     const panel = document.getElementById("ct-desempeno");
     if (!panel) return;
@@ -2412,84 +2419,104 @@
     try {
       const r = await datosDesempeno();
       if (!panel.isConnected) return;
-      const evidencia = r.evidencia || {};
-      const suficiente = r.muestra_suficiente === true;
-      const avisos = (r.advertencias || []).map(esc).join(" ");
-      evidenciaHost.className = "ct-nota ct-evidencia-causal " + (suficiente ? "suficiente" : "insuficiente");
-      evidenciaHost.innerHTML = `<b>${suficiente ? "Evidencia causal suficiente" : "Muestra causal insuficiente"}</b> · ` +
-        `${fmtNum(evidencia.casos_estacion_fecha || 0)} casos estación×día · ` +
-        `${fmtNum(evidencia.fechas_validas || 0)} fechas válidas · ` +
-        `${fmtNum(evidencia.fechas_emision || 0)} emisiones. ${avisos}`;
+      const estricta = r.validacion_estricta || {};
+      const muestra = estricta.muestra || {};
+      const disponible = estricta.estado === "disponible" && estricta.evidencia_disponible === true;
+      const avisos = (estricta.advertencias || []).map(esc).join(" ");
+      evidenciaHost.className = "ct-nota ct-evidencia-causal " + (disponible ? "suficiente" : "insuficiente");
+      evidenciaHost.innerHTML = disponible
+        ? `<b>Validación causal espacial cerrada</b> · ${fmtNum(muestra.emisiones_cerradas || 0)} emisiones · ` +
+          `${fmtNum(muestra.fechas || 0)} fechas · ${fmtNum(muestra.fuentes || 0)} fuentes. ${avisos}`
+        : `<b>Esperando ventanas causales cerradas</b> · ${avisos || "El visor no mostrará métricas sustitutas."}`;
 
-      const filas = (r.filas || []).filter(f => f.tot);
       const oscuro = !!(App.tema && App.tema() === "oscuro");
       const tinta = oscuro ? "#9DAABF" : "#58667A";
       const rejilla = oscuro ? "rgba(223,230,247,.10)" : "rgba(70,89,122,.12)";
-      const fuentes = filas.map(f => ALERTA_FUENTE_ROTULO[f.fuente] || f.fuente);
-      const colores = { CSI: "#4c78a8", POD: "#54a24b", FAR: "#e45756", HSS: "#b279a2" };
-      if (comparativa && filas.length && window.Plotly) {
-        const traces = ["CSI", "POD", "FAR", "HSS"].map(metrica => ({
-          type: "bar", name: metrica, x: fuentes,
-          y: filas.map(f => f.tot[metrica] == null ? null : +f.tot[metrica]),
-          marker: { color: colores[metrica] },
-          text: filas.map(f => f.tot[metrica] == null ? "" : (+f.tot[metrica]).toFixed(2)),
-          textposition: "outside", cliponaxis: false,
-          hovertemplate: `%{x}<br>${metrica}: %{y:.3f}<extra></extra>`,
-        }));
+      if (!disponible) {
+        if (window.Plotly) {
+          try { Plotly.purge(comparativa); } catch (_) { /* host aún sin gráfico */ }
+          try { Plotly.purge(temporal); } catch (_) { /* host aún sin gráfico */ }
+        }
+        if (comparativa) comparativa.innerHTML = `<span class="suave">Sin ventanas cerradas: no se publica desempeño areal.</span>`;
+        if (temporal) temporal.innerHTML = `<span class="suave">Sin pares cerrados: no se publica cuantificación de intensidad.</span>`;
+        panel.querySelector('[data-rol="dsub"]').textContent = "· esperando verdad diaria cerrada";
+        nota.innerHTML = `La validación es <b>fail-closed</b>: no usa pronósticos como verdad, reconstrucciones retrospectivas ni gráficos sustitutos.`;
+        return;
+      }
+
+      const espacial = (estricta.espacial || []).filter(f => [1, 2, 3].includes(+f.nivel_minimo));
+      const colores = { CSI_area: "#4c78a8", POD_area: "#54a24b", FAR_area: "#e45756" };
+      const rotulos = { CSI_area: "CSI", POD_area: "POD", FAR_area: "FAR" };
+      if (comparativa && espacial.length && window.Plotly) {
+        const traces = [];
+        [1, 2, 3].forEach((nivel, ni) => {
+          const filas = espacial.filter(f => +f.nivel_minimo === nivel);
+          const fuentes = filas.map(f => ALERTA_FUENTE_ROTULO[f.fuente] || f.fuente);
+          ["CSI_area", "POD_area", "FAR_area"].forEach(metrica => traces.push({
+            type: "bar", name: rotulos[metrica], legendgroup: metrica,
+            showlegend: ni === 0, x: fuentes,
+            y: filas.map(f => f[metrica] == null ? null : +f[metrica]),
+            xaxis: `x${ni + 1}`, yaxis: `y${ni + 1}`,
+            marker: { color: colores[metrica] },
+            text: filas.map(f => f[metrica] == null ? "" : (+f[metrica]).toFixed(2)),
+            textposition: "outside", cliponaxis: false,
+            hovertemplate: `%{x}<br>Nivel ≥${nivel} · ${rotulos[metrica]} %{y:.3f}<extra></extra>`,
+          }));
+        });
         Plotly.react(comparativa, traces, {
-          height: 390, barmode: "group", margin: { l: 42, r: 14, t: 48, b: 72 },
+          height: 720, barmode: "group", margin: { l: 48, r: 14, t: 58, b: 82 },
           paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
-          title: { text: suficiente ? "Métricas causales por fuente" : "Métricas causales descriptivas · evidencia aún insuficiente", font: { size: 13, color: tinta } },
-          legend: { orientation: "h", y: 1.12, font: { size: 10, color: tinta } },
-          xaxis: { tickfont: { size: 10, color: tinta }, showgrid: false },
-          yaxis: { range: [-1, 1], tickfont: { size: 9, color: tinta }, gridcolor: rejilla, zeroline: true },
+          title: { text: "Desempeño espacial por área · umbrales congelados", font: { size: 13, color: tinta } },
+          grid: { rows: 3, columns: 1, pattern: "independent" },
+          legend: { orientation: "h", y: 1.08, font: { size: 10, color: tinta } },
+          xaxis: { showticklabels: false, showgrid: false },
+          xaxis2: { showticklabels: false, showgrid: false },
+          xaxis3: { tickfont: { size: 9, color: tinta }, showgrid: false },
+          yaxis: { title: "Nivel ≥1", range: [0, 1], gridcolor: rejilla },
+          yaxis2: { title: "Nivel ≥2", range: [0, 1], gridcolor: rejilla },
+          yaxis3: { title: "Nivel ≥3", range: [0, 1], gridcolor: rejilla },
           font: { color: tinta },
         }, { displayModeBar: false, responsive: true });
       } else if (comparativa) {
-        comparativa.innerHTML = `<span class="suave">Aún no hay emisiones verificables para comparar.</span>`;
+        comparativa.innerHTML = `<span class="suave">La evidencia cerrada no contiene métricas espaciales comparables.</span>`;
       }
 
-      const serie = (r.serie || []).filter(s => (s.puntos || []).length);
-      if (temporal && serie.length && window.Plotly) {
-        const paleta = { CONSENSO: "#e45756", GFS: "#4c78a8", ICON: "#f58518", IFS: "#54a24b",
-          BIAS: "#b279a2", RF: "#9d755d", GB: "#72b7b2", CAT: "#eeca3b", LSTM: "#bab0ac" };
-        const metricas = ["CSI", "POD", "FAR"];
-        const traces = [];
-        metricas.forEach((metrica, mi) => serie.forEach(s => traces.push({
-          type: "scatter", mode: "lines+markers", name: ALERTA_FUENTE_ROTULO[s.fuente] || s.fuente,
-          legendgroup: s.fuente, showlegend: mi === 0,
-          x: s.puntos.map(p => p.fecha), y: s.puntos.map(p => p[metrica]),
-          xaxis: `x${mi + 1}`, yaxis: `y${mi + 1}`, connectgaps: false,
-          marker: { size: 4 }, line: { width: s.fuente === "CONSENSO" ? 2.8 : 1.3, color: paleta[s.fuente] || "#888" },
-          hovertemplate: `%{x} · ${metrica} %{y:.3f}<extra>${esc(ALERTA_FUENTE_ROTULO[s.fuente] || s.fuente)}</extra>`,
-        })));
+      const intensidad = (estricta.intensidad || []).filter(f => +f.n_pares_estacion_dia > 0);
+      if (temporal && intensidad.length && window.Plotly) {
+        const fuentes = intensidad.map(f => ALERTA_FUENTE_ROTULO[f.fuente] || f.fuente);
+        const metricas = [
+          ["MAE", "MAE", "#4c78a8"], ["RMSE", "RMSE", "#f58518"],
+          ["sesgo", "Sesgo", "#b279a2"],
+        ];
+        const traces = metricas.map(([clave, rotulo, color]) => ({
+          type: "bar", name: rotulo, x: fuentes,
+          y: intensidad.map(f => f[clave] == null ? null : +f[clave]),
+          marker: { color },
+          text: intensidad.map(f => f[clave] == null ? "" : (+f[clave]).toFixed(2)),
+          textposition: "outside", cliponaxis: false,
+          customdata: intensidad.map(f => +f.n_pares_estacion_dia || 0),
+          hovertemplate: `%{x}<br>${rotulo}: %{y:.3f}<br>Pares estación×día: %{customdata}<extra></extra>`,
+        }));
+        const unidad = estricta.variable === "precip" ? "mm" : "°C";
         Plotly.react(temporal, traces, {
-          height: 690, margin: { l: 44, r: 14, t: 54, b: 92 },
+          height: 410, barmode: "group", margin: { l: 52, r: 14, t: 56, b: 82 },
           paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
-          title: { text: "Evolución temporal causal · CSI / POD / FAR", font: { size: 13, color: tinta } },
-          grid: { rows: 3, columns: 1, pattern: "independent" },
-          // Nueve fuentes no caben junto al título sin solaparse. La leyenda va
-          // debajo de los tres paneles: mantiene todos los modelos visibles y el
-          // encabezado queda legible tanto en escritorio como en el visor.
-          legend: { orientation: "h", x: 0, xanchor: "left", y: -0.12,
-            yanchor: "top", font: { size: 9, color: tinta } },
-          xaxis: { type: "category", showticklabels: false, showgrid: false },
-          xaxis2: { type: "category", showticklabels: false, showgrid: false },
-          xaxis3: { type: "category", tickfont: { size: 9, color: tinta }, showgrid: false },
-          yaxis: { title: "CSI", range: [0, 1], gridcolor: rejilla },
-          yaxis2: { title: "POD", range: [0, 1], gridcolor: rejilla },
-          yaxis3: { title: "FAR", range: [0, 1], gridcolor: rejilla },
+          title: { text: "Cuantificación de intensidad vs observaciones diarias", font: { size: 13, color: tinta } },
+          legend: { orientation: "h", y: 1.12, font: { size: 10, color: tinta } },
+          xaxis: { tickfont: { size: 9, color: tinta }, showgrid: false },
+          yaxis: { title: unidad, gridcolor: rejilla, zeroline: true },
           font: { color: tinta },
         }, { displayModeBar: false, responsive: true });
       } else if (temporal) {
-        temporal.innerHTML = `<span class="suave">La serie causal crecerá con cada nueva emisión verificada.</span>`;
+        temporal.innerHTML = `<span class="suave">La contingencia areal ya cerró; la intensidad espera pares continuos con observación diaria.</span>`;
       }
 
       const varEt = (VAR_ALERTA.find(x => x.id === a.varId) || VAR_ALERTA[0]).etiqueta.toLowerCase();
       panel.querySelector('[data-rol="dsub"]').textContent =
-        `· ${varEt} · ${fmtNum(r.n_eval || 0)} evaluaciones causales`;
-      nota.innerHTML = `Referencia: <b>observación canónica con QC y ventana exacta</b>. ` +
-        `Solo se verifica si la fecha válida es posterior a la emisión; la reconstrucción retrospectiva no se usa como habilidad operativa.`;
+        `· ${varEt} · ${fmtNum(muestra.emisiones_cerradas || 0)} emisiones cerradas`;
+      nota.innerHTML = `Espacio: <b>contingencia por área</b> contra la capa diaria corregida comprometida ` +
+        `(o un hidroestimador previamente promovido). Intensidad: <b>pronóstico continuo vs observaciones diarias canónicas con QC</b>. ` +
+        `Las ventanas y los umbrales son los congelados al emitir; no se publican mapas de cruce.`;
     } catch (e) {
       panel.querySelector('[data-rol="dsub"]').textContent = "· sin evidencia causal verificable";
       if (comparativa) comparativa.innerHTML = "";

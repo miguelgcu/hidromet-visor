@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"HN19","dias":2,"fecha":"2026-07-20","hoy":"2026-07-18","lluvia":null,"nombre":"Pajan","sin_datos":true,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"HN19","dias":2,"fecha":"2026-07-25","hoy":"2026-07-23","lluvia":{"llueve":false,"prob":10,"prob_fuerte":4,"q25":0.6,"q75":3.4,"texto":"NO"},"nombre":"Pajan","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

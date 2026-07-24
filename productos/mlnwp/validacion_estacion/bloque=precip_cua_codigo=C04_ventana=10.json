@@ -1,1 +1,1 @@
-{"altitud_m":3355.0,"aviso":null,"bloque":"precip_cua","codigo":"C04","familia":"Todos","lat":-0.17541,"lon":-78.53129,"met_cols":["mae","rmse","bias","corr"],"modelos":[],"modo":"quantification","nombre":"Rumipamba","region":"Interandina","resumen":null,"ventana":"10"}
+{"altitud_m":3355,"aviso":null,"bloque":"precip_cua","codigo":"C04","familia":"Todos","lat":-0.17557,"lon":-78.53135,"met_cols":["mae","rmse","bias","corr"],"modelos":[],"modo":"quantification","nombre":"Rumipamba","region":"Interandina","resumen":null,"ventana":"10"}

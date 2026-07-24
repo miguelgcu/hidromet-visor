@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"HN10","dias":2,"fecha":"2026-07-20","hoy":"2026-07-18","lluvia":null,"nombre":"San Pablo","sin_datos":true,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"HN10","dias":2,"fecha":"2026-07-25","hoy":"2026-07-23","lluvia":{"llueve":false,"prob":25,"prob_fuerte":3,"q25":2.7,"q75":5.5,"texto":"NO"},"nombre":"San Pablo","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

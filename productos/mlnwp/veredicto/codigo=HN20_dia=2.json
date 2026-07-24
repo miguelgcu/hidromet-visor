@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"HN20","dias":2,"fecha":"2026-07-20","hoy":"2026-07-18","lluvia":null,"nombre":"Palestina","sin_datos":true,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"HN20","dias":2,"fecha":"2026-07-25","hoy":"2026-07-23","lluvia":{"llueve":false,"prob":5,"prob_fuerte":2,"q25":0.9,"q75":3.6,"texto":"NO"},"nombre":"Palestina","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

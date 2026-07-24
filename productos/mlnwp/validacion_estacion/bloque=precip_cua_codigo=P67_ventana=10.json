@@ -1,1 +1,1 @@
-{"altitud_m":2658.0,"aviso":null,"bloque":"precip_cua","codigo":"P67","familia":"Todos","lat":-0.2941,"lon":-78.35592,"met_cols":["mae","rmse","bias","corr"],"modelos":[],"modo":"quantification","nombre":"Relleno El Inga","region":"Interandina","resumen":null,"ventana":"10"}
+{"altitud_m":2658,"aviso":null,"bloque":"precip_cua","codigo":"P67","familia":"Todos","lat":-0.29435,"lon":-78.35584,"met_cols":["mae","rmse","bias","corr"],"modelos":[],"modo":"quantification","nombre":"Relleno El Inga","region":"Interandina","resumen":null,"ventana":"10"}

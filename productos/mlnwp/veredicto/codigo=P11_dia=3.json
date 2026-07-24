@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"P11","dias":3,"fecha":"2026-07-21","hoy":"2026-07-18","lluvia":{"llueve":false,"prob":16,"prob_fuerte":null,"q25":3.7,"q75":5.0,"texto":"NO"},"nombre":"Antenas","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"P11","dias":3,"fecha":"2026-07-26","hoy":"2026-07-23","lluvia":{"llueve":false,"prob":14,"prob_fuerte":4,"q25":0.0,"q75":0.5,"texto":"NO"},"nombre":"Antenas","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
