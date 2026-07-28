@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"HN17","dias":2,"fecha":"2026-07-30","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":25,"prob_fuerte":3,"q25":3.3,"q75":3.8,"texto":"NO"},"nombre":"Murucumba","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"HN17","dias":2,"fecha":"2026-07-30","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":23,"prob_fuerte":2,"q25":1.8,"q75":2.2,"texto":"NO"},"nombre":"Murucumba","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

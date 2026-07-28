@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"HN03","dias":4,"fecha":"2026-08-01","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":16,"prob_fuerte":10,"q25":2.7,"q75":4.6,"texto":"NO"},"nombre":"Guayacan","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"HN03","dias":4,"fecha":"2026-08-01","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":25,"prob_fuerte":13,"q25":2.5,"q75":4.4,"texto":"NO"},"nombre":"Guayacan","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"HN12","dias":5,"fecha":"2026-08-02","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":7,"prob_fuerte":3,"q25":3.6,"q75":4.0,"texto":"NO"},"nombre":"DJ Colimes","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"HN12","dias":5,"fecha":"2026-08-02","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":6,"prob_fuerte":3,"q25":4.6,"q75":5.0,"texto":"NO"},"nombre":"DJ Colimes","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

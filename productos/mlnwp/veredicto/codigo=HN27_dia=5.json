@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"HN27","dias":5,"fecha":"2026-08-02","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":20,"prob_fuerte":19,"q25":8.7,"q75":9.1,"texto":"NO"},"nombre":"San Pedro De Oro","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"HN27","dias":5,"fecha":"2026-08-02","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":31,"prob_fuerte":16,"q25":10.4,"q75":10.8,"texto":"NO"},"nombre":"San Pedro De Oro","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

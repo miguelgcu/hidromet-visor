@@ -20,10 +20,24 @@
   // punto convertía el gráfico en una nube de recuadros; la etiqueta estática
   // muestra únicamente el valor. La unidad permanece en el eje Y y el hover.
   const etiquetaValor = valor => `<b>${num(valor, 1)}</b>`;
-  // Halo blanco tenue, sin borde ni sombra: contraste suficiente sobre barras y
-  // franja futura sin parecer una tarjeta superpuesta.
-  const ETIQUETA_BG = "rgba(255,255,255,.82)";
   const ETIQUETA_TEXTO = "#071326";
+  const ETIQUETA_SOMBRA = "0 0 1px #fff, 0 0 3px #fff, 0 0 5px #fff";
+  function abreviarModeloLeyenda(nombre, maximo = 19) {
+    const original = String(nombre || "").trim();
+    const abreviado = original
+      .replace(/^CONSENSO_OP_TOP10$/i, "Consenso Top10")
+      .replace(/^BEST_OP_CV$/i, "Mejor OOS")
+      .replace(/^BC_CLASSIC_/i, "BC · ")
+      .replace(/^ML_LGBM_STATION$/i, "ML LGBM est.")
+      .replace(/^ML_XGB_STATION$/i, "ML XGB est.")
+      .replace(/^METEOBLUE$/i, "Meteoblue")
+      .replace(/^IFSHRES$/i, "IFS HRES")
+      .replace(/^AIFS025$/i, "AIFS 0.25°")
+      .replace(/^IFS025$/i, "IFS 0.25°")
+      .replace(/^GFS05$/i, "GFS 0.5°");
+    return abreviado.length <= maximo
+      ? abreviado : `${abreviado.slice(0, Math.max(1, maximo - 1)).trimEnd()}…`;
+  }
   const OPACIDAD_SKILL_MIN = 0.28;
   const OPACIDAD_SKILL_MAX = 0.92;
   function opacidadPorSkill(rating, score = null, oscuro = false) {
@@ -283,11 +297,20 @@
     const obsValores = (d.observado && d.observado.valores) || [];
     const hayObs = obsFechas.some((fecha, i) => fecha >= inicio && fecha <= fin
       && esFinito(obsValores[i]));
-    // Tmax/Tmin solo son exportables cuando existe observación local.
-    if (!esPrecip && !hayObs) return null;
     const trazas = [];
     const anotaciones = anotacionesCabeceraPNG(
       meta, contexto.variableLabel, contexto.agregacionLabel);
+    const nObs = obsFechas.filter((fecha, i) => fecha >= inicio && fecha <= fin
+      && esFinito(obsValores[i])).length;
+    anotaciones.push({
+      xref: "paper", yref: "paper", x: 0.5, y: 0.145, showarrow: false,
+      xanchor: "center", yanchor: "middle",
+      text: hayObs
+        ? `<i>Observación local disponible · ${nObs} fecha(s)</i>`
+        : "<i>Sin observación local en esta ventana · pronóstico no sustituido</i>",
+      font: { family: PNG_SERIE.font, size: pxDesdePt(9.2),
+        color: hayObs ? "#4B5D72" : "#8A4F19" },
+    });
     const valoresY = [];
     const recortarLluvia = valor => esPrecip && esFinito(valor)
       ? Math.max(0, Number(valor)) : (esFinito(valor) ? Number(valor) : null);
@@ -318,11 +341,10 @@
             yshift: esPrecip
               ? [2, 4, 6].map(pxDesdePt)[rango]
               : [2, 7, 12].map(pxDesdePt)[rango],
-            bgcolor: "rgba(255,255,255,.72)", bordercolor: color,
-            borderwidth: pxDesdePt(0.22), borderpad: pxDesdePt(0.10),
+            bgcolor: "rgba(0,0,0,0)", borderwidth: 0, borderpad: 0,
             font: { family: PNG_SERIE.font,
               size: pxDesdePt(esPrecip ? 6.225 : 6.525),
-              color: "#1B1B1B" },
+              color: "#1B1B1B", shadow: ETIQUETA_SOMBRA },
           });
         }
       });
@@ -370,11 +392,10 @@
           anotaciones.push({
             xref: "x", yref: "y", x: fecha, y: valor, showarrow: false,
             text: `<b>${valor.toFixed(1)}</b>`, xanchor: "center", yanchor: "bottom",
-            yshift: pxDesdePt(4), bgcolor: "rgba(255,255,255,.82)",
-            bordercolor: "#CCCCCC", borderwidth: pxDesdePt(0.25),
-            borderpad: pxDesdePt(0.12),
+            yshift: pxDesdePt(4), bgcolor: "rgba(0,0,0,0)",
+            borderwidth: 0, borderpad: 0,
             font: { family: PNG_SERIE.font, size: pxDesdePt(7.2),
-              color: PNG_SERIE.observation },
+              color: PNG_SERIE.observation, shadow: ETIQUETA_SOMBRA },
           });
         }
       });
@@ -470,8 +491,9 @@
     if (!d.es_precip || !pu || !fechas.length || !hoy) return null;
     const obsFechas = (d.observado && d.observado.fechas) || [];
     const obsValores = (d.observado && d.observado.valores) || [];
-    if (!obsFechas.some((fecha, i) => fechas.includes(fecha) && esFinito(obsValores[i])))
-      return null;
+    const nObs = obsFechas.filter((fecha, i) =>
+      fechas.includes(fecha) && esFinito(obsValores[i])).length;
+    const hayObs = nObs > 0;
     const indicesFecha = new Map(
       (pu.fechas || []).map((fecha, i) => [fecha, i]));
     const umbrales = (pu.umbrales || []).map(Number);
@@ -492,11 +514,20 @@
         return esFinito(bruto) ? Number(bruto) : null;
       });
       return { ...def, valores };
-    }).filter(fila => fila.valores.some(esFinito));
-    if (!filas.length) return null;
+    });
+    if (!filas.some(fila => fila.valores.some(esFinito))) return null;
 
     const anotaciones = anotacionesCabeceraPNG(
       meta, "Precipitación probabilística", contexto.agregacionLabel);
+    anotaciones.push({
+      xref: "paper", yref: "paper", x: 0.5, y: 0.145, showarrow: false,
+      xanchor: "center", yanchor: "middle",
+      text: hayObs
+        ? `<i>Observación local disponible · ${nObs} fecha(s)</i>`
+        : "<i>Sin observación local en esta ventana · probabilidades pronosticadas</i>",
+      font: { family: PNG_SERIE.font, size: pxDesdePt(9.2),
+        color: hayObs ? "#4B5D72" : "#8A4F19" },
+    });
     filas.forEach(fila => fila.valores.forEach((valor, i) => {
       if (!esFinito(valor)) return;
       const visible = Math.max(0, Math.min(100, Number(valor)));
@@ -552,8 +583,13 @@
   async function descargarFiguraPNG(figura, boton) {
     if (!figura || !window.Plotly || typeof Plotly.toImage !== "function")
       throw new Error("La imagen no está disponible para esta selección.");
-    const original = boton ? boton.textContent : "";
-    if (boton) { boton.disabled = true; boton.textContent = "Preparando PNG…"; }
+    const tituloOriginal = boton ? boton.title : "";
+    if (boton) {
+      boton.disabled = true;
+      boton.setAttribute("aria-busy", "true");
+      boton.classList.add("cargando");
+      boton.title = "Preparando PNG…";
+    }
     const host = document.createElement("div");
     host.setAttribute("aria-hidden", "true");
     Object.assign(host.style, {
@@ -579,7 +615,12 @@
     } finally {
       try { Plotly.purge(host); } catch (e) { /* figura temporal ya liberada */ }
       host.remove();
-      if (boton) { boton.disabled = false; boton.textContent = original; }
+      if (boton) {
+        boton.disabled = false;
+        boton.removeAttribute("aria-busy");
+        boton.classList.remove("cargando");
+        boton.title = tituloOriginal;
+      }
     }
   }
 
@@ -672,6 +713,36 @@
     if (!familia || familia === "Todos" || familia === "Mejor desempeño") return lista;
     return lista.filter(modelo => modelo && modelo.familia === familia);
   };
+  const HORIZONTES_VALIDACION = Object.freeze([1, 2, 3, 4, 5]);
+  function normalizarHorizonteValidacion(horizonte) {
+    if (String(horizonte).toLowerCase() === "todos") return "todos";
+    const lead = Number(horizonte);
+    return HORIZONTES_VALIDACION.includes(lead) ? String(lead) : "1";
+  }
+  const claveModeloHorizonteValidacion = modelo =>
+    `${String((modelo && modelo.modelo) || "")}\u0000${Number(modelo && modelo.lead)}`;
+  function filtrarModelosHorizonteValidacion(modelos, familia, horizonte) {
+    const seleccionado = normalizarHorizonteValidacion(horizonte);
+    const vistos = new Set();
+    return filtrarModelosFamilia(modelos, familia).filter(modelo => {
+      const lead = Number(modelo && modelo.lead);
+      if (!HORIZONTES_VALIDACION.includes(lead)) return false;
+      if (seleccionado !== "todos" && lead !== Number(seleccionado)) return false;
+      // En una vista D+n la identidad visible es el modelo; en "Todos", cada
+      // identidad es modelo×plazo. Conservamos la primera fila ya ordenada por
+      // el backend y evitamos que un artefacto duplicado reaparezca en pantalla.
+      const clave = seleccionado === "todos"
+        ? claveModeloHorizonteValidacion(modelo)
+        : String(modelo.modelo || "");
+      if (!clave || vistos.has(clave)) return false;
+      vistos.add(clave);
+      return true;
+    });
+  }
+  const etiquetaHorizonteValidacion = horizonte => {
+    const seleccionado = normalizarHorizonteValidacion(horizonte);
+    return seleccionado === "todos" ? "Todos los plazos" : `D+${seleccionado}`;
+  };
   // Tamaño del punto del MAPA por confianza (px de marcador Plotly). Borde blanco
   // UNIFORME (nunca color por confianza). Alta grande / Media medio / Baja pequeño.
   const TAM_CONF = { Alta: 15, Media: 11, Baja: 8, "Sin calificar": 6 };
@@ -710,6 +781,7 @@
     ctx: null,
     variable: "precip",          // precip | tmax | tmin
     familia: "Todos",            // filtro de familia de modelo
+    horizonteValidacion: "1",    // D+1 por defecto; "todos" = modelo × plazo
     estacion: "",                // código de estación (v12: siempre por estación)
     valData: null,               // última respuesta de /validacion (alimenta el selector)
     geojson: null,
@@ -730,7 +802,7 @@
   function pintarRaiz(vista) {
     vista.innerHTML = `
       <div class="ml-raiz" data-screen-label="ML-NWP">
-        <div class="ml-cab-mini">Validación NWP-ML · compara 41 modelos por estación · calificación 1–10 con confianza muestral</div>
+        <div class="ml-cab-mini">Validación NWP-ML por estación y horizonte D+1…D+5 · calificación 1–10 con confianza muestral</div>
         <div id="ml-cuerpo"></div>
       </div>`;
   }
@@ -1049,8 +1121,11 @@
   // UNA tabla de clasificación (un bloque de métricas: detección o cuantificación).
   // La usa pintarDetalle — para precip se pintan DOS (detección + cuantificación).
   function tablaClasifHTML(d) {
-    // Filtro de familia: restringe los modelos mostrados (client-side, como el resumen).
-    const modelos = filtrarModelosFamilia(d.modelos, S.familia);
+    // Familia + horizonte se resuelven client-side sobre el artefacto estático.
+    // Para D+n queda exactamente una fila por modelo; "Todos" conserva una fila
+    // por modelo×plazo y muestra el plazo como dimensión explícita.
+    const modelos = filtrarModelosHorizonteValidacion(
+      d.modelos, S.familia, S.horizonteValidacion);
     const esDet = d.modo === "detection";
     const esTemp = d.bloque === "tmax" || d.bloque === "tmin";
 
@@ -1061,7 +1136,7 @@
          ...(esTemp ? [["mae_delta", "MAE ΔT"], ["corr_delta", "Corr ΔT"],
            ["sign_hit_active", "Acierto ΔT"], ["flat_miss_rate", "Fallo plano"]] : [])];
     const metHeadHTML = metHead.map(([, t]) => `<th class="der">${t}</th>`).join("");
-    const nCols = 5 + metHead.length;
+    const nCols = 6 + metHead.length;
 
     const fmtMet = (m, k) => {
       const v = m[k];
@@ -1091,6 +1166,7 @@
       return `<tr class="${sinCal ? "sin-calif" : ""}${esMejor ? " ml-best" : ""}">
         <td class="idx">${sinCal ? "—" : i + 1}</td>
         <td><span class="ml-mod-punto" style="background:${esc(m.color)}"></span>${esc(m.modelo)}${esMejor ? " ★" : ""}<span class="ml-mod-tipo"> · ${tipoFam}</span></td>
+        <td class="ml-lead">D+${Number(m.lead)}</td>
         <td>${sinCal ? `<span style="color:var(--muted-2)">sin calif.</span>`
           : `<span class="ml-calif-badge" style="background:${bg};color:${fg}">${num(m.rating, 1)}</span>`}</td>
         <td class="num">${m.n}</td>
@@ -1103,13 +1179,13 @@
     const mg = mejorIdx >= 0 ? modelos[mejorIdx] : null;
     const banner = mg
       ? `<div class="ml-mejor-banner"><span class="ml-mejor-estrella">★</span> Mejor en ${esDet ? "detección de eventos" : "cuantificación"}:
-         <b>${esc(mg.modelo)}</b> — calif. ${num(mg.rating, 1)}/10 · confianza ${esc(String(mg.confianza || "—")).toLowerCase()} · <b>${mg.n}</b> fechas</div>`
+         <b>${esc(mg.modelo)} · D+${Number(mg.lead)}</b> — calif. ${num(mg.rating, 1)}/10 · confianza ${esc(String(mg.confianza || "—")).toLowerCase()} · <b>${mg.n}</b> fechas</div>`
       : "";
 
     return `${banner}
       <table class="ml-tabla-modelos">
         <thead><tr>
-          <th>#</th><th>Modelo</th><th>Calif.</th><th class="der">Fechas</th><th>Confianza</th>
+          <th>#</th><th>Modelo</th><th>Plazo</th><th>Calif.</th><th class="der">Fechas</th><th>Confianza</th>
           ${metHeadHTML}
         </tr></thead>
         <tbody>${filas || `<tr><td colspan="${nCols}" class="suave" style="padding:14px">Sin modelos para esta estación.</td></tr>`}</tbody>
@@ -1120,29 +1196,33 @@
   // en la misma fila por modelo — la columna del MODELO queda FIJA (sticky) y las
   // métricas se deslizan en X. Aplica a escritorio y móvil.
   function tablaUnificadaHTML(dCua, dDet) {
-    const fil = ms => filtrarModelosFamilia(ms, S.familia);
+    const fil = ms => filtrarModelosHorizonteValidacion(
+      ms, S.familia, S.horizonteValidacion);
     const cua = fil(dCua.modelos), det = fil(dDet.modelos);
-    const dmap = new Map(det.map(m => [m.modelo, m]));
+    const clave = claveModeloHorizonteValidacion;
+    const dmap = new Map(det.map(m => [clave(m), m]));
     // Orden = el del bloque base (cuantificación, ya viene por calificación); los
     // modelos solo-detección se anexan al final.
     const orden = [...cua];
-    det.forEach(m => { if (!cua.some(x => x.modelo === m.modelo)) orden.push({ ...m, _soloDet: true }); });
+    const clavesCua = new Set(cua.map(clave));
+    det.forEach(m => { if (!clavesCua.has(clave(m))) orden.push({ ...m, _soloDet: true }); });
     const mejorDe = ms => { let bn = null, br = -Infinity;
-      ms.forEach(m => { if (m.califica && m.rating != null && m.rating > br) { br = m.rating; bn = m.modelo; } }); return bn; };
+      ms.forEach(m => { if (m.califica && m.rating != null && m.rating > br) { br = m.rating; bn = clave(m); } }); return bn; };
     const bestCua = mejorDe(cua), bestDet = mejorDe(det);
     const sinC = m => !m || !m.califica || m.rating == null;
     const f2 = v => (v == null || Number.isNaN(v)) ? "—" : Number(v).toFixed(2);
     const f1 = v => (v == null || Number.isNaN(v)) ? "—" : Number(v).toFixed(1);
     const badge = (m, best) => sinC(m)
       ? `<span style="color:var(--muted-2)">—</span>`
-      : (([bg, fg]) => `<span class="ml-calif-badge" style="background:${bg};color:${fg}">${num(m.rating, 1)}</span>${m.modelo === best ? " ★" : ""}`)(calColor(m.rating));
+      : (([bg, fg]) => `<span class="ml-calif-badge" style="background:${bg};color:${fg}">${num(m.rating, 1)}</span>${clave(m) === best ? " ★" : ""}`)(calColor(m.rating));
     const filas = orden.map((base, i) => {
       const mc = base._soloDet ? null : base;
-      const md = dmap.get(base.modelo) || (base._soloDet ? base : null);
+      const md = dmap.get(clave(base)) || (base._soloDet ? base : null);
       const tipoFam = { Convencionales: "grillado", "No convencionales": "grillado",
         ML: "calibrado", Postprocesamiento: "combinación" }[base.familia] || "crudo";
       return `<tr>
         <td class="ml-uni-mod"><span class="ml-uni-idx">${i + 1}</span><span class="ml-mod-punto" style="background:${esc(base.color)}"></span>${esc(base.modelo)}<span class="ml-mod-tipo"> · ${tipoFam}</span></td>
+        <td class="ml-lead">D+${Number(base.lead)}</td>
         <td>${badge(md, bestDet)}</td>
         <td class="num">${sinC(md) ? "—" : f2(md.pod)}</td>
         <td class="num">${sinC(md) ? "—" : f2(md.far)}</td>
@@ -1157,15 +1237,15 @@
       </tr>`;
     }).join("");
     const ban = (ms, best, etq) => {
-      const mg = ms.find(m => m.modelo === best);
+      const mg = ms.find(m => clave(m) === best);
       return mg ? `<div class="ml-mejor-banner"><span class="ml-mejor-estrella">★</span> Mejor en ${etq}:
-        <b>${esc(mg.modelo)}</b> — calif. ${num(mg.rating, 1)}/10 · <b>${mg.n}</b> fechas</div>` : "";
+        <b>${esc(mg.modelo)} · D+${Number(mg.lead)}</b> — calif. ${num(mg.rating, 1)}/10 · <b>${mg.n}</b> fechas</div>` : "";
     };
     return `${ban(det, bestDet, "detección de eventos")}${ban(cua, bestCua, "cuantificación")}
       <div class="ml-uni-wrap">
       <table class="ml-tabla-modelos ml-uni">
         <thead>
-          <tr><th class="ml-uni-mod" rowspan="2">Modelo</th>
+          <tr><th class="ml-uni-mod" rowspan="2">Modelo</th><th rowspan="2">Plazo</th>
               <th colspan="4" class="ml-uni-grp">Detección · ¿llueve sí/no?</th>
               <th colspan="4" class="ml-uni-grp">Cuantificación · ¿cuánto?</th>
               <th colspan="3" class="ml-uni-grp">Muestra</th></tr>
@@ -1173,7 +1253,7 @@
               <th>Calif.</th><th class="der">MAE</th><th class="der">RMSE</th><th class="der">Sesgo</th>
               <th class="der">Corr</th><th class="der">Fechas</th><th>Conf.</th></tr>
         </thead>
-        <tbody>${filas || `<tr><td colspan="12" class="suave" style="padding:14px">Sin modelos para esta estación.</td></tr>`}</tbody>
+        <tbody>${filas || `<tr><td colspan="13" class="suave" style="padding:14px">Sin modelos para esta estación y horizonte.</td></tr>`}</tbody>
       </table></div>
       <div class="ml-pb-nota">Detección: POD acierto · FAR falsa alarma · CSI global. Cuantificación: MAE/RMSE error en mm · Sesgo · Corr. Desliza la tabla para ver todas las métricas; el modelo y su calificación quedan fijos.</div>`;
   }
@@ -1185,12 +1265,40 @@
     const nom = d.nombre || S.estacion;
     const dosSecciones = !!(dDet && (dDet.modelos || []).length);
     const cuerpo = dosSecciones ? tablaUnificadaHTML(d, dDet) : tablaClasifHTML(d);
+    const horizonte = normalizarHorizonteValidacion(S.horizonteValidacion);
+    const optsHorizonte = [
+      ...HORIZONTES_VALIDACION.map(lead =>
+        [`${lead}`, lead === 1 ? "D+1 (mañana)" : `D+${lead}`]),
+      ["todos", "Todos (modelo × plazo)"],
+    ].map(([valor, texto]) =>
+      `<option value="${valor}" ${horizonte === valor ? "selected" : ""}>${texto}</option>`
+    ).join("");
+    const filasVisibles = new Set([
+      ...filtrarModelosHorizonteValidacion(d.modelos, S.familia, horizonte),
+      ...filtrarModelosHorizonteValidacion(
+        dDet && dDet.modelos, S.familia, horizonte),
+    ].map(claveModeloHorizonteValidacion)).size;
+    const alcance = horizonte === "todos"
+      ? `${filasVisibles} combinaciones modelo × plazo · cada fila identifica ambos campos`
+      : `${filasVisibles} modelos en ${etiquetaHorizonteValidacion(horizonte)} · una fila por modelo`;
     cont.innerHTML = `
       <div class="ml-card">
-        <h3 class="ml-titulo">Clasificación de modelos en ${esc(nom)}
-          <span class="ml-sutil">· ${esc(d.codigo)} · ${esc(App.redEtiqueta(d.region))} · ordenados por calificación</span></h3>
+        <div class="ml-detalle-cab">
+          <h3 class="ml-titulo">Clasificación de modelos en ${esc(nom)}
+            <span class="ml-sutil">· ${esc(d.codigo)} · ${esc(App.redEtiqueta(d.region))}</span></h3>
+          <label class="ml-horizonte-control" for="ml-sel-lead">
+            <span>Horizonte</span>
+            <select id="ml-sel-lead">${optsHorizonte}</select>
+          </label>
+        </div>
+        <div class="ml-clasif-alcance">${esc(alcance)} · ordenados por calificación dentro de esta selección</div>
         ${cuerpo}
       </div>`;
+    const selLead = cont.querySelector("#ml-sel-lead");
+    if (selLead) selLead.onchange = () => {
+      S.horizonteValidacion = normalizarHorizonteValidacion(selLead.value);
+      pintarDetalle(cont, d, dDet);
+    };
   }
 
   /* ============================================================
@@ -1340,8 +1448,8 @@
     // halo blanco único en ambos temas para no perder contraste en el futuro.
     const oscuro = (App.tema && App.tema() === "oscuro");
     const C = oscuro
-      ? { obs: "#FFFFFF", p50: "#6BB1EE", fan80: "rgba(120,165,225,.14)", fan50: "rgba(120,165,225,.30)", anot: "#E8F0FF" }
-      : { obs: "#0F1B2D", p50: "#0052A3", fan80: "rgba(27,58,107,.10)", fan50: "rgba(27,58,107,.24)", anot: "#5A6678" };
+      ? { obs: "#FFFFFF", p50: "#6BB1EE", fan80: "rgba(120,165,225,.14)", fan50: "rgba(120,165,225,.30)", anot: "#E8F0FF", marco: "#718096" }
+      : { obs: "#0F1B2D", p50: "#0052A3", fan80: "rgba(27,58,107,.10)", fan50: "rgba(27,58,107,.24)", anot: "#5A6678", marco: "#4B5D72" };
     const metaCtx = ((S.ctx && S.ctx.estaciones) || []).find(
       e => String(e.codigo) === String(d.codigo));
     const meta = { ...(metaCtx || {}), ...d };
@@ -1380,12 +1488,27 @@
     card.innerHTML = `
       ${cabecera}
       <div class="ml-serie-acciones" aria-label="Descargas de la estación">
-        <button type="button" class="boton chico ml-descarga-png"
-                data-descarga-png="serie">↓ Descargar serie PNG</button>
-        ${esPrecip ? `<button type="button" class="boton chico ml-descarga-png"
-                data-descarga-png="probabilidades">↓ Descargar probabilidades PNG</button>` : ""}
-        <span>PNG formal · 2310 × 1144 px · 220 dpi</span>
+        <button type="button" class="ml-descarga-png" data-descarga-png="serie"
+                title="Descargar serie PNG · 2310 × 1144 px · 220 dpi"
+                aria-label="Descargar serie en PNG">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>
+          </svg><span class="ml-descarga-tipo" aria-hidden="true">S</span>
+        </button>
+        ${esPrecip ? `<button type="button" class="ml-descarga-png"
+                data-descarga-png="probabilidades"
+                title="Descargar probabilidades PNG · 2310 × 1144 px · 220 dpi"
+                aria-label="Descargar probabilidades en PNG">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>
+          </svg><span class="ml-descarga-tipo" aria-hidden="true">P</span>
+        </button>` : ""}
       </div>
+      <div class="ml-obs-estado" id="ml-obs-estado" role="status"></div>
       <div class="ml-time-scroll" role="region" tabindex="0"
            aria-label="Serie y probabilidades alineadas por fecha">
         <div class="ml-time-track">
@@ -1394,7 +1517,7 @@
         </div>
       </div>
       <div class="ml-serie-leyenda" id="ml-serie-leyenda"></div>
-      <p class="ml-serie-pie">Observado vs. pronóstico (la franja sombreada de la derecha es el horizonte futuro). Los modelos se atenúan según su calificación.${esPrecip ? " En cada día, las barras se leen del centro hacia afuera por desempeño; detalle probabilístico por umbral en la tabla inferior." : ""}</p>`;
+      <p class="ml-serie-pie">Pronóstico y, cuando existe, observación local de la base única (la franja sombreada de la derecha es el horizonte futuro). Los modelos se atenúan según su calificación.${esPrecip ? " En cada día, las barras se leen del centro hacia afuera por desempeño; detalle probabilístico por umbral en la tabla inferior." : ""}</p>`;
 
     const el = document.getElementById("ml-plot-serie");
     if (!window.Plotly || !el) return;
@@ -1419,6 +1542,30 @@
     const hoyVisual = (App.hoyEC ? App.hoyEC() : d.hoy);
     const lookbackVisual = Number.isFinite(Number(d.lookback)) ? Number(d.lookback) : LOOKBACK_SERIE;
     const desdeVisual = moverFechaISO(hoyVisual, -Math.max(0, lookbackVisual));
+    const obsFechas = (d.observado && d.observado.fechas) || [];
+    const obsValores = (d.observado && d.observado.valores) || [];
+    const observacionesVentana = obsFechas.map((fecha, i) => ({
+      fecha, valor: obsValores[i],
+    })).filter(item => item.fecha && (!desdeVisual || item.fecha >= desdeVisual)
+      && esFinito(item.valor));
+    const hayObsVentana = observacionesVentana.length > 0;
+    const obsEstadoEl = card.querySelector("#ml-obs-estado");
+    if (obsEstadoEl) {
+      const estadoServidor = d.observacion_estado || {};
+      const ultimaServidor = String(estadoServidor.ultima_fecha || "");
+      const ultimaCorta = FECHA_ISO_RE.test(ultimaServidor)
+        ? `${ultimaServidor.slice(8, 10)}/${ultimaServidor.slice(5, 7)}/${ultimaServidor.slice(0, 4)}`
+        : null;
+      const mensajeSinObs = estadoServidor.estado === "sin_reporte_reciente"
+        ? `Sin reporte reciente; último ${ultimaCorta || "no informado"}. No se dibuja una serie sustituta.`
+        : estadoServidor.estado === "variable_no_observada"
+          ? "Esta estación no observa esta variable en la agregación seleccionada."
+          : "Sin observación local en esta ventana; se muestran pronósticos sin fabricar una serie sustituta.";
+      obsEstadoEl.classList.toggle("sin-datos", !hayObsVentana);
+      obsEstadoEl.innerHTML = hayObsVentana
+        ? `<span aria-hidden="true">●</span> Observación local · ${observacionesVentana.length} fecha(s) · última ${esc(observacionesVentana[observacionesVentana.length - 1].fecha)}`
+        : `<span aria-hidden="true">○</span> ${esc(mensajeSinObs)}`;
+    }
 
     const traces = [];
     const opacidadesTrazas = [];
@@ -1456,16 +1603,15 @@
         text: etiquetaValor(valor), showarrow: false,
         xanchor: "center", yanchor: yshift >= 0 ? "bottom" : "top",
         xshift, yshift, align: "center", captureevents: false,
-        bgcolor: ETIQUETA_BG, borderwidth: 0, borderpad: 1, opacity: 1,
-        font: { family: "IBM Plex Mono, monospace", size: 9.5, color: ETIQUETA_TEXTO },
+        bgcolor: "rgba(0,0,0,0)", borderwidth: 0, borderpad: 0, opacity: 1,
+        font: { family: "IBM Plex Mono, monospace", size: 9.5,
+          color: ETIQUETA_TEXTO, shadow: ETIQUETA_SOMBRA },
       });
     };
 
     // El observado reserva el primer carril y etiqueta cada valor, incluido 0 mm.
-    if (d.observado && d.observado.fechas && d.observado.fechas.length) {
-      d.observado.fechas.forEach((fecha, i) =>
-        agregarEtiquetaPunto(fecha, (d.observado.valores || [])[i]));
-    }
+    observacionesVentana.forEach(item =>
+      agregarEtiquetaPunto(item.fecha, item.valor));
 
     // BANDA INTERCUARTIL RETIRADA (pedido del dueño 2026-07-11): el abanico P25–P75 /
     // P10–P90 y la mediana P50 se distorsionaban en el pronóstico a futuro. Se conserva el
@@ -1535,17 +1681,27 @@
       opacidadesTrazas.push(op);
       const swStyle = m.dash ? `border-top:2px dotted ${esc(color)};height:0`
                              : `background:${esc(color)};opacity:${op}`;
+      const nombreCompleto = `${m.modelo}${otxt}${rtxt}`;
+      const notaLeyenda = m.sin_entrenar ? "s/cal."
+        : `${esRecomendado ? "★ · " : (m.operacional ? "op. · " : "")}${num(m.rating, 1)}`;
       leyenda.push({ orden: ordenDesempeno,
-        html: `<span class="it"><span class="sw-caja" style="${swStyle}"></span>${esc(m.modelo)}${esc(otxt)}${rtxt}</span>` });
+        html: `<span class="it" title="${esc(nombreCompleto)}" aria-label="${esc(nombreCompleto)}">
+          <span class="sw-caja" style="${swStyle}"></span>
+          <span class="ml-leyenda-nombre">${esc(abreviarModeloLeyenda(m.modelo))}</span>
+          <span class="ml-leyenda-nota">${esc(notaLeyenda)}</span>
+        </span>` });
     }
 
-    // Observado: línea con marcadores. Sus etiquetas son anotaciones con fondo
-    // translúcido, creadas arriba para reservar el primer carril de cada fecha.
-    if (d.observado && d.observado.fechas && d.observado.fechas.length) {
-      d.observado.fechas.forEach(registrarFecha);
-      traces.push({ type: "scatter", mode: "lines+markers", x: d.observado.fechas, y: d.observado.valores,
+    // Observado: línea y marcadores con contorno para que también destaquen los
+    // ceros. Si no hay observación válida no se inventa traza ni entrada de leyenda.
+    if (hayObsVentana) {
+      observacionesVentana.forEach(item => registrarFecha(item.fecha));
+      traces.push({ type: "scatter", mode: "lines+markers",
+        x: observacionesVentana.map(item => item.fecha),
+        y: observacionesVentana.map(item => Number(item.valor)),
         name: "Observado", opacity: 1, line: { color: C.obs, width: 3.2 }, connectgaps: false,
-        marker: { color: C.obs, size: 8, symbol: "circle" },
+        marker: { color: C.obs, size: 9, symbol: "circle",
+          line: { color: oscuro ? "#111827" : "#FFFFFF", width: 1.4 } },
         hovertemplate: `Observado<br>%{x|%d/%m/%Y}: %{y:.1f} ${esc(unidad)}<extra></extra>` });
       opacidadesTrazas.push(1);
     }
@@ -1583,12 +1739,16 @@
       annotations: etiquetasPuntos,
       margin: { l: MARGEN_EJE_IZQ_PX, r: MARGEN_EJE_DER_PX, t: 50, b: 56 },
       yaxis: { title: { text: unidad, font: { size: 11 } }, rangemode: esPrecip ? "tozero" : "normal",
+               showline: true, mirror: true, linecolor: C.marco, linewidth: 1.2,
+               ticks: "outside", tickcolor: C.marco,
                ...(angosto ? { fixedrange: true } : {}) },
       // Eje X: TODAS las fechas (un tick por día, rotadas -45°) — el lienzo tiene ancho
       // mínimo 680px en angosto (scroll), así que siguen legibles. En angosto los ejes
       // van FIJOS: el gesto táctil desliza el contenedor y el tap abre el popup.
       xaxis: { type: "date", tickformat: "%d/%m", tickmode: "linear", dtick: 86400000,
                tickangle: -45, tickfont: { size: 9 }, automargin: true,
+               showline: true, mirror: true, linecolor: C.marco, linewidth: 1.2,
+               ticks: "outside", tickcolor: C.marco,
                ...(rangoX ? { range: rangoX } : {}),
                ...(angosto ? { fixedrange: true } : {}) },
     });
@@ -1657,7 +1817,9 @@
 
     const leyEl = document.getElementById("ml-serie-leyenda");
     if (leyEl) leyEl.innerHTML =
-      `<span class="it"><span class="sw-linea"></span>Observado</span>`
+      (hayObsVentana
+        ? `<span class="it" title="Observación local"><span class="sw-linea"></span><span class="ml-leyenda-nombre">Observado</span></span>`
+        : "")
       + leyenda.sort((a, b) => a.orden - b.orden).map(item => item.html).join("");
 
     // Tabla de probabilidades por umbral: los porcentajes por nivel de lluvia (antes
@@ -1681,24 +1843,72 @@
         const sep = i => i === iHoy ? " ml-pb-hoy" : "";   // borde que marca el inicio del pronóstico
         const cabFechas = fechasTabla.map((fecha, i) =>
           `<th class="ml-pb-f${sep(i)}" data-fecha="${esc(fecha)}" aria-label="${esc(fecha)}">${dd(fecha)}</th>`).join("");
-        const filasU = (pu.umbrales || []).map((u, j) => {
-          const celdas = fechasTabla.map((fecha, i) => {
-            const p = (probabilidadesPorFecha.get(fecha) || [])[j];
-            return `<td class="ml-pb-c${sep(i)}" data-fecha="${esc(fecha)}" style="${celStyle(p)}">${p == null ? "—" : p + "%"}</td>`;
+        const coberturaPorUmbral = new Map(
+          ((pu.diagnostico || {}).cobertura_umbral || []).map(item =>
+            [Number(item.umbral), item]));
+        const filasUmbral = [0.1, 1, 5, 10, 25, 50].map(u => {
+          const j = (pu.umbrales || []).findIndex(valor =>
+            Number.isFinite(Number(valor))
+            && Math.abs(Number(valor) - u) <= 1e-9);
+          return {
+            u, j,
+            cobertura: coberturaPorUmbral.get(u) || null,
+            valores: fechasTabla.map(fecha =>
+              j < 0 ? null : (probabilidadesPorFecha.get(fecha) || [])[j]),
+          };
+        });
+        const filasU = filasUmbral.map(fila => {
+          const celdas = fila.valores.map((p, i) => {
+            return `<td class="ml-pb-c${sep(i)}" data-fecha="${esc(fechasTabla[i])}" style="${celStyle(p)}">${p == null ? "—" : p + "%"}</td>`;
           }).join("");
-          const etiqueta = Math.abs(Number(u) - 0.1) <= 1e-9
-            ? "P(lluvia)" : `≥${u} mm`;
-          return `<tr><th class="ml-pb-u">${etiqueta}</th>${celdas}<td class="ml-pb-spacer" aria-hidden="true"></td></tr>`;
+          const etiqueta = Math.abs(Number(fila.u) - 0.1) <= 1e-9
+            ? "P(lluvia)" : `≥${fila.u} mm`;
+          const sinValor = !fila.valores.some(esFinito);
+          const estadoFila = sinValor
+            ? (fila.cobertura && fila.cobertura.estado === "no_emitido"
+              ? "no emitido"
+              : (fila.cobertura && fila.cobertura.estado === "sin_emision_reciente"
+                ? "sin emisión vigente" : "sin dato en ventana"))
+            : "";
+          const detalle = fila.cobertura && fila.cobertura.motivo
+            ? ` title="${esc(fila.cobertura.motivo)}"` : "";
+          return `<tr><th class="ml-pb-u"${detalle}><span>${etiqueta}</span>${estadoFila ? `<small>${estadoFila}</small>` : ""}</th>${celdas}<td class="ml-pb-spacer" aria-hidden="true"></td></tr>`;
         }).join("");
+        const diag = pu.diagnostico || {};
+        const avisos = [];
+        const fallos = Array.isArray(diag.fechas_fallo_emparejamiento)
+          ? diag.fechas_fallo_emparejamiento.length : 0;
+        const ausencias = Array.isArray(diag.fechas_ausencia_real)
+          ? diag.fechas_ausencia_real.length : 0;
+        const sinEmisionReciente = (diag.cobertura_umbral || []).filter(
+          item => item && item.estado !== "vigente");
+        if (fallos) avisos.push(
+          `<span class="fallo">${fallos} fecha(s) con cohortes incompatibles; no se mezclaron modelos ni emisiones.</span>`);
+        if (sinEmisionReciente.length) avisos.push(
+          `<span class="parcial">${sinEmisionReciente.map(item =>
+            `${Number(item.umbral) === 0.1 ? "P(lluvia)" : `≥${item.umbral} mm`} ${
+              item.fecha_hasta ? `solo hasta ${item.fecha_hasta}` : "no emitido"
+            }`
+          ).join(" · ")}; no se inventaron ni extrapolaron valores.</span>`);
+        if (ausencias || (diag.umbrales_ausentes || []).length) avisos.push(
+          `<span class="parcial">Emisión parcial real: faltan uno o más umbrales en ${ausencias || "la"} fecha(s).</span>`);
+        if (Number(diag.curvas_reparadas) > 0) avisos.push(
+          `<span>Coherencia física aplicada a ${Number(diag.curvas_reparadas)} curva(s): P(lluvia) ≥ P(1) ≥ … ≥ P(50).</span>`);
+        const diagnosticoHTML = avisos.length
+          ? `<div class="ml-pb-diagnostico" role="status">${avisos.join("")}</div>` : "";
         const columnas = `<col class="ml-pb-col-umbral">${fechasTabla.map(() =>
           '<col class="ml-pb-col-fecha">').join("")}<col class="ml-pb-col-spacer">`;
-        probsEl.innerHTML =
-          `<div class="ml-pb-tit">Probabilidad de lluvia por umbral · ventana móvil</div>
+        probsEl.innerHTML = filasUmbral.some(fila => fila.valores.some(esFinito))
+          ? `<div class="ml-pb-tit">Probabilidad de lluvia por umbral · ventana móvil</div>
+           ${diagnosticoHTML}
            <div class="ml-pb-wrap"><table class="ml-pb-tabla"><colgroup>${columnas}</colgroup><thead><tr><th class="ml-pb-esq">Umbral</th>${cabFechas}<th class="ml-pb-spacer" aria-hidden="true"></th></tr></thead>
            <tbody>${filasU}</tbody></table></div>
-           <div class="ml-pb-nota">Mismo eje diario de la serie; “—” identifica una fecha sin probabilidad emitida. La línea vertical marca el inicio del pronóstico. Ej.: “≥25 mm = 30 %” significa 30 % de probabilidad de superar 25 mm ese día.</div>`;
+           <div class="ml-pb-nota">Se muestran siempre los seis umbrales. “—” identifica una probabilidad no emitida o sin soporte suficiente; nunca un cero inferido. La línea vertical marca el inicio del pronóstico.</div>`
+          : `<div class="ml-pb-estado" role="status"><b>Producto probabilístico sin valores finitos en esta ventana.</b>${diagnosticoHTML}</div>`;
       } else {
-        probsEl.innerHTML = "";
+        probsEl.innerHTML = esPrecip
+          ? `<div class="ml-pb-estado" role="status"><b>Sin producto probabilístico emitido.</b><span>No hay datos para esta estación, agregación y ventana.</span></div>`
+          : "";
       }
     }
 
@@ -1716,8 +1926,8 @@
       if (!figura) {
         boton.disabled = true;
         boton.title = rol === "probabilidades"
-          ? "Requiere observación local y al menos una probabilidad finita."
-          : "Tmax/Tmin requieren observación local y modelos disponibles.";
+          ? "No hay probabilidades finitas para esta selección."
+          : "No hay modelos disponibles para esta selección.";
         return;
       }
       boton.onclick = async () => {
@@ -1817,10 +2027,13 @@
 
   window.MLNWP = {
     _opacidadPorSkill: opacidadPorSkill,
+    _abreviarModeloLeyenda: abreviarModeloLeyenda,
     _indiceRecomendadoModelos: indiceRecomendadoModelos,
     _ordenarModelosPorDesempeno: ordenarModelosPorDesempeno,
     _distribuirModelosCentroAfuera: distribuirModelosCentroAfuera,
     _filtrarModelosFamilia: filtrarModelosFamilia,
+    _filtrarModelosHorizonteValidacion: filtrarModelosHorizonteValidacion,
+    _claveModeloHorizonteValidacion: claveModeloHorizonteValidacion,
     _construirEjeDiarioVentana: construirEjeDiarioVentana,
     _margenesEjeDesdeTicks: margenesEjeDesdeTicks,
     _configPNGSerie: PNG_SERIE,

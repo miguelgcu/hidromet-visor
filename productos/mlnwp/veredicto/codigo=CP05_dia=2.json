@@ -1,1 +1,1 @@
-{"agg_precip":"sum_07_07","codigo":"CP05","dias":2,"fecha":"2026-07-30","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":15,"prob_fuerte":1,"q25":0.6,"q75":1.4,"texto":"NO"},"nombre":"Sta.Bárbara","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_07_07","codigo":"CP05","dias":2,"fecha":"2026-07-30","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":16,"prob_fuerte":1,"q25":0.3,"q75":1.0,"texto":"NO"},"nombre":"Sta.Bárbara","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

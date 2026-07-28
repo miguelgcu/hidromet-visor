@@ -1,1 +1,1 @@
-{"agg_precip":"sum_07_07","codigo":"M5101","dias":3,"fecha":"2026-07-31","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":2,"prob_fuerte":0,"q25":0.0,"q75":0.0,"texto":"NO"},"nombre":"Calderón","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_07_07","codigo":"M5101","dias":3,"fecha":"2026-07-31","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":3,"prob_fuerte":1,"q25":0.0,"q75":1.0,"texto":"NO"},"nombre":"Calderón","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

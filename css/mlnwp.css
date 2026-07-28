@@ -107,6 +107,17 @@
 .ml-meta b.ink { color: var(--ink); }
 .ml-titulo { margin: 0 0 4px; font-size: 14px; font-weight: 650; color: var(--ink); }
 .ml-titulo .ml-sutil { font-weight: 500; color: var(--muted-2); font-size: 12px; }
+.ml-detalle-cab { display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 3px; }
+.ml-detalle-cab .ml-titulo { margin-bottom: 0; }
+.ml-horizonte-control { display: inline-flex; align-items: center; gap: 8px;
+  color: var(--faint); font: 600 10px var(--mono); letter-spacing: .07em;
+  text-transform: uppercase; }
+.ml-horizonte-control select { min-width: 142px; padding: 6px 28px 6px 9px;
+  border: 1px solid var(--line-2); border-radius: 8px; background: var(--surface);
+  color: var(--ink); font: 600 12px var(--mono); text-transform: none; cursor: pointer; }
+.ml-clasif-alcance { margin: 0 0 10px; color: var(--muted-2);
+  font: 500 11.5px var(--mono); line-height: 1.45; }
 
 /* mapa ganador: grid 1fr / 200px ---------------------------------------- */
 .ml-grid-mapa { display: grid; grid-template-columns: 1fr 200px; gap: 14px; align-items: start; }
@@ -164,6 +175,8 @@ html[data-tema="oscuro"] .ml-tabla-modelos tbody tr { border-bottom-color: var(-
 .ml-tabla-modelos td { padding: 7px 9px; color: var(--ink-2); }
 .ml-tabla-modelos td.num { text-align: right; font-family: var(--mono); }
 .ml-tabla-modelos td.idx { font-family: var(--mono); color: var(--muted-2); }
+.ml-tabla-modelos .ml-lead { white-space: nowrap; color: var(--ml-purple);
+  font: 700 11px var(--mono); }
 .ml-tabla-modelos tr.sin-calif { opacity: .62; font-style: italic; }
 /* fila GANADORA del bloque: fondo verde tenue + nombre en verde (paralelo a rm-best en cartas) */
 .ml-tabla-modelos tr.ml-best td { background: var(--ok-bg); }
@@ -188,6 +201,7 @@ html[data-tema="oscuro"] .ml-tabla-modelos tbody tr { border-bottom-color: var(-
   color: var(--muted-2); }
 
 /* SERIES ---------------------------------------------------------------- */
+#ml-serie-card { position: relative; padding-top: 52px; }
 .ml-serie-cabecera { display: flex; flex-direction: column; align-items: center;
   gap: 7px; margin: 0 0 8px; text-align: center; }
 .ml-serie-cabecera h2 { margin: 0; color: var(--ink); font-size: clamp(18px, 2.2vw, 24px);
@@ -198,11 +212,27 @@ html[data-tema="oscuro"] .ml-tabla-modelos tbody tr { border-bottom-color: var(-
   color: var(--muted); font: 600 10.5px var(--mono); font-variant-numeric: tabular-nums; }
 .ml-serie-subtitulo { color: var(--ml-purple); font: 700 12px var(--mono);
   letter-spacing: .025em; }
-.ml-serie-acciones { display: flex; align-items: center; justify-content: center;
-  flex-wrap: wrap; gap: 7px; margin: 2px 0 9px; }
-.ml-serie-acciones .ml-descarga-png { min-height: 34px; white-space: nowrap; }
-.ml-serie-acciones > span { color: var(--faint); font: 600 9.5px var(--mono);
-  font-variant-numeric: tabular-nums; }
+.ml-serie-acciones { position: absolute; z-index: 4; top: 11px; right: 11px;
+  display: flex; align-items: center; gap: 6px; }
+.ml-serie-acciones .ml-descarga-png { position: relative; display: inline-grid;
+  place-items: center; width: 34px; height: 34px; padding: 0; border: 1px solid var(--line-2);
+  border-radius: 8px; color: var(--muted); background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: var(--sombra-xs); cursor: pointer; transition: border-color .16s, color .16s, transform .16s; }
+.ml-serie-acciones .ml-descarga-png:hover:not(:disabled) { color: var(--ml-purple);
+  border-color: color-mix(in srgb, var(--ml-purple) 55%, var(--line-2)); transform: translateY(-1px); }
+.ml-serie-acciones .ml-descarga-png:focus-visible { outline: 2px solid var(--ml-purple);
+  outline-offset: 2px; }
+.ml-serie-acciones .ml-descarga-png:disabled { opacity: .38; cursor: not-allowed; }
+.ml-serie-acciones .ml-descarga-png.cargando svg { animation: ml-spin .8s linear infinite; }
+.ml-descarga-tipo { position: absolute; right: 2px; bottom: 1px; font: 800 7px var(--mono);
+  line-height: 1; color: var(--ml-purple); }
+@keyframes ml-spin { to { transform: rotate(360deg); } }
+.ml-obs-estado { width: fit-content; max-width: min(100%, 760px); margin: 3px auto 8px;
+  padding: 5px 9px; border-radius: 999px; border: 1px solid var(--ok-bd);
+  color: var(--ok); background: var(--ok-bg); font: 600 10.5px var(--mono);
+  line-height: 1.35; text-align: center; }
+.ml-obs-estado.sin-datos { border-color: var(--warn-bd); color: var(--warn);
+  background: var(--warn-bg); }
 .ml-serie-vacia { min-height: 210px; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 6px; padding: 24px;
   border: 1px dashed var(--line-2); border-radius: 10px; color: var(--muted);
@@ -218,30 +248,39 @@ html[data-tema="oscuro"] .ml-tabla-modelos tbody tr { border-bottom-color: var(-
      sus márgenes y dejan cada fecha de la tabla bajo el tick correspondiente. */
   --ml-axis-left: 58px; --ml-axis-right: 20px; }
 .ml-serie-plot { width: 100%; height: 380px; }
-/* Etiqueta mínima: solo el valor sobre un halo blanco tenue. Sin fecha, borde ni
-   sombra; la fecha completa permanece en el eje X y en el hover unificado. */
+/* Etiqueta mínima: solo valor y contorno blanco de texto. El rectángulo de
+   anotación permanece transparente para que nunca parezca una tarjeta. */
 .ml-serie-plot .annotation .bg {
-  fill: rgba(255,255,255,.82) !important;
+  fill: transparent !important;
   stroke: none !important;
   stroke-width: 0 !important;
   filter: none !important;
 }
 .ml-serie-plot .annotation-text {
-  fill: #071326 !important; font-weight: 700 !important;
+  fill: #071326 !important; stroke: #fff !important; stroke-width: 3px !important;
+  paint-order: stroke fill; stroke-linejoin: round; font-weight: 750 !important;
 }
 html[data-tema="oscuro"] .ml-serie-plot .annotation .bg {
-  fill: rgba(255,255,255,.82) !important;
+  fill: transparent !important;
   stroke: none !important;
   stroke-width: 0 !important;
   filter: none !important;
 }
 html[data-tema="oscuro"] .ml-serie-plot .annotation-text {
-  fill: #071326 !important; font-weight: 750 !important;
+  fill: #071326 !important; stroke: #fff !important; stroke-width: 3px !important;
+  paint-order: stroke fill; stroke-linejoin: round; font-weight: 750 !important;
 }
-.ml-serie-leyenda { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; margin-top: 10px; font-size: 11.5px; color: var(--muted); }
-.ml-serie-leyenda span.it { display: inline-flex; align-items: center; gap: 6px; }
-.ml-serie-leyenda .sw-linea { width: 14px; height: 0; border-top: 2px dashed var(--ink); }
-.ml-serie-leyenda .sw-caja { width: 12px; height: 10px; border-radius: 2px; }
+.ml-serie-leyenda { display: flex; gap: 0; flex-wrap: nowrap; justify-content: flex-start;
+  max-width: 100%; margin-top: 10px; overflow-x: auto; overscroll-behavior-inline: contain;
+  scrollbar-width: thin; font-size: 11px; color: var(--muted); }
+.ml-serie-leyenda span.it { display: inline-flex; flex: 0 0 auto; align-items: center;
+  min-width: 0; gap: 5px; padding: 2px 11px; white-space: nowrap; }
+.ml-serie-leyenda span.it + span.it { border-left: 1px solid var(--line-2); }
+.ml-serie-leyenda .ml-leyenda-nombre { display: inline-block; max-width: 132px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
+.ml-serie-leyenda .ml-leyenda-nota { color: var(--faint); font: 650 9.5px var(--mono); }
+.ml-serie-leyenda .sw-linea { flex: 0 0 auto; width: 14px; height: 0; border-top: 2px dashed var(--ink); }
+.ml-serie-leyenda .sw-caja { flex: 0 0 auto; width: 12px; height: 10px; border-radius: 2px; }
 .ml-serie-leyenda .sw-banda { width: 14px; height: 10px;
   background: linear-gradient(rgba(27,58,107,.10), rgba(27,58,107,.10)) padding-box,
               rgba(27,58,107,.24); border: 2px solid rgba(27,58,107,.10); box-sizing: border-box; }
@@ -302,11 +341,25 @@ html[data-tema="oscuro"] .ml-region-tabla td { border-top-color: var(--line-3); 
   border-bottom: 1.5px solid var(--line) !important; }
 .ml-pb-u { text-align: left !important; color: var(--ink-2); font-weight: 600; white-space: nowrap;
   font-variant-numeric: tabular-nums; }
+.ml-pb-u small { display: block; max-width: calc(var(--ml-axis-left) - 5px);
+  margin-top: 1px; color: var(--warn); font: 600 7px/1.05 var(--sans);
+  white-space: normal; overflow-wrap: anywhere; }
 .ml-pb-c { font-variant-numeric: tabular-nums; }
 .ml-pb-spacer { padding: 0 !important; border: 0 !important; background: transparent !important; }
 /* Borde punteado que marca el inicio del pronóstico (mismo criterio que la franja de la serie) */
 .ml-pb-hoy { border-left: 1.8px dotted #6B8CB4 !important; }
 .ml-pb-nota { font-size: 10.5px; color: var(--muted-2); margin-top: 6px; }
+.ml-pb-diagnostico { display: flex; flex-wrap: wrap; gap: 5px; margin: 0 0 7px;
+  color: var(--muted); font: 600 9.5px var(--mono); }
+.ml-pb-diagnostico span { padding: 4px 7px; border: 1px solid var(--line-2);
+  border-radius: 6px; background: var(--surface-2); }
+.ml-pb-diagnostico .parcial { color: var(--warn); border-color: var(--warn-bd);
+  background: var(--warn-bg); }
+.ml-pb-diagnostico .fallo { color: var(--danger); border-color: var(--danger-bd);
+  background: var(--danger-bg); }
+.ml-pb-estado { margin-top: 12px; padding: 10px 12px; border: 1px dashed var(--line-2);
+  border-radius: 8px; color: var(--muted); font-size: 11px; line-height: 1.45; }
+.ml-pb-estado b, .ml-pb-estado span { display: block; }
 
 /* GLOSARIO -------------------------------------------------------------- */
 .ml-glosario { max-width: 1080px; }
@@ -348,6 +401,9 @@ html[data-tema="oscuro"] .ml-region-tabla td { border-top-color: var(--line-3); 
   .ml-telemetria { margin-left: 0; padding-left: 0; }
   /* tarjetas y rejillas */
   .ml-card { padding: 13px; }
+  .ml-detalle-cab { align-items: stretch; }
+  .ml-horizonte-control { width: 100%; justify-content: space-between; }
+  .ml-horizonte-control select { flex: 1; max-width: 230px; }
   .ml-stats-grid { grid-template-columns: 1fr; }
   .ml-ministats { gap: 7px; }
   .ml-ministat { padding: 9px; }
@@ -361,9 +417,10 @@ html[data-tema="oscuro"] .ml-region-tabla td { border-top-color: var(--line-3); 
   .ml-time-track { width: var(--ml-time-track-width, 720px);
     min-width: var(--ml-time-track-width, 720px); }
   .ml-serie-plot { width: 100%; min-width: 0; height: 320px; }
-  .ml-serie-acciones { align-items: stretch; }
-  .ml-serie-acciones .ml-descarga-png { flex: 1 1 150px; }
-  .ml-serie-acciones > span { flex-basis: 100%; text-align: center; }
+  #ml-serie-card { padding-top: 50px; }
+  .ml-serie-acciones { top: 9px; right: 9px; }
+  .ml-obs-estado { width: auto; border-radius: 8px; }
+  .ml-serie-leyenda .ml-leyenda-nombre { max-width: 112px; }
   .ml-pb-wrap { overflow: visible; }
   .ml-pb-tabla th.ml-pb-u, .ml-pb-tabla th.ml-pb-esq {
     position: sticky; left: 0; z-index: 2; background: var(--surface);
@@ -379,7 +436,7 @@ html[data-tema="oscuro"] .ml-region-tabla td { border-top-color: var(--line-3); 
    Modelo + calificación FIJOS a la izquierda; las métricas se deslizan en X
    (escritorio y móvil — pedido del dueño 2026-07-09). */
 .ml-uni-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-.ml-tabla-modelos.ml-uni { min-width: 780px; }
+.ml-tabla-modelos.ml-uni { min-width: 840px; }
 .ml-tabla-modelos.ml-uni th.ml-uni-mod, .ml-tabla-modelos.ml-uni td.ml-uni-mod {
   position: sticky; left: 0; z-index: 2; background: var(--surface);
   box-shadow: inset -1px 0 0 var(--line-2); min-width: 170px; max-width: 230px;
@@ -387,8 +444,8 @@ html[data-tema="oscuro"] .ml-region-tabla td { border-top-color: var(--line-3); 
 .ml-tabla-modelos.ml-uni thead th { background: var(--surface); }
 .ml-uni-grp { text-align: center; font: 650 10px var(--mono); letter-spacing: .06em;
   text-transform: uppercase; color: var(--muted); border-left: 1px solid var(--line-3); }
-.ml-tabla-modelos.ml-uni td:nth-child(2), .ml-tabla-modelos.ml-uni td:nth-child(6),
-.ml-tabla-modelos.ml-uni td:nth-child(11),
+.ml-tabla-modelos.ml-uni td:nth-child(3), .ml-tabla-modelos.ml-uni td:nth-child(7),
+.ml-tabla-modelos.ml-uni td:nth-child(12),
 .ml-tabla-modelos.ml-uni thead tr:last-child th:nth-child(1),
 .ml-tabla-modelos.ml-uni thead tr:last-child th:nth-child(5),
 .ml-tabla-modelos.ml-uni thead tr:last-child th:nth-child(10) { border-left: 1px solid var(--line-3); }

@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"HN23","dias":2,"fecha":"2026-07-30","hoy":"2026-07-28","lluvia":{"llueve":true,"prob":78,"prob_fuerte":16,"q25":4.6,"q75":5.1,"texto":"SÍ"},"nombre":"Pto. Limón","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"HN23","dias":2,"fecha":"2026-07-30","hoy":"2026-07-28","lluvia":{"llueve":true,"prob":66,"prob_fuerte":13,"q25":3.6,"q75":4.0,"texto":"SÍ"},"nombre":"Pto. Limón","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

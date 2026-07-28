@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"HN22","dias":1,"fecha":"2026-07-29","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":27,"prob_fuerte":4,"q25":0.1,"q75":0.5,"texto":"NO"},"nombre":"La Presa","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"HN22","dias":1,"fecha":"2026-07-29","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":28,"prob_fuerte":5,"q25":0.6,"q75":1.1,"texto":"NO"},"nombre":"La Presa","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

@@ -1244,9 +1244,11 @@
   }
 
   /* ============================================================
-     §P9 — VALIDACIÓN DE HIDROESTIMADORES. Una sola figura comparable,
-     selector de estación y tabla fuente×ventana. Solo usa estaciones 7-7;
-     las 0-24 quedan fuera hasta disponer de un producto con esa ventana.
+     §P9 — HISTORIAL Y VALIDACIÓN DE HIDROESTIMADORES. La figura conserva
+     todos los datos reales de cada fuente en la ventana elegida; la cohorte
+     común se informa aparte para que la comparación de métricas siga siendo
+     justa. Solo usa estaciones 7-7; las 0-24 quedan fuera hasta disponer de
+     un producto con esa ventana.
      ============================================================ */
   const _hvCache = new Map();
   const _hvEstado = { dias: 14, codigo: "" };
@@ -1255,7 +1257,7 @@
     return `
       <div class="ct-panel ct-hv">
         <div class="ct-panel-cab">
-          <h3>Validación de hidroestimadores <span class="suave">· estimado grillado vs observación canónica 7-7</span></h3>
+          <h3>Historial y validación de hidroestimadores <span class="suave">· estimado grillado vs observación canónica 7-7</span></h3>
           <div class="ct-hv-controles">
             <label><span>Estación</span><select data-rol="hv-estacion"><option value="">Promedio de la red 7-7</option></select></label>
             <label><span>Ventana</span><select data-rol="hv-ventana">
@@ -1264,10 +1266,11 @@
           </div>
         </div>
         <div class="ct-hv-grid" data-rol="hv-grid"><span class="suave" style="font-size:12px">Cargando validación…</span></div>
-        <p class="ct-nota">La serie y las métricas usan la misma ventana física <b>07:00–07:00</b> y la intersección exacta
-          de pares estación×día común a todas las fuentes. <b>PERSIANN-CCS se evalúa primero en modo diagnóstico</b> y
-          solo participa en el consenso cuando acredita al menos 30 fechas comunes, 100 pares y 10 estaciones. GMAP no aparece porque es lluvia
-          media areal por cuenca, no un píxel independiente.</p>
+        <p class="ct-nota">La serie respeta exactamente los <b>7/14/30/60 días calendario</b> elegidos y muestra todos los
+          estimados realmente disponibles de cada fuente; un día sin dato queda como hueco, nunca se rellena ni se interpola.
+          La tabla de habilidad usa por separado la intersección estación×día común para comparar con justicia.
+          <b>PERSIANN-CCS se evalúa primero en modo diagnóstico</b> y solo participa en el consenso cuando acredita al menos
+          30 fechas comunes, 100 pares y 10 estaciones. GMAP no aparece porque es lluvia media areal por cuenca.</p>
       </div>`;
   }
   const _hvFmt = (v, suf = "") => (v == null ? "—" : (+v).toLocaleString("es-EC", { maximumFractionDigits: 2 }) + suf);
@@ -1308,11 +1311,23 @@
     }
     const prods = (datos && datos.productos) || [];
     if (!prods.length) {
-      host.innerHTML = `<span class="suave" style="font-size:12px">Aún no hay pares estimado↔observación (se llenan con la actualización diaria).</span>`;
+      host.innerHTML = `<span class="suave" style="font-size:12px">Aún no hay hidroestimadores disponibles en esta ventana (se incorporan con la actualización diaria).</span>`;
       return;
     }
     const ventanas = (datos.ventanas || [7, 14, 30, 60]);
-    const filas = prods.flatMap(p => ventanas.map(ventana => {
+    const ventanaActiva = datos.ventana || {};
+    const filasCobertura = prods.map(p => {
+      const c = p.cobertura || {};
+      const rotulo = ({ PDIR: "PERSIANN-PDIR", CCS: "PERSIANN-CCS" }[p.fuente] || p.fuente);
+      return `<tr>
+        <td><span class="ct-hv-fuente" style="--hv-color:${esc(HV_COLOR[p.fuente] || "#4c78a8")}">${esc(rotulo)}</span></td>
+        <td class="mono">${fmtNum(c.dias_estimados || 0)} / ${fmtNum(datos.dias || 0)}</td>
+        <td class="mono">${fmtNum(c.valores_estimados || 0)}</td>
+        <td class="mono">${fmtNum(c.dias_pareados || 0)}</td>
+        <td class="mono">${fmtNum(c.pares || 0)}</td>
+        <td class="mono">${esc(c.inicio || "—")}</td><td class="mono">${esc(c.fin || "—")}</td></tr>`;
+    });
+    const filasComunes = prods.flatMap(p => ventanas.map(ventana => {
       const m = (p.metricas_ventanas || {})[String(ventana)];
       const d = (m && m.deteccion) || {};
       const motor = p.motor || {};
@@ -1334,41 +1349,48 @@
     }));
     const comun = datos.muestra_comun || {};
     host.innerHTML = `<div class="ct-hv-plot" data-hv-plot="comparacion"></div>
-      <div class="ct-hv-tabla-wrap"><table class="ct-hv-met"><thead><tr>
+      <div class="ct-hv-tabla-wrap">
+      <div class="ct-hv-muestra"><b>Cobertura real por fuente</b> · ${esc(ventanaActiva.inicio || "—")} → ${esc(ventanaActiva.fin || "—")} · los huecos no se rellenan</div>
+      <table class="ct-hv-met"><thead><tr>
+        <th>Fuente</th><th>Días con dato</th><th>Valores</th><th>Días pareados</th><th>Pares</th><th>Desde</th><th>Hasta</th>
+      </tr></thead><tbody>${filasCobertura.join("")}</tbody></table>
+      <div class="ct-hv-muestra"><b>Comparación justa · muestra común</b>: ${fmtNum(comun.pares || 0)} pares ·
+        ${fmtNum(comun.dias || 0)} días · ${fmtNum(comun.estaciones || 0)} estaciones · ${(comun.fuentes || []).map(esc).join(" / ")}</div>
+      <table class="ct-hv-met"><thead><tr>
         <th>Fuente</th><th>Ventana</th><th>MAE</th><th>RMSE</th><th>Sesgo</th><th>r</th><th>POD</th><th>FAR</th><th>CSI</th><th>Pares</th><th>Días</th><th>Estado</th>
-      </tr></thead><tbody>${filas.join("")}</tbody></table>
-      <div class="ct-hv-muestra">Muestra común: ${fmtNum(comun.pares || 0)} pares estación×día · ${(comun.fuentes || []).map(esc).join(" / ")}</div></div>`;
+      </tr></thead><tbody>${filasComunes.join("")}</tbody></table></div>`;
     if (!window.Plotly) return;
     const oscuro = temaOscuro();
     const tinta = oscuro ? "#9DAABF" : "#58667A", rejilla = oscuro ? "rgba(223,230,247,.10)" : "rgba(70,89,122,.12)";
     const div = host.querySelector('[data-hv-plot="comparacion"]');
     if (!div) return;
-    const obs = new Map();
-    prods.forEach(p => {
-      const s = p.serie || {};
-      (s.fechas || []).forEach((fecha, i) => {
-        if (s.observado && s.observado[i] != null && !obs.has(fecha)) obs.set(fecha, s.observado[i]);
-      });
-    });
-    const fechasObs = [...obs.keys()].sort();
-    const trazas = [{ type: "bar", name: "Observado", x: fechasObs, y: fechasObs.map(f => obs.get(f)),
+    const serieObs = datos.serie_observada || {};
+    const fechasObs = serieObs.fechas || datos.fechas_ventana || [];
+    const observados = serieObs.observado || [];
+    const nObservaciones = serieObs.n_observaciones || [];
+    const trazas = [{ type: "bar", name: "Observado · red disponible", x: fechasObs, y: observados,
+      customdata: nObservaciones,
       marker: { color: oscuro ? "rgba(174,187,208,.50)" : "rgba(70,89,122,.38)" },
-      hovertemplate: "%{x} · observado <b>%{y:.2f} mm</b><extra></extra>" }];
+      hovertemplate: "%{x} · observado <b>%{y:.2f} mm</b> · %{customdata} observaciones<extra></extra>" }];
     prods.forEach(p => {
       const s = p.serie || {};
       const col = HV_COLOR[p.fuente] || "#4c78a8";
       const rotulo = ({ PDIR: "PERSIANN-PDIR", CCS: "PERSIANN-CCS" }[p.fuente] || p.fuente);
+      const nEstimados = s.n_estimados || s.n_pares || [];
+      const nPares = s.n_pares || [];
+      const detalle = (s.fechas || []).map((_, i) => [nEstimados[i] || 0, nPares[i] || 0]);
       trazas.push({ type: "scatter", mode: "lines+markers", name: rotulo,
         x: s.fechas, y: s.estimado, connectgaps: false,
         line: { color: col, width: 2.2, dash: p.fuente === "CCS" ? "dot" : "solid" },
-        marker: { size: 5, color: col }, customdata: s.n_pares,
-        hovertemplate: "%{x} · " + rotulo + " <b>%{y:.2f} mm</b> · %{customdata} pares comunes<extra></extra>" });
+        marker: { size: 5, color: col }, customdata: detalle,
+        hovertemplate: "%{x} · " + rotulo + " <b>%{y:.2f} mm</b> · %{customdata[0]} valores · %{customdata[1]} pares obs.<extra></extra>" });
     });
     Plotly.newPlot(div, trazas, {
       height: 325, margin: { l: 42, r: 10, t: 12, b: 48 },
       paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)", barmode: "overlay",
       showlegend: true, legend: { orientation: "h", y: -0.20, font: { size: 10, color: tinta } },
-      xaxis: { type: "category", nticks: 10, tickfont: { size: 9, color: tinta }, showgrid: false },
+      xaxis: { type: "category", categoryorder: "array", categoryarray: datos.fechas_ventana || [],
+        nticks: 10, tickfont: { size: 9, color: tinta }, showgrid: false },
       yaxis: { title: { text: "Precipitación (mm)", font: { size: 10, color: tinta } },
         tickfont: { size: 9, color: tinta }, gridcolor: rejilla, zeroline: false, rangemode: "tozero" },
       font: { color: tinta }, barcornerradius: 3,
@@ -1748,7 +1770,7 @@
       const rotulo = ALERTA_FUENTE_ROTULO[fuente] || fuente;
       const estado = _estados[fuente] || {};
       const badge = estado.estado === "diagnostica_no_acreditada"
-        ? `<span class="ct-fuente-estado diagnostico" title="${esc(estado.motivo || "Muestra causal insuficiente")}">Diagnóstico · no acreditado</span>`
+        ? `<span class="ct-fuente-estado diagnostico" title="${esc((estado.motivo || "Muestra causal insuficiente") + ". Esta fuente se muestra para evaluación, pero no aporta al consenso operativo.")}">En evaluación · fuera del consenso</span>`
         : estado.estado === "acreditada"
           ? `<span class="ct-fuente-estado acreditada">Acreditada</span>` : "";
       // localizar la fuente real dentro del período (los nombres del árbol son
@@ -2421,13 +2443,27 @@
       if (!panel.isConnected) return;
       const estricta = r.validacion_estricta || {};
       const muestra = estricta.muestra || {};
-      const disponible = estricta.estado === "disponible" && estricta.evidencia_disponible === true;
+      // PARTIAL_PENDING conserva evidencia histórica estricta válida mientras
+      // las fechas más recientes esperan la verdad corregida. Ocultarla hacía
+      // parecer que no existía desempeño aunque sí había emisiones cerradas.
+      const disponible = estricta.evidencia_disponible === true
+        && ((estricta.espacial || []).length > 0 || (estricta.intensidad || []).length > 0);
+      const pendienteReciente = estricta.estado === "disponible_con_referencia_pendiente";
+      const pendienteGlobal = estricta.estado === "disponible_con_pendientes_globales";
       const avisos = (estricta.advertencias || []).map(esc).join(" ");
       evidenciaHost.className = "ct-nota ct-evidencia-causal " + (disponible ? "suficiente" : "insuficiente");
       evidenciaHost.innerHTML = disponible
         ? `<b>Validación causal espacial cerrada</b> · ${fmtNum(muestra.emisiones_cerradas || 0)} emisiones · ` +
           `${fmtNum(muestra.fechas || 0)} fechas · ${fmtNum(muestra.fuentes || 0)} fuentes. ${avisos}`
         : `<b>Esperando ventanas causales cerradas</b> · ${avisos || "El visor no mostrará métricas sustitutas."}`;
+
+      if (disponible && pendienteReciente && evidenciaHost.querySelector("b")) {
+        evidenciaHost.querySelector("b").textContent =
+          "Evidencia cerrada disponible; fechas recientes pendientes";
+      } else if (disponible && pendienteGlobal && evidenciaHost.querySelector("b")) {
+        evidenciaHost.querySelector("b").textContent =
+          "Evidencia cerrada disponible; el motor global conserva pendientes";
+      }
 
       const oscuro = !!(App.tema && App.tema() === "oscuro");
       const tinta = oscuro ? "#9DAABF" : "#58667A";

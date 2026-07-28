@@ -215,6 +215,32 @@
 .cl-plot, .cl-plot-mapa { max-width: 100%; }
 .cl-card { max-width: 100%; }
 
+/* ── El Niño histórico: RONI + impacto observacional mensual ───────────── */
+.cl-enso-intro{background:
+  radial-gradient(circle at 92% 15%,color-mix(in srgb,#e0562d 18%,transparent),transparent 34%),
+  linear-gradient(135deg,var(--cl-acc-bg),transparent 72%)}
+.cl-enso-intro b{color:var(--ink)}
+.cl-enso-toolbar .cl-enso-est{flex:1 1 390px;min-width:270px}
+.cl-enso-toolbar .cl-enso-est select{width:100%;min-width:240px;font:600 12px var(--fuente)}
+.cl-enso-toolbar .cl-enso-evt{flex:1 1 300px;min-width:245px}
+.cl-enso-toolbar .cl-enso-evt select{width:100%;font:600 12px var(--mono)}
+.cl-enso-badges{display:flex;flex-wrap:wrap;gap:7px}
+.cl-enso-badges span{display:inline-flex;align-items:center;min-height:27px;padding:4px 10px;
+  border:1px solid var(--cl-acc-bd);border-radius:999px;background:var(--cl-acc-bg);
+  color:var(--ink-2);font:650 10.5px var(--mono)}
+.cl-enso-kpis{margin-top:0}
+.cl-enso-tabla td:not(:first-child),.cl-enso-tabla th:not(:first-child){text-align:right}
+.cl-enso-eventos tbody tr{cursor:pointer}
+.cl-enso-eventos tbody tr.on td{background:var(--cl-acc-bg);color:var(--ink)}
+.cl-enso-eventos tbody tr:focus-visible{outline:2px solid var(--cl-acc);outline-offset:-2px}
+.cl-enso code{font:600 10px var(--mono);color:var(--ink-2)}
+.cl-enso a{color:var(--cl-acc);font-weight:650}
+@media(max-width:700px){
+  .cl-enso-toolbar .cl-enso-est,.cl-enso-toolbar .cl-enso-evt{min-width:0;flex-basis:100%}
+  .cl-enso-toolbar .cl-grupo,.cl-enso-toolbar input,.cl-enso-toolbar select{width:100%;max-width:none}
+  .cl-enso-badges{gap:5px}
+}
+
 /* ── Series, relleno y mapas por rango ── */
 .cl-diario-toolbar input[type=date],.cl-diario-toolbar select,.cl-serie-controles select{
   border:1px solid var(--line);border-radius:var(--r-ctrl,8px);padding:8px 10px;

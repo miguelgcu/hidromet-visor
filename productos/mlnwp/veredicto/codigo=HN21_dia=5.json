@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"HN21","dias":5,"fecha":"2026-08-02","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":42,"prob_fuerte":9,"q25":8.4,"q75":8.9,"texto":"NO"},"nombre":"Pichincha","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"HN21","dias":5,"fecha":"2026-08-02","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":37,"prob_fuerte":12,"q25":8.3,"q75":8.7,"texto":"NO"},"nombre":"Pichincha","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

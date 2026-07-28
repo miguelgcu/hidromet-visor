@@ -780,6 +780,250 @@
     pintarVars(); pintarEstaciones(); cargar();
   }
 
+  // PESTAÑA — EL NIÑO: RONI CPC + impacto mensual observado -----------------
+  function ensoFmt(value, dec = 1, suffix = "") {
+    return value == null || !Number.isFinite(Number(value))
+      ? "—" : `${num(Number(value), dec)}${suffix}`;
+  }
+
+  function ensoKpis(evento) {
+    const r = evento.resumen || {};
+    const k = (label, value, color) => `<div class="cl-kpi" style="--kc:${color}">
+      <div class="v">${value}</div><div class="e">${label}</div></div>`;
+    return `<div class="cl-kpis cl-enso-kpis">
+      ${k("Cobertura de lluvia", `${ensoFmt(r.precip_cobertura_pct, 0, "%")}`, "#2f7fc1")}
+      ${k("Acumulado del episodio", `${ensoFmt(r.precip_total_mm, 1)} <small>mm</small>`, "#0b6e4f")}
+      ${k("Anomalía vs 1991–2020", `${ensoFmt(r.precip_anomalia_total_mm, 1)} <small>mm</small>`, "#d97706")}
+      ${k("Pico RONI", `${ensoFmt(evento.pico_c, 2)} <small>°C</small>`, "#b91c1c")}
+      ${k("Δ Tmax media", `${ensoFmt(r.tmax_anomalia_media_c, 1)} <small>°C</small>`, "#e0562d")}
+      ${k("Δ Tmin media", `${ensoFmt(r.tmin_anomalia_media_c, 1)} <small>°C</small>`, "#2e8bc0")}
+    </div>`;
+  }
+
+  function pintarEnsoLluvia(host, evento) {
+    if (!window.Plotly || !host) return;
+    const rows = evento.meses || [], x = rows.map(row => row.fecha);
+    const observed = rows.map(row => row.precip && row.precip.valor);
+    const normal = rows.map(row => row.precip && row.precip.normal);
+    const cumulative = rows.map(row => row.precip && row.precip.acumulado);
+    const cumulativeNormal = rows.map(row => row.precip && row.precip.acumulado_normal);
+    const traces = [
+      { type: "bar", x, y: normal, name: "Normal 1991–2020", marker: { color: "rgba(126,138,156,.42)", line: { color: "rgba(126,138,156,.8)", width: .5 } },
+        hovertemplate: "%{x}<br>Normal: <b>%{y:.1f} mm</b><extra></extra>" },
+      { type: "bar", x, y: observed, name: "Lluvia observada", marker: { color: "#2f7fc1", line: { color: "#175b91", width: .7 } },
+        hovertemplate: "%{x}<br>Observado: <b>%{y:.1f} mm</b><extra></extra>" },
+      { type: "scatter", mode: "lines+markers", x, y: cumulativeNormal, yaxis: "y2", name: "Acumulado normal",
+        line: { color: "#7e8a9c", width: 1.5, dash: "dot" }, marker: { size: 4 },
+        hovertemplate: "%{x}<br>Acumulado normal: %{y:.1f} mm<extra></extra>" },
+      { type: "scatter", mode: "lines+markers", x, y: cumulative, yaxis: "y2", name: "Acumulado observado",
+        line: { color: "#0b6e4f", width: 2.4 }, marker: { size: 5 },
+        hovertemplate: "%{x}<br>Acumulado observado: <b>%{y:.1f} mm</b><extra></extra>" },
+    ];
+    const layout = App.plotlyLayoutBase({
+      height: 430, barmode: "group", bargap: .18, bargroupgap: .05,
+      margin: { l: 54, r: 62, t: 18, b: 54 }, hovermode: "x unified",
+      legend: { orientation: "h", y: 1.11, x: .5, xanchor: "center" },
+      xaxis: { type: "date", tickformat: "%b<br>%Y", gridcolor: "rgba(120,130,150,.10)" },
+      yaxis: { title: "Lluvia mensual (mm)", rangemode: "tozero", gridcolor: "rgba(120,130,150,.14)", zeroline: false },
+      yaxis2: { title: "Acumulado (mm)", overlaying: "y", side: "right", rangemode: "tozero", showgrid: false },
+    });
+    quitarPlaceholder(host);
+    Plotly.react(host, traces, layout, App.plotlyConfig());
+  }
+
+  function pintarEnsoTemperatura(host, evento) {
+    if (!window.Plotly || !host) return;
+    const rows = evento.meses || [], x = rows.map(row => row.fecha);
+    const tmax = rows.map(row => row.tmax && row.tmax.anomalia);
+    const tmin = rows.map(row => row.tmin && row.tmin.anomalia);
+    if (![...tmax, ...tmin].some(value => value != null)) {
+      limpiarPlot(host);
+      host.innerHTML = vacio("🌡️", "Sin temperatura mensual con normal formal 1991–2020 para este episodio.");
+      return;
+    }
+    const traces = [
+      { type: "scatter", mode: "lines+markers", x, y: tmax, name: "Anomalía Tmax",
+        line: { color: "#e0562d", width: 2.2 }, marker: { size: 5 },
+        hovertemplate: "%{x}<br>Δ Tmax: <b>%{y:+.1f} °C</b><extra></extra>" },
+      { type: "scatter", mode: "lines+markers", x, y: tmin, name: "Anomalía Tmin",
+        line: { color: "#2e8bc0", width: 2.2 }, marker: { size: 5 },
+        hovertemplate: "%{x}<br>Δ Tmin: <b>%{y:+.1f} °C</b><extra></extra>" },
+    ];
+    const layout = App.plotlyLayoutBase({
+      height: 300, margin: { l: 54, r: 18, t: 10, b: 48 }, hovermode: "x unified",
+      legend: { orientation: "h", y: 1.14, x: .5, xanchor: "center" },
+      xaxis: { type: "date", tickformat: "%b<br>%Y", gridcolor: "rgba(120,130,150,.10)" },
+      yaxis: { title: "Anomalía (°C)", gridcolor: "rgba(120,130,150,.14)", zeroline: true,
+        zerolinecolor: "rgba(90,100,120,.65)", zerolinewidth: 1 },
+    });
+    quitarPlaceholder(host);
+    Plotly.react(host, traces, layout, App.plotlyConfig());
+  }
+
+  function tablaEnsoMeses(evento) {
+    const rows = (evento.meses || []).map(row => {
+      const p = row.precip || {}, tx = row.tmax || {}, tn = row.tmin || {};
+      return `<tr>
+        <td>${esc(row.fecha)} · ${esc(row.temporada_roni || "")}</td>
+        <td>${ensoFmt(row.roni_c, 2)}</td>
+        <td>${ensoFmt(p.valor, 1)}</td><td>${ensoFmt(p.normal, 1)}</td>
+        <td>${ensoFmt(p.anomalia, 1)}</td><td>${ensoFmt(p.anomalia_pct, 0, "%")}</td>
+        <td>${ensoFmt(p.acumulado, 1)}</td>
+        <td>${ensoFmt(tx.anomalia, 1)}</td><td>${ensoFmt(tn.anomalia, 1)}</td>
+        <td>${p.valor == null ? esc(p.motivo_faltante || "sin dato") : `${p.dias_observados}/${p.dias_esperados}`}</td>
+      </tr>`;
+    }).join("");
+    return `<div class="cl-tabla-scroll"><table class="cl-tabla cl-enso-tabla">
+      <thead><tr><th>Mes · temporada</th><th>RONI °C</th><th>Lluvia mm</th><th>Normal mm</th>
+      <th>Anom. mm</th><th>Anom. %</th><th>Acum. mm</th><th>Δ Tmax °C</th><th>Δ Tmin °C</th><th>Cobertura</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
+  }
+
+  function tablaEnsoEventos(payload) {
+    const rows = (payload.eventos || []).map(evento => {
+      const r = evento.resumen || {};
+      return `<tr data-evento="${esc(evento.id)}" tabindex="0">
+        <td>${esc(evento.desde)} → ${esc(evento.hasta)}</td><td>${ensoFmt(evento.pico_c, 2)}</td>
+        <td>${ensoFmt(r.precip_cobertura_pct, 0, "%")}</td><td>${ensoFmt(r.precip_total_mm, 1)}</td>
+        <td>${ensoFmt(r.precip_anomalia_total_mm, 1)}</td><td>${ensoFmt(r.precip_anomalia_total_pct, 0, "%")}</td>
+        <td>${ensoFmt(r.tmax_anomalia_media_c, 1)}</td><td>${ensoFmt(r.tmin_anomalia_media_c, 1)}</td>
+      </tr>`;
+    }).join("");
+    return `<div class="cl-tabla-scroll"><table class="cl-tabla cl-enso-tabla cl-enso-eventos">
+      <thead><tr><th>Episodio</th><th>Pico RONI °C</th><th>Cobertura</th><th>Lluvia mm</th>
+      <th>Anom. mm</th><th>Anom. %</th><th>Δ Tmax °C</th><th>Δ Tmin °C</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
+  }
+
+  async function tabEnso(c) {
+    inyectarCSS(); _alTema = null;
+    c.innerHTML = cargando("Leyendo RONI oficial y cobertura observacional…");
+    let catalog;
+    try { catalog = await App.api("/clima/enso_catalogo"); }
+    catch (e) { c.innerHTML = vacio("⚠️", esc(e.message)); return; }
+    const stations = (catalog.estaciones || []).filter(s => Number(s.episodios_posibles || 0) > 0);
+    if (!stations.length) {
+      c.innerHTML = vacio("📭", "No hay estaciones con historia que se solape con episodios El Niño clasificados.");
+      return;
+    }
+    const controlStyle = "border:1px solid var(--line);border-radius:9px;padding:8px 11px;background:var(--surface);color:var(--ink)";
+    c.innerHTML = `<div class="cl-wrap cl-enso">
+      <div class="cl-glo-intro cl-enso-intro">
+        <h3>El Niño histórico · impacto local observado</h3>
+        <p>Los episodios se clasifican con <b>RONI de NOAA CPC</b> (≥ +0.5 °C durante al menos cinco temporadas solapadas).
+        Cada estación se compara mes a mes contra su normal observada 1991–2020. RONI describe el Pacífico; el gráfico mide
+        el impacto local y no presupone que todas las regiones respondan igual.</p>
+      </div>
+      <div class="cl-toolbar cl-enso-toolbar">
+        <div class="cl-grupo"><span>Buscar</span><input class="cl-buscar" data-rol="buscar" placeholder="Estación, código o región"></div>
+        <div class="cl-grupo cl-enso-est"><span>Estación</span><select data-rol="est" style="${controlStyle}"></select></div>
+        <div class="cl-grupo cl-enso-evt"><span>Episodio</span><select data-rol="evento" style="${controlStyle}"></select></div>
+      </div>
+      <div data-rol="estado" class="cl-enso-estado"></div>
+      <div data-rol="kpis"></div>
+      <div class="cl-card"><h3 class="cl-maptit" data-rol="titulo">Lluvia mensual y acumulada</h3>
+        <div class="cl-plot" data-rol="lluvia"></div>
+        <p class="cl-nota">Un acumulado solo continúa mientras todos los meses previos del episodio sean válidos. Un mes ausente nunca se convierte en cero.</p>
+      </div>
+      <div class="cl-card"><h3 class="cl-maptit">Respuesta térmica local</h3><div class="cl-plot" data-rol="temp"></div></div>
+      <div class="cl-card"><h3 class="cl-maptit">Detalle mes a mes</h3><div data-rol="meses"></div></div>
+      <div class="cl-card"><h3 class="cl-maptit">Comparación de episodios en esta estación</h3>
+        <p class="cl-nota" style="margin-top:0">Totales y anomalías solo aparecen cuando el episodio está completo y existe una normal formal para cada mes.</p>
+        <div data-rol="eventos"></div></div>
+      <div class="cl-aviso"><span class="ic">🔬</span><p data-rol="metodo"></p></div>
+    </div>`;
+    const search = c.querySelector('[data-rol="buscar"]');
+    const station = c.querySelector('[data-rol="est"]');
+    const eventSelect = c.querySelector('[data-rol="evento"]');
+    const status = c.querySelector('[data-rol="estado"]');
+    const kpis = c.querySelector('[data-rol="kpis"]');
+    const title = c.querySelector('[data-rol="titulo"]');
+    const rain = c.querySelector('[data-rol="lluvia"]');
+    const temperature = c.querySelector('[data-rol="temp"]');
+    const months = c.querySelector('[data-rol="meses"]');
+    const events = c.querySelector('[data-rol="eventos"]');
+    const method = c.querySelector('[data-rol="metodo"]');
+    let payload = null, currentEvent = null;
+
+    function fillStations() {
+      const previous = station.value;
+      const query = search.value.trim().toLowerCase();
+      const filtered = stations.filter(s => !query || `${s.codigo} ${s.nombre || ""} ${s.region || ""} ${s.dependencia || ""}`.toLowerCase().includes(query));
+      station.innerHTML = filtered.map(s => `<option value="${esc(s.codigo)}">${esc(s.nombre || s.codigo)} (${esc(s.codigo)}) · ${esc(App.redEtiqueta(s.region || s.dependencia || ""))} · ${s.episodios_posibles} episodios posibles</option>`).join("");
+      if ([...station.options].some(o => o.value === previous)) station.value = previous;
+    }
+
+    function renderEvent(id) {
+      if (!payload) return;
+      currentEvent = (payload.eventos || []).find(event => event.id === id) || payload.eventos[0];
+      if (!currentEvent) {
+        status.innerHTML = vacio("📭", "La estación no tiene meses coincidentes con el catálogo RONI.");
+        return;
+      }
+      eventSelect.value = currentEvent.id;
+      const meta = payload.estacion || {};
+      const r = currentEvent.resumen || {};
+      title.textContent = `${meta.nombre || meta.codigo} · ${currentEvent.desde} a ${currentEvent.hasta}`;
+      status.innerHTML = `<div class="cl-enso-badges">
+        <span>RONI ${ensoFmt(currentEvent.pico_c, 2)} °C</span>
+        <span>${r.precip_meses_validos}/${r.precip_meses_esperados} meses de lluvia válidos</span>
+        <span>${payload.agregacion_precip ? esc(payload.agregacion_precip.replace("sum_", "").replaceAll("_", "–")) : "sin lluvia"}</span>
+      </div>`;
+      kpis.innerHTML = ensoKpis(currentEvent);
+      pintarEnsoLluvia(rain, currentEvent);
+      pintarEnsoTemperatura(temperature, currentEvent);
+      months.innerHTML = tablaEnsoMeses(currentEvent);
+      events.querySelectorAll("[data-evento]").forEach(row => row.classList.toggle("on", row.dataset.evento === currentEvent.id));
+    }
+
+    async function loadStation() {
+      if (!station.value) return;
+      limpiarPlot(rain); limpiarPlot(temperature);
+      status.innerHTML = cargando("Agregando meses desde la observación canónica…");
+      kpis.innerHTML = ""; months.innerHTML = ""; events.innerHTML = "";
+      try { payload = await App.api(`/clima/enso?codigo=${encodeURIComponent(station.value)}`); }
+      catch (e) { status.innerHTML = vacio("⚠️", esc(e.message)); payload = null; return; }
+      const available = (payload.eventos || []).filter(event =>
+        ((event.resumen || {}).precip_meses_validos || 0)
+        + ((event.resumen || {}).tmax_meses_validos || 0)
+        + ((event.resumen || {}).tmin_meses_validos || 0) > 0);
+      const selectable = available.length ? available : (payload.eventos || []);
+      eventSelect.innerHTML = selectable.slice().reverse().map(event => {
+        const r = event.resumen || {};
+        return `<option value="${esc(event.id)}">${esc(event.desde)} → ${esc(event.hasta)} · lluvia ${r.precip_meses_validos}/${r.precip_meses_esperados}</option>`;
+      }).join("");
+      events.innerHTML = tablaEnsoEventos(payload);
+      const best = available.slice().sort((a, b) =>
+        ((b.resumen || {}).precip_cobertura_pct || 0) - ((a.resumen || {}).precip_cobertura_pct || 0)
+        || Math.abs(Number(b.pico_c || 0)) - Math.abs(Number(a.pico_c || 0)))[0] || selectable[0];
+      method.innerHTML = `<b>Cobertura honesta.</b> ${esc(payload.nota || "")}
+        Fuente ENSO: <a href="${esc((payload.fuente_roni || {}).url || "#")}" target="_blank" rel="noopener">NOAA CPC RONI</a>,
+        caché SHA-256 <code>${esc(String((payload.fuente_roni || {}).sha256 || "").slice(0, 12))}…</code>.
+        La temperatura se muestra únicamente donde también existe normal formal observada.`;
+      renderEvent(best && best.id);
+    }
+
+    station.onchange = loadStation;
+    eventSelect.onchange = () => renderEvent(eventSelect.value);
+    search.oninput = () => { fillStations(); };
+    events.onclick = event => {
+      const row = event.target.closest("[data-evento]");
+      if (row) renderEvent(row.dataset.evento);
+    };
+    events.onkeydown = event => {
+      const row = event.target.closest("[data-evento]");
+      if (row && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); renderEvent(row.dataset.evento); }
+    };
+    _alTema = () => {
+      if (currentEvent) {
+        pintarEnsoLluvia(rain, currentEvent);
+        pintarEnsoTemperatura(temperature, currentEvent);
+      }
+    };
+    fillStations();
+    loadStation();
+  }
+
   // PESTAÑA — SERIES, RELLENO Y MAPA POR RANGO ------------------------------
   function pintarSerieRelleno(host, d) {
     if (!window.Plotly || !host) return;
@@ -1100,7 +1344,7 @@
           // Explorar (selector + clic en mapa/ranking → climograma y ficha ahí mismo).
           { id: "mapas", etiqueta: "Explorar", render: tabMapas },
           { id: "diario", etiqueta: "Series y acumulados", render: tabDiario },
-          { id: "records", etiqueta: "Récords", render: tabRecords },
+          { id: "enso", etiqueta: "El Niño histórico", render: tabEnso },
           // "Por coordenada" consulta lat/lon libres (imposible de congelar) → oculta en el visor.
           window.HIDROMET_VISOR ? null : { id: "punto", etiqueta: "Por coordenada", render: tabPunto },
           { id: "glosario", etiqueta: "Metodología", render: tabGlosario },

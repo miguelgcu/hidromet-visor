@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"M5023","dias":3,"fecha":"2026-07-31","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":49,"prob_fuerte":14,"q25":1.6,"q75":3.5,"texto":"NO"},"nombre":"Papallacta","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"M5023","dias":3,"fecha":"2026-07-31","hoy":"2026-07-28","lluvia":{"llueve":true,"prob":62,"prob_fuerte":19,"q25":1.6,"q75":3.5,"texto":"SÍ"},"nombre":"Papallacta","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
