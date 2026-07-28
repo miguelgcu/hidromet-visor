@@ -1,1 +1,1 @@
-{"agg_precip":"sum_07_07","codigo":"HM002","dias":4,"fecha":"2026-07-27","hoy":"2026-07-23","lluvia":{"llueve":false,"prob":23,"prob_fuerte":0,"q25":1.5,"q75":2.1,"texto":"NO"},"nombre":"Daule","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_07_07","codigo":"HM002","dias":4,"fecha":"2026-08-01","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":32,"prob_fuerte":22,"q25":1.4,"q75":2.7,"texto":"NO"},"nombre":"Daule","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

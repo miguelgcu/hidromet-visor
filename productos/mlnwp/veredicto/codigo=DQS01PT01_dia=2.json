@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"DQS01PT01","dias":2,"fecha":"2026-07-25","hoy":"2026-07-23","lluvia":{"llueve":false,"prob":9,"prob_fuerte":3,"q25":0.0,"q75":0.4,"texto":"NO"},"nombre":"Pluviometrica Atacazo Dique Sur","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"DQS01PT01","dias":2,"fecha":"2026-07-30","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":8,"prob_fuerte":3,"q25":0.0,"q75":1.2,"texto":"NO"},"nombre":"Pluviometrica Atacazo Dique Sur","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

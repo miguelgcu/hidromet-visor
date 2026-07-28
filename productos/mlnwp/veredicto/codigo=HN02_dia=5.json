@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"HN02","dias":5,"fecha":"2026-07-28","hoy":"2026-07-23","lluvia":{"llueve":false,"prob":26,"prob_fuerte":3,"q25":1.6,"q75":4.3,"texto":"NO"},"nombre":"Gualipe","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"HN02","dias":5,"fecha":"2026-08-02","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":36,"prob_fuerte":10,"q25":5.5,"q75":5.9,"texto":"NO"},"nombre":"Gualipe","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

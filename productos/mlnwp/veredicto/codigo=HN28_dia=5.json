@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"HN28","dias":5,"fecha":"2026-07-28","hoy":"2026-07-23","lluvia":{"llueve":false,"prob":1,"prob_fuerte":1,"q25":0.0,"q75":0.3,"texto":"NO"},"nombre":"Santa Lucia","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"HN28","dias":5,"fecha":"2026-08-02","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":4,"prob_fuerte":3,"q25":1.1,"q75":1.6,"texto":"NO"},"nombre":"Santa Lucia","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

@@ -43,7 +43,546 @@
   const indiceRecomendadoModelos = modelos =>
     (modelos || []).findIndex(modelo => modelo && modelo.operacional);
 
+  // Orden objetivo de barras de lluvia. La calificación validada (1–10) es la
+  // fuente primaria; score/skill solo cubre artefactos antiguos que aún no
+  // publicaban rating. Sin ninguna métrica, el nombre da un fallback estable:
+  // nunca se usa el orden accidental de llegada de la respuesta.
+  function ordenarModelosPorDesempeno(modelos) {
+    const metrica = modelo => {
+      const ratingCrudo = modelo && modelo.rating;
+      const rating = (ratingCrudo === null || ratingCrudo === undefined
+        || ratingCrudo === "") ? NaN : Number(ratingCrudo);
+      if (Number.isFinite(rating)) return { prioridad: 2, valor: rating };
+      const scoreCrudo = modelo && (modelo.score ?? modelo.skill);
+      const score = (scoreCrudo === null || scoreCrudo === undefined
+        || scoreCrudo === "") ? NaN : Number(scoreCrudo);
+      if (Number.isFinite(score)) return { prioridad: 1, valor: score };
+      return { prioridad: 0, valor: -Infinity };
+    };
+    return [...(modelos || [])].sort((a, b) => {
+      const ma = metrica(a), mb = metrica(b);
+      if (ma.prioridad !== mb.prioridad) return mb.prioridad - ma.prioridad;
+      if (ma.valor !== mb.valor) return mb.valor - ma.valor;
+      const na = String((a && a.modelo) || "");
+      const nb = String((b && b.modelo) || "");
+      return na < nb ? -1 : (na > nb ? 1 : 0);
+    });
+  }
+
+  // Convierte el ranking mejor→peor en posiciones físicas izquierda→derecha.
+  // Para cinco modelos, por ejemplo, los puestos quedan [4, 2, 1, 3, 5]:
+  // el mejor ocupa el centro y los demás se alejan de forma alternada.
+  function distribuirModelosCentroAfuera(modelos) {
+    const ranking = ordenarModelosPorDesempeno(modelos);
+    const n = ranking.length;
+    const posiciones = [];
+    if (n % 2) {
+      const centro = Math.floor(n / 2);
+      posiciones.push(centro);
+      for (let distancia = 1; posiciones.length < n; distancia += 1) {
+        posiciones.push(centro - distancia);
+        if (posiciones.length < n) posiciones.push(centro + distancia);
+      }
+    } else {
+      const centroIzq = n / 2 - 1;
+      const centroDer = n / 2;
+      for (let distancia = 0; posiciones.length < n; distancia += 1) {
+        posiciones.push(centroIzq - distancia);
+        if (posiciones.length < n) posiciones.push(centroDer + distancia);
+      }
+    }
+    const visual = ranking.map((modelo, ordenDesempeno) => ({
+      modelo, ordenDesempeno, posicion: posiciones[ordenDesempeno],
+    })).sort((a, b) => a.posicion - b.posicion);
+    return { ranking, visual };
+  }
+
+  function distribuirRankingCentroAfuera(ranking) {
+    const n = ranking.length;
+    const posiciones = [];
+    if (n % 2) {
+      const centro = Math.floor(n / 2);
+      posiciones.push(centro);
+      for (let distancia = 1; posiciones.length < n; distancia += 1) {
+        posiciones.push(centro - distancia);
+        if (posiciones.length < n) posiciones.push(centro + distancia);
+      }
+    } else {
+      const centroIzq = n / 2 - 1, centroDer = n / 2;
+      for (let distancia = 0; posiciones.length < n; distancia += 1) {
+        posiciones.push(centroIzq - distancia);
+        if (posiciones.length < n) posiciones.push(centroDer + distancia);
+      }
+    }
+    return ranking.map((modelo, ordenDesempeno) => ({
+      modelo, ordenDesempeno, posicion: posiciones[ordenDesempeno],
+    })).sort((a, b) => a.posicion - b.posicion);
+  }
+
   // Acento del módulo y colores de modelos de la cabecera de la tabla/leyenda.
+  /* ---------------- PNG portable de series por estación ----------------
+     La figura descargable es un entregable de papel independiente del tema y
+     del ancho del dispositivo. No se captura el DOM: se reconstruye en un
+     lienzo Plotly exacto para que móvil y escritorio produzcan los mismos
+     2310×1144 px, sin recorte automático ni padding externo. */
+  const PNG_SERIE = Object.freeze({
+    width: 2310, height: 1144, dpi: 220,
+    paper: "#FFFFFF", title: "#1B3A6B", metadata: "#5F6B76",
+    observation: "#303030", frame: "#555555", credit: "#A0A0A0",
+    font: "Calibri, Carlito, Liberation Sans, DejaVu Sans, Arial, sans-serif",
+    legendFont: "DejaVu Sans, Arial, sans-serif",
+  });
+  const PALETA_MODELOS_PNG = Object.freeze([
+    "#0072B2", "#D55E00", "#009E73", "#CC79A7", "#E69F00",
+    "#56B4E9", "#8A2BE2", "#DC267F", "#648FFF", "#785EF0",
+    "#FE6100", "#00A9A5", "#A6761D", "#B33DC6", "#E41A1C",
+    "#377EB8", "#4DAF4A", "#984EA3", "#FF7F00", "#F781BF",
+  ]);
+  const DIA_MS = 86400000;
+  const pxDesdePt = puntos => Number((Number(puntos) * PNG_SERIE.dpi / 72).toFixed(3));
+  const esFinito = valor => valor !== null && valor !== undefined
+    && valor !== "" && Number.isFinite(Number(valor));
+  const scoreModeloPNG = modelo => {
+    const bruto = modelo && (modelo.model_score ?? modelo.rating);
+    return esFinito(bruto) ? Math.max(1, Math.min(10, Number(bruto))) : null;
+  };
+  const claveModeloPNG = modelo => String(
+    (modelo && (modelo.model_key ?? modelo.modelo)) || "").trim();
+
+  function colorModeloPNG(modelo) {
+    const clave = claveModeloPNG(modelo);
+    let suma = 0;
+    Array.from(clave).forEach((caracter, i) => {
+      suma += (i + 1) * caracter.codePointAt(0);
+    });
+    return PALETA_MODELOS_PNG[
+      ((suma % PALETA_MODELOS_PNG.length) + PALETA_MODELOS_PNG.length)
+      % PALETA_MODELOS_PNG.length
+    ];
+  }
+
+  function seleccionarModelosPNG(modelos, inicio, fin, maximo = 7) {
+    const candidatos = (modelos || []).map((modelo, indice) => ({
+      modelo, indice, clave: claveModeloPNG(modelo), score: scoreModeloPNG(modelo),
+    })).filter(item => {
+      if (!item.clave) return false;
+      const fechas = item.modelo.fechas || [];
+      const valores = item.modelo.valores || [];
+      return fechas.some((fecha, i) => fecha >= inicio && fecha <= fin
+        && esFinito(valores[i]));
+    });
+    // Membresía: calificados primero, score descendente, orden de entrada estable
+    // y clave como último desempate reproducible.
+    candidatos.sort((a, b) => {
+      const ca = a.score !== null, cb = b.score !== null;
+      if (ca !== cb) return ca ? -1 : 1;
+      if (ca && a.score !== b.score) return b.score - a.score;
+      if (a.indice !== b.indice) return a.indice - b.indice;
+      return a.clave.localeCompare(b.clave);
+    });
+    const miembros = candidatos.slice(0, Math.max(0, maximo));
+    // Presentación final: score descendente y clave estable; s/d siempre después.
+    miembros.sort((a, b) => {
+      const ca = a.score !== null, cb = b.score !== null;
+      if (ca !== cb) return ca ? -1 : 1;
+      if (ca && a.score !== b.score) return b.score - a.score;
+      return a.clave.localeCompare(b.clave);
+    });
+    return miembros.map(item => item.modelo);
+  }
+
+  function opacidadModeloPNG(modelo, rango, total, temperatura = false) {
+    const score = scoreModeloPNG(modelo);
+    // Sin nota se usa únicamente la posición del modelo, como respaldo visual;
+    // la leyenda conserva "s/d" y nunca fabrica una calificación.
+    const calidad = score === null
+      ? Math.max(0, Math.min(1, (Math.max(1, total) - rango) / (Math.max(1, total) + 1)))
+      : Math.max(0, Math.min(1, (score - 1) / 9));
+    const visual = Math.pow(calidad, 2.15);
+    const alpha = temperatura
+      ? Math.max(0.07, Math.min(0.92, 0.07 + 0.85 * visual))
+      : Math.max(0.06, Math.min(0.92, 0.06 + 0.86 * visual));
+    return Number(alpha.toFixed(4));
+  }
+
+  function fechaMs(fecha) {
+    const valor = new Date(`${fecha}T00:00:00Z`).getTime();
+    return Number.isFinite(valor) ? valor : null;
+  }
+
+  function nombreSeguroPNG(valor, respaldo, conservarGuion = false) {
+    const normalizado = String(valor || "").normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+    const patron = conservarGuion ? /[^A-Za-z0-9_-]+/g : /[^A-Za-z0-9]+/g;
+    return normalizado.replace(patron, "_").replace(/^_+|_+$/g, "") || respaldo;
+  }
+
+  function nombreArchivoSeriePNG(meta, variable, probabilistico = false) {
+    const codigo = nombreSeguroPNG(meta.codigo, "estacion", true);
+    const nombre = nombreSeguroPNG(meta.nombre, "sin_nombre");
+    const sufijo = probabilistico ? "probabilistico"
+      : variable === "tmax" ? "tmax"
+      : variable === "tmin" ? "tmin" : "precipitacion";
+    return `${codigo}_${nombre}__${sufijo}.png`;
+  }
+
+  function metadatosFiguraPNG(meta, variableLabel, agregacionLabel) {
+    const codigo = String(meta.codigo || "—");
+    const complejo = String(
+      meta.complex_name ?? meta.complejo ?? meta.nombre_complejo ?? "").trim();
+    const identidad = [`Estación ${codigo}`];
+    if (complejo && !/^(s\/?a|n\/?a|no asignado)$/i.test(complejo))
+      identidad.push(`Complejo ${complejo}`);
+    identidad.push([variableLabel, agregacionLabel].filter(Boolean).join(" · "));
+    const geografia = [];
+    if (esFinito(meta.lat)) geografia.push(`Lat. ${Number(meta.lat).toFixed(4)}°`);
+    if (esFinito(meta.lon)) geografia.push(`Lon. ${Number(meta.lon).toFixed(4)}°`);
+    if (esFinito(meta.altitud_m))
+      geografia.push(`Alt. ${Math.round(Number(meta.altitud_m))} m`);
+    return {
+      titulo: String(meta.nombre || meta.codigo || "Estación"),
+      identidad: identidad.filter(Boolean).join("  ·  "),
+      geografia: geografia.join("  ·  "),
+    };
+  }
+
+  function anotacionesCabeceraPNG(meta, variableLabel, agregacionLabel) {
+    const texto = metadatosFiguraPNG(meta, variableLabel, agregacionLabel);
+    const comun = { xref: "paper", yref: "paper", showarrow: false,
+      xanchor: "center", align: "center" };
+    const salida = [
+      { ...comun, x: 0.5, y: 0.955, yanchor: "middle", text: `<b>${esc(texto.titulo)}</b>`,
+        font: { family: PNG_SERIE.font, size: pxDesdePt(27.75), color: PNG_SERIE.title } },
+      { ...comun, x: 0.5, y: 0.869, yanchor: "top", text: `<i>${esc(texto.identidad)}</i>`,
+        font: { family: PNG_SERIE.font, size: pxDesdePt(14.4), color: PNG_SERIE.metadata } },
+    ];
+    if (texto.geografia) salida.push(
+      { ...comun, x: 0.5, y: 0.803, yanchor: "top",
+        text: `<i>${esc(texto.geografia)}</i>`,
+        font: { family: PNG_SERIE.font, size: pxDesdePt(14.4), color: PNG_SERIE.metadata } },
+    );
+    salida.push({
+      xref: "paper", yref: "paper", x: 0.014, y: 0.105, showarrow: false,
+      xanchor: "left", yanchor: "bottom", text: "<i>Elaborado por M.G.</i>",
+      font: { family: PNG_SERIE.font, size: pxDesdePt(10.2), color: PNG_SERIE.credit },
+      opacity: 0.88,
+    });
+    return salida;
+  }
+
+  function figuraTemporalPNG(d, contexto) {
+    const meta = contexto.meta || d;
+    const hoy = contexto.hoyVisual || d.hoy;
+    const fechasEje = [...(contexto.ejeFechas || [])];
+    if (!hoy || !fechasEje.length) return null;
+    const inicio = fechasEje[0], fin = fechasEje[fechasEje.length - 1];
+    const esPrecip = !!d.es_precip;
+    const modelos = seleccionarModelosPNG(d.modelos, inicio, fin, 7);
+    if (!modelos.length) return null;
+    const obsFechas = (d.observado && d.observado.fechas) || [];
+    const obsValores = (d.observado && d.observado.valores) || [];
+    const hayObs = obsFechas.some((fecha, i) => fecha >= inicio && fecha <= fin
+      && esFinito(obsValores[i]));
+    // Tmax/Tmin solo son exportables cuando existe observación local.
+    if (!esPrecip && !hayObs) return null;
+    const trazas = [];
+    const anotaciones = anotacionesCabeceraPNG(
+      meta, contexto.variableLabel, contexto.agregacionLabel);
+    const valoresY = [];
+    const recortarLluvia = valor => esPrecip && esFinito(valor)
+      ? Math.max(0, Number(valor)) : (esFinito(valor) ? Number(valor) : null);
+    const rangoModelo = new Map(modelos.map((modelo, i) => [modelo, i]));
+    const visuales = esPrecip
+      ? distribuirRankingCentroAfuera(modelos)
+      : modelos.map((modelo, i) => ({ modelo, ordenDesempeno: i, posicion: i }));
+
+    for (const item of visuales) {
+      const modelo = item.modelo;
+      const rango = rangoModelo.get(modelo);
+      const color = colorModeloPNG(modelo);
+      const alpha = opacidadModeloPNG(modelo, rango, modelos.length, !esPrecip);
+      const fechas = [], valores = [];
+      (modelo.fechas || []).forEach((fecha, i) => {
+        if (fecha < inicio || fecha > fin) return;
+        fechas.push(fecha);
+        const valor = recortarLluvia((modelo.valores || [])[i]);
+        valores.push(valor);
+        if (valor !== null) valoresY.push(valor);
+        // Presente/futuro: únicamente los tres mejores, nunca los primeros
+        // accidentales de la respuesta.
+        if (rango < 3 && fecha >= hoy && valor !== null) {
+          anotaciones.push({
+            xref: "x", yref: "y", x: fecha, y: valor, showarrow: false,
+            text: `<b>${valor.toFixed(1)}</b>`, textangle: esPrecip ? 90 : 0,
+            xanchor: "center", yanchor: "bottom",
+            yshift: esPrecip
+              ? [2, 4, 6].map(pxDesdePt)[rango]
+              : [2, 7, 12].map(pxDesdePt)[rango],
+            bgcolor: "rgba(255,255,255,.72)", bordercolor: color,
+            borderwidth: pxDesdePt(0.22), borderpad: pxDesdePt(0.10),
+            font: { family: PNG_SERIE.font,
+              size: pxDesdePt(esPrecip ? 6.225 : 6.525),
+              color: "#1B1B1B" },
+          });
+        }
+      });
+      if (esPrecip) {
+        trazas.push({
+          type: "bar", x: fechas, y: valores, name: claveModeloPNG(modelo),
+          width: 0.070 * DIA_MS,
+          marker: { color, line: { color: "#FFFFFF", width: pxDesdePt(0.16) } },
+          opacity: alpha,
+          offsetgroup: `png-lluvia-${String(item.posicion).padStart(2, "0")}`,
+          alignmentgroup: "png-precipitacion-diaria",
+          legendrank: rango + 1,
+          zorder: 3 + 0.01 * (modelos.length - rango),
+          hoverinfo: "skip",
+        });
+      } else {
+        const score = scoreModeloPNG(modelo);
+        const baseCalidad = score === null
+          ? Math.max(0, (modelos.length - rango) / (modelos.length + 1))
+          : Math.max(0, Math.min(1, (score - 1) / 9));
+        const calidad = Math.pow(baseCalidad, 2.15);
+        trazas.push({
+          type: "scatter", mode: "lines+markers", x: fechas, y: valores,
+          name: claveModeloPNG(modelo), opacity: alpha, connectgaps: false,
+          line: { color, width: pxDesdePt(
+            Math.max(0.45, Math.min(1.47, 0.45 + 1.02 * calidad))) },
+          marker: { color, size: pxDesdePt(
+            Math.max(1.05, Math.min(2.30, 1.05 + 1.25 * calidad))),
+            symbol: "circle" },
+          zorder: 3,
+          hoverinfo: "skip",
+        });
+      }
+    }
+
+    if (hayObs) {
+      const fechas = [], valores = [];
+      obsFechas.forEach((fecha, i) => {
+        if (fecha < inicio || fecha > fin) return;
+        fechas.push(fecha);
+        const valor = recortarLluvia(obsValores[i]);
+        valores.push(valor);
+        if (valor !== null) {
+          valoresY.push(valor);
+          anotaciones.push({
+            xref: "x", yref: "y", x: fecha, y: valor, showarrow: false,
+            text: `<b>${valor.toFixed(1)}</b>`, xanchor: "center", yanchor: "bottom",
+            yshift: pxDesdePt(4), bgcolor: "rgba(255,255,255,.82)",
+            bordercolor: "#CCCCCC", borderwidth: pxDesdePt(0.25),
+            borderpad: pxDesdePt(0.12),
+            font: { family: PNG_SERIE.font, size: pxDesdePt(7.2),
+              color: PNG_SERIE.observation },
+          });
+        }
+      });
+      trazas.push({
+        type: "scatter", mode: "lines+markers", x: fechas, y: valores,
+        name: "Obs", connectgaps: false, opacity: 1,
+        line: { color: PNG_SERIE.observation, width: pxDesdePt(1.05), dash: "dash" },
+        marker: { color: PNG_SERIE.observation,
+          size: pxDesdePt(esPrecip ? 2.7 : 2.8),
+          symbol: "square" },
+        zorder: 6,
+        hoverinfo: "skip",
+      });
+    }
+
+    const entradasLeyenda = [];
+    if (hayObs) entradasLeyenda.push({ texto: "Obs", color: PNG_SERIE.observation,
+      simbolo: "━" });
+    modelos.forEach(modelo => {
+      const score = scoreModeloPNG(modelo);
+      entradasLeyenda.push({
+        texto: `${claveModeloPNG(modelo)}\u2002${score === null ? "s/d" : score.toFixed(1)}`,
+        color: colorModeloPNG(modelo), simbolo: esPrecip ? "■" : "━",
+      });
+    });
+    const legendSize = pxDesdePt(entradasLeyenda.length >= 10 ? 8.45
+      : entradasLeyenda.length >= 8 ? 8.75 : 9.05);
+    entradasLeyenda.forEach((entrada, i) => {
+      const x = 0.075 + ((i + 0.5) / entradasLeyenda.length) * (0.955 - 0.075);
+      anotaciones.push({
+        xref: "paper", yref: "paper", x, y: 0.727, showarrow: false,
+        xanchor: "center", yanchor: "middle",
+        text: `<span style="color:${entrada.color}">${entrada.simbolo}</span> ${esc(entrada.texto)}`,
+        font: { family: PNG_SERIE.legendFont, size: legendSize, color: "#283550" },
+      });
+    });
+
+    const min = valoresY.length ? Math.min(...valoresY) : 0;
+    const max = valoresY.length ? Math.max(...valoresY) : (esPrecip ? 2 : 1);
+    const extension = Math.max(0, max - min);
+    const pad = esPrecip ? Math.max(2, extension * 0.14)
+      : Math.max(1.2, extension * 0.16);
+    const rangoY = esPrecip
+      ? [Math.max(0, min - pad), max + pad]
+      : [min - pad, max + pad];
+    const inicioMs = fechaMs(inicio), finMs = fechaMs(fin);
+    const xRange = [inicioMs - 0.62 * DIA_MS, finMs + 1.05 * DIA_MS];
+    const shapes = [{
+      type: "line", xref: "x", yref: "paper", x0: hoy, x1: hoy,
+      y0: 0.190, y1: 0.700,
+      line: { color: "#999999", width: pxDesdePt(0.8), dash: "dot" },
+    }];
+    const axisBase = {
+      showline: true, mirror: true, linecolor: PNG_SERIE.frame,
+      linewidth: pxDesdePt(0.68),
+      ticks: "outside", tickcolor: PNG_SERIE.frame, tickwidth: pxDesdePt(0.68),
+      zeroline: false, fixedrange: true, automargin: false,
+    };
+    return {
+      width: PNG_SERIE.width, height: PNG_SERIE.height,
+      filename: nombreArchivoSeriePNG(meta, d.variable, false),
+      traces: trazas,
+      layout: {
+        width: PNG_SERIE.width, height: PNG_SERIE.height, autosize: false,
+        paper_bgcolor: PNG_SERIE.paper, plot_bgcolor: PNG_SERIE.paper,
+        margin: { l: 0, r: 0, t: 0, b: 0, pad: 0 },
+        font: { family: PNG_SERIE.font, color: "#1B1B1B" },
+        showlegend: false, hovermode: false,
+        barmode: "group", bargap: 0.24, bargroupgap: 0.14,
+        annotations: anotaciones, shapes,
+        xaxis: { ...axisBase, domain: [0.075, 0.955], type: "date", range: xRange,
+          tickmode: "array", tickvals: fechasEje,
+          ticktext: fechasEje.map(fecha => `${fecha.slice(8, 10)}/${fecha.slice(5, 7)}`),
+          tickfont: { family: PNG_SERIE.font, size: pxDesdePt(9.6), color: "#303030" },
+          showgrid: !esPrecip, gridcolor: "rgba(80,80,80,.16)",
+          gridwidth: pxDesdePt(0.45) },
+        yaxis: { ...axisBase, domain: [0.190, 0.700], range: rangoY,
+          title: { text: d.unidad || (esPrecip ? "mm" : "°C"),
+            font: { family: PNG_SERIE.font, size: pxDesdePt(11.7), color: "#303030" },
+            standoff: 10 },
+          tickfont: { family: PNG_SERIE.font, size: pxDesdePt(9.75), color: "#303030" },
+          showgrid: true, gridcolor: "rgba(80,80,80,.16)",
+          gridwidth: pxDesdePt(0.45) },
+      },
+    };
+  }
+
+  function figuraProbabilidadesPNG(d, contexto) {
+    const pu = d.probs_umbral;
+    const meta = contexto.meta || d;
+    const hoy = contexto.hoyVisual || d.hoy;
+    const fechas = [...(contexto.ejeFechas || [])];
+    if (!d.es_precip || !pu || !fechas.length || !hoy) return null;
+    const obsFechas = (d.observado && d.observado.fechas) || [];
+    const obsValores = (d.observado && d.observado.valores) || [];
+    if (!obsFechas.some((fecha, i) => fechas.includes(fecha) && esFinito(obsValores[i])))
+      return null;
+    const indicesFecha = new Map(
+      (pu.fechas || []).map((fecha, i) => [fecha, i]));
+    const umbrales = (pu.umbrales || []).map(Number);
+    const filasDef = [
+      { valor: 0.1, label: "P(lluvia)" },
+      { valor: 1, label: "P≥1mm" },
+      { valor: 5, label: "P≥5mm" },
+      { valor: 10, label: "P≥10mm" },
+      { valor: 25, label: "P≥25mm" },
+      { valor: 50, label: "P≥50mm" },
+    ];
+    const filas = filasDef.map(def => {
+      const j = umbrales.findIndex(valor => Number.isFinite(valor)
+        && Math.abs(valor - def.valor) <= 1e-9);
+      const valores = fechas.map(fecha => {
+        const i = indicesFecha.get(fecha);
+        const bruto = i === undefined || j < 0 ? null : ((pu.probs || [])[i] || [])[j];
+        return esFinito(bruto) ? Number(bruto) : null;
+      });
+      return { ...def, valores };
+    }).filter(fila => fila.valores.some(esFinito));
+    if (!filas.length) return null;
+
+    const anotaciones = anotacionesCabeceraPNG(
+      meta, "Precipitación probabilística", contexto.agregacionLabel);
+    filas.forEach(fila => fila.valores.forEach((valor, i) => {
+      if (!esFinito(valor)) return;
+      const visible = Math.max(0, Math.min(100, Number(valor)));
+      anotaciones.push({
+        xref: "x", yref: "y", x: fechas[i], y: fila.label,
+        showarrow: false, text: `<b>${visible.toFixed(0)}%</b>`,
+        xanchor: "center", yanchor: "middle",
+        font: { family: PNG_SERIE.font, size: pxDesdePt(7.875),
+          color: visible >= 55 ? "#FFFFFF" : "#1B1B1B" },
+      });
+    }));
+    const z = filas.map(fila => fila.valores);
+    return {
+      width: PNG_SERIE.width, height: PNG_SERIE.height,
+      filename: nombreArchivoSeriePNG(meta, "precip", true),
+      traces: [{
+        type: "heatmap", x: fechas, y: filas.map(fila => fila.label), z,
+        colorscale: "Blues", zmin: 0, zmax: 100, showscale: false,
+        xgap: pxDesdePt(0.45), ygap: pxDesdePt(0.45),
+        hoverinfo: "skip", connectgaps: false,
+      }],
+      layout: {
+        width: PNG_SERIE.width, height: PNG_SERIE.height, autosize: false,
+        paper_bgcolor: PNG_SERIE.paper,
+        plot_bgcolor: "rgba(107,107,107,.85)",
+        margin: { l: 0, r: 0, t: 0, b: 0, pad: 0 },
+        font: { family: PNG_SERIE.font, color: "#1B1B1B" },
+        showlegend: false, hovermode: false, annotations: anotaciones, shapes: [],
+        xaxis: {
+          domain: [0.095, 0.955], type: "date",
+          range: [fechaMs(fechas[0]) - 0.5 * DIA_MS,
+            fechaMs(fechas[fechas.length - 1]) + 0.5 * DIA_MS],
+          tickmode: "array", tickvals: fechas,
+          ticktext: fechas.map(fecha => `${fecha.slice(8, 10)}/${fecha.slice(5, 7)}`),
+          tickfont: { family: PNG_SERIE.font, size: pxDesdePt(9.15), color: "#303030" },
+          ticks: "outside", fixedrange: true, showgrid: false, zeroline: false,
+          showline: true, mirror: true, linecolor: "#8A8A8A",
+          linewidth: pxDesdePt(0.5),
+        },
+        yaxis: {
+          domain: [0.190, 0.727], type: "category",
+          categoryorder: "array", categoryarray: filas.map(fila => fila.label),
+          autorange: "reversed",
+          tickfont: { family: PNG_SERIE.font, size: pxDesdePt(9.45), color: "#303030" },
+          ticks: "", fixedrange: true, showgrid: false, zeroline: false,
+          showline: true, mirror: true, linecolor: "#8A8A8A",
+          linewidth: pxDesdePt(0.5),
+        },
+      },
+    };
+  }
+
+  async function descargarFiguraPNG(figura, boton) {
+    if (!figura || !window.Plotly || typeof Plotly.toImage !== "function")
+      throw new Error("La imagen no está disponible para esta selección.");
+    const original = boton ? boton.textContent : "";
+    if (boton) { boton.disabled = true; boton.textContent = "Preparando PNG…"; }
+    const host = document.createElement("div");
+    host.setAttribute("aria-hidden", "true");
+    Object.assign(host.style, {
+      position: "fixed", left: "-100000px", top: "0",
+      width: `${figura.width}px`, height: `${figura.height}px`,
+      opacity: "0", pointerEvents: "none", overflow: "hidden",
+    });
+    document.body.appendChild(host);
+    try {
+      await Plotly.newPlot(host, figura.traces, figura.layout, {
+        staticPlot: true, displayModeBar: false, responsive: false,
+      });
+      const dataUrl = await Plotly.toImage(host, {
+        format: "png", width: figura.width, height: figura.height, scale: 1,
+      });
+      const enlace = document.createElement("a");
+      enlace.href = dataUrl;
+      enlace.download = figura.filename;
+      document.body.appendChild(enlace);
+      enlace.click();
+      enlace.remove();
+      if (App.aviso) App.aviso(`PNG descargado: ${figura.filename}`, "ok", 5000);
+    } finally {
+      try { Plotly.purge(host); } catch (e) { /* figura temporal ya liberada */ }
+      host.remove();
+      if (boton) { boton.disabled = false; boton.textContent = original; }
+    }
+  }
+
   const MORADO = "#6A47CE", NAVY = "#0F2745";
   // Familia → clase visual del glosario.
   const FAM_CRUDO = ["GFS05", "ICON", "IFS025", "IFSHRES", "AIFS025", "METEOBLUE", "GEM15"];
@@ -840,6 +1379,13 @@
     }
     card.innerHTML = `
       ${cabecera}
+      <div class="ml-serie-acciones" aria-label="Descargas de la estación">
+        <button type="button" class="boton chico ml-descarga-png"
+                data-descarga-png="serie">↓ Descargar serie PNG</button>
+        ${esPrecip ? `<button type="button" class="boton chico ml-descarga-png"
+                data-descarga-png="probabilidades">↓ Descargar probabilidades PNG</button>` : ""}
+        <span>PNG formal · 2310 × 1144 px · 220 dpi</span>
+      </div>
       <div class="ml-time-scroll" role="region" tabindex="0"
            aria-label="Serie y probabilidades alineadas por fecha">
         <div class="ml-time-track">
@@ -848,7 +1394,7 @@
         </div>
       </div>
       <div class="ml-serie-leyenda" id="ml-serie-leyenda"></div>
-      <p class="ml-serie-pie">Observado vs. pronóstico (la franja sombreada de la derecha es el horizonte futuro). Los modelos se atenúan según su calificación.${esPrecip ? " Detalle probabilístico por umbral en la tabla inferior." : ""}</p>`;
+      <p class="ml-serie-pie">Observado vs. pronóstico (la franja sombreada de la derecha es el horizonte futuro). Los modelos se atenúan según su calificación.${esPrecip ? " En cada día, las barras se leen del centro hacia afuera por desempeño; detalle probabilístico por umbral en la tabla inferior." : ""}</p>`;
 
     const el = document.getElementById("ml-plot-serie");
     if (!window.Plotly || !el) return;
@@ -938,7 +1484,18 @@
     // el cupo restante muestra los comparadores con mayor skill.
     const modelosVisibles = modelosRespuesta.slice(0, 8);
     const iRecomendado = indiceRecomendadoModelos(modelosVisibles);
-    for (const [iModelo, original] of modelosVisibles.entries()) {
+    const distribucionLluvia = distribuirModelosCentroAfuera(modelosVisibles);
+    const modelosTrazado = esPrecip
+      ? distribucionLluvia.visual
+      : modelosVisibles.map((modelo, ordenDesempeno) => ({
+        modelo, ordenDesempeno, posicion: ordenDesempeno,
+      }));
+    const nBarrasLluvia = esPrecip
+      ? modelosTrazado.filter(item => !item.modelo.dash).length : 0;
+    for (const item of modelosTrazado) {
+      const original = item.modelo;
+      const iModelo = modelosVisibles.indexOf(original);
+      const ordenDesempeno = item.ordenDesempeno;
       let m = original;   // el respaldo se re-etiqueta abajo
       const color = m.color;
       const esRecomendado = iRecomendado >= 0 && iModelo === iRecomendado;
@@ -961,8 +1518,13 @@
       });
       if (esPrecip && !m.dash) {
         traces.push({ type: "bar", x: fx(m.fechas), y: m.valores, name: `${m.modelo}${otxt}${rtxt}`,
-          marker: { color }, opacity: op,
-          hovertemplate: `${esc(m.modelo)}<br>%{x|%d/%m/%Y}: %{y:.1f} ${esc(unidad)}<extra></extra>` });
+          marker: { color, line: {
+            color: oscuro ? "rgba(255,255,255,.58)" : "rgba(15,39,69,.48)",
+            width: ordenDesempeno === 0 ? 1.15 : 0.35,
+          } },
+          opacity: op, offsetgroup: `lluvia-${String(item.posicion).padStart(2, "0")}`,
+          alignmentgroup: "precipitacion-diaria", legendrank: ordenDesempeno + 1,
+          hovertemplate: `${esc(m.modelo)} · desempeño #${ordenDesempeno + 1}<br>%{x|%d/%m/%Y}: %{y:.1f} ${esc(unidad)}<extra></extra>` });
       } else {
         // connectgaps:false + eje completo con null (series.py): un hueco de fechas
         // se ve como hueco, NO como diagonal fantasma (queja La Argelia 84270 03/07).
@@ -973,7 +1535,8 @@
       opacidadesTrazas.push(op);
       const swStyle = m.dash ? `border-top:2px dotted ${esc(color)};height:0`
                              : `background:${esc(color)};opacity:${op}`;
-      leyenda.push(`<span class="it"><span class="sw-caja" style="${swStyle}"></span>${esc(m.modelo)}${esc(otxt)}${rtxt}</span>`);
+      leyenda.push({ orden: ordenDesempeno,
+        html: `<span class="it"><span class="sw-caja" style="${swStyle}"></span>${esc(m.modelo)}${esc(otxt)}${rtxt}</span>` });
     }
 
     // Observado: línea con marcadores. Sus etiquetas son anotaciones con fondo
@@ -998,9 +1561,12 @@
       [...fechasGrafico], hoyVisual, lookbackVisual);
     const timeTrack = card.querySelector(".ml-time-track");
     if (timeTrack) {
+      // Ocho barras caben sin solaparse en escritorio; en teléfono se ensancha
+      // cada día y el carril temporal ya existente permite recorrerlas con el dedo.
+      const anchoDia = esPrecip ? Math.max(68, nBarrasLluvia * 10) : 56;
       timeTrack.style.setProperty("--ml-time-track-width",
         `${Math.max(720, MARGEN_EJE_IZQ_PX + MARGEN_EJE_DER_PX
-          + ejeFechas.length * 56)}px`);
+          + ejeFechas.length * anchoDia)}px`);
     }
     el.style.minWidth = "0";
     const rangoX = ejeFechas.length ? [
@@ -1009,11 +1575,10 @@
     ] : null;
 
     const layout = App.plotlyLayoutSerie("", {
-      // barmode "overlay": los hietogramas de modelos se superponen y se atenúan por
-      // calificación (opacity); el mejor queda más nítido. El eje X es de FECHA (no
-      // categoría) para que banda P10–P90, P50, barras y observado se alineen en el
-      // tiempo aunque tengan distinta cantidad de fechas.
-      barmode: "overlay",
+      // Cada fecha es un grupo: ninguna barra tapa a otra. El orden de trazas ya
+      // ubica al mejor modelo en el centro y desplaza los siguientes hacia afuera.
+      // El eje X sigue siendo temporal para alinear observado y probabilidades.
+      barmode: "group", bargap: 0.14, bargroupgap: 0.06,
       showlegend: false,   // única leyenda = la HTML (ml-serie-leyenda); evita leyenda doble
       annotations: etiquetasPuntos,
       margin: { l: MARGEN_EJE_IZQ_PX, r: MARGEN_EJE_DER_PX, t: 50, b: 56 },
@@ -1092,7 +1657,8 @@
 
     const leyEl = document.getElementById("ml-serie-leyenda");
     if (leyEl) leyEl.innerHTML =
-      `<span class="it"><span class="sw-linea"></span>Observado</span>` + leyenda.join("");
+      `<span class="it"><span class="sw-linea"></span>Observado</span>`
+      + leyenda.sort((a, b) => a.orden - b.orden).map(item => item.html).join("");
 
     // Tabla de probabilidades por umbral: los porcentajes por nivel de lluvia (antes
     // solo se veía la 'sombra' de la banda y no estos números).
@@ -1120,7 +1686,9 @@
             const p = (probabilidadesPorFecha.get(fecha) || [])[j];
             return `<td class="ml-pb-c${sep(i)}" data-fecha="${esc(fecha)}" style="${celStyle(p)}">${p == null ? "—" : p + "%"}</td>`;
           }).join("");
-          return `<tr><th class="ml-pb-u">≥${u} mm</th>${celdas}<td class="ml-pb-spacer" aria-hidden="true"></td></tr>`;
+          const etiqueta = Math.abs(Number(u) - 0.1) <= 1e-9
+            ? "P(lluvia)" : `≥${u} mm`;
+          return `<tr><th class="ml-pb-u">${etiqueta}</th>${celdas}<td class="ml-pb-spacer" aria-hidden="true"></td></tr>`;
         }).join("");
         const columnas = `<col class="ml-pb-col-umbral">${fechasTabla.map(() =>
           '<col class="ml-pb-col-fecha">').join("")}<col class="ml-pb-col-spacer">`;
@@ -1133,6 +1701,37 @@
         probsEl.innerHTML = "";
       }
     }
+
+    // Las descargas se construyen desde los datos ya normalizados de la tarjeta,
+    // nunca desde una captura del viewport. Por ello el mismo botón produce bytes
+    // con geometría idéntica en escritorio y teléfono.
+    const contextoPNG = {
+      meta, hoyVisual, ejeFechas, variableLabel: varMet, agregacionLabel: aggMet,
+    };
+    const figuraSerie = figuraTemporalPNG(d, contextoPNG);
+    const figuraProb = figuraProbabilidadesPNG(d, contextoPNG);
+    const conectarDescarga = (rol, figura) => {
+      const boton = card.querySelector(`[data-descarga-png="${rol}"]`);
+      if (!boton) return;
+      if (!figura) {
+        boton.disabled = true;
+        boton.title = rol === "probabilidades"
+          ? "Requiere observación local y al menos una probabilidad finita."
+          : "Tmax/Tmin requieren observación local y modelos disponibles.";
+        return;
+      }
+      boton.onclick = async () => {
+        try {
+          await descargarFiguraPNG(figura, boton);
+        } catch (error) {
+          if (App.aviso) App.aviso(
+            error && error.message ? error.message : "No se pudo generar el PNG.",
+            "error", 7000);
+        }
+      };
+    };
+    conectarDescarga("serie", figuraSerie);
+    conectarDescarga("probabilidades", figuraProb);
   }
 
   /* ============================================================
@@ -1219,9 +1818,17 @@
   window.MLNWP = {
     _opacidadPorSkill: opacidadPorSkill,
     _indiceRecomendadoModelos: indiceRecomendadoModelos,
+    _ordenarModelosPorDesempeno: ordenarModelosPorDesempeno,
+    _distribuirModelosCentroAfuera: distribuirModelosCentroAfuera,
     _filtrarModelosFamilia: filtrarModelosFamilia,
     _construirEjeDiarioVentana: construirEjeDiarioVentana,
     _margenesEjeDesdeTicks: margenesEjeDesdeTicks,
+    _configPNGSerie: PNG_SERIE,
+    _colorModeloPNG: colorModeloPNG,
+    _seleccionarModelosPNG: seleccionarModelosPNG,
+    _nombreArchivoSeriePNG: nombreArchivoSeriePNG,
+    _figuraTemporalPNG: figuraTemporalPNG,
+    _figuraProbabilidadesPNG: figuraProbabilidadesPNG,
     async render(vista) {
       // La cabecera global ya la gestiona el módulo anfitrión (Pronóstico):
       // aquí no se toca #cabecera-vista.

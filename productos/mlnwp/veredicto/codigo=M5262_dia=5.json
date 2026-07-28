@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"M5262","dias":5,"fecha":"2026-07-28","hoy":"2026-07-23","lluvia":{"llueve":false,"prob":46,"prob_fuerte":6,"q25":5.8,"q75":6.8,"texto":"NO"},"nombre":"Bellavista - Camping","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"M5262","dias":5,"fecha":"2026-08-02","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":44,"prob_fuerte":14,"q25":5.1,"q75":7.0,"texto":"NO"},"nombre":"Bellavista - Camping","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

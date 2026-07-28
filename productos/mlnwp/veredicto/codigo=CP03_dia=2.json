@@ -1,1 +1,1 @@
-{"agg_precip":"sum_07_07","codigo":"CP03","dias":2,"fecha":"2026-07-25","hoy":"2026-07-23","lluvia":{"llueve":false,"prob":41,"prob_fuerte":2,"q25":0.1,"q75":9.4,"texto":"NO"},"nombre":"Guarumales","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_07_07","codigo":"CP03","dias":2,"fecha":"2026-07-30","hoy":"2026-07-28","lluvia":{"llueve":true,"prob":92,"prob_fuerte":13,"q25":3.4,"q75":10.6,"texto":"SÍ"},"nombre":"Guarumales","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

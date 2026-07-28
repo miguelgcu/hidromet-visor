@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"HN08","dias":1,"fecha":"2026-07-24","hoy":"2026-07-23","lluvia":{"llueve":false,"prob":11,"prob_fuerte":4,"q25":6.6,"q75":9.3,"texto":"NO"},"nombre":"Q. AJ Lulu","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"HN08","dias":1,"fecha":"2026-07-29","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":29,"prob_fuerte":6,"q25":0.6,"q75":1.0,"texto":"NO"},"nombre":"Q. AJ Lulu","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

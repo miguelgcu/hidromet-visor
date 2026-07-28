@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"HN05","dias":3,"fecha":"2026-07-26","hoy":"2026-07-23","lluvia":{"llueve":false,"prob":28,"prob_fuerte":7,"q25":0.2,"q75":2.9,"texto":"NO"},"nombre":"Met. Baba","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"HN05","dias":3,"fecha":"2026-07-31","hoy":"2026-07-28","lluvia":{"llueve":true,"prob":67,"prob_fuerte":30,"q25":0.8,"q75":1.2,"texto":"SÍ"},"nombre":"Met. Baba","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
