@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"P53","dias":2,"fecha":"2026-07-30","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":3,"prob_fuerte":1,"q25":0.0,"q75":1.2,"texto":"NO"},"nombre":"Paluguillo","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"P53","dias":2,"fecha":"2026-07-30","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":5,"prob_fuerte":1,"q25":0.0,"q75":0.1,"texto":"NO"},"nombre":"Paluguillo","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

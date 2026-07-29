@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"HN16","dias":4,"fecha":"2026-08-01","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":21,"prob_fuerte":13,"q25":5.2,"q75":5.6,"texto":"NO"},"nombre":"La Palizada","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"HN16","dias":4,"fecha":"2026-08-01","hoy":"2026-07-28","lluvia":{"llueve":true,"prob":54,"prob_fuerte":35,"q25":2.4,"q75":5.1,"texto":"SÍ"},"nombre":"La Palizada","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

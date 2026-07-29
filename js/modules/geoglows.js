@@ -15,6 +15,10 @@
   const LIMITES_EC = [[-5.1, -81.2], [1.6, -75.1]];
   const COLOR_ALERTA = { 0: "#2EA043", 2: "#C5B11B", 5: "#C5B11B", 10: "#E08A1E",
     25: "#D2691E", 50: "#CF362B", 100: "#7A1FA2" };
+  const COLOR_SCREENING_SENAL = "#0E94A4";
+  const COLOR_SCREENING_ESCENARIO = "#1763B6";
+  const PASO_SCREENING_MS = 3 * 60 * 60 * 1000;
+  const UMBRAL_PROBABILIDAD_ESCENARIO = 0.5;
   const colorNivel = na => (na && COLOR_ALERTA[na.anios] != null) ? COLOR_ALERTA[na.anios]
     : (na && na.color) ? na.color : "#6B7785";
   const fmt = n => (n == null ? "—" : Number(n).toLocaleString("es-EC", { maximumFractionDigits: 0 }));
@@ -24,6 +28,104 @@
   const primerValor = s => { if (!s) return null;
     for (const v of s) if (v != null && isFinite(v)) return v; return null; };
   const encuadrar = m => m && m.fitBounds(LIMITES_EC, { padding: [8, 8] });
+  const numeroFinito = valor => valor !== null && valor !== undefined
+    && valor !== "" && Number.isFinite(Number(valor));
+  const probabilidadExplicita = item => {
+    const bruto = item && (item.prob_exceedance ?? item.probabilidad);
+    if (!numeroFinito(bruto)) return null;
+    const valor = Number(bruto);
+    if (valor < 0 || valor > 100) return null;
+    return valor > 1 ? valor / 100 : valor;
+  };
+
+  function tipoItemScreening(item) {
+    if (!item || item.excluido === true || item.excluded === true
+      || /^(excluid[oa]|excluded)$/i.test(String(item.estado || item.status || "")))
+      return "excluida";
+    const probabilidad = probabilidadExplicita(item);
+    return probabilidad !== null && probabilidad < UMBRAL_PROBABILIDAD_ESCENARIO
+      ? "posible_escenario" : "senal_cribado";
+  }
+
+  function normalizarScreening(payload) {
+    const bruto = payload && typeof payload === "object" ? payload : {};
+    const resumenBruto = bruto.resumen && typeof bruto.resumen === "object"
+      ? bruto.resumen : {};
+    const items = (Array.isArray(bruto.items) ? bruto.items : []).map(item => ({
+      ...item,
+      river_id: item && item.river_id != null ? String(item.river_id) : "",
+      lat: numeroFinito(item && item.lat) ? Number(item.lat) : null,
+      lon: numeroFinito(item && item.lon) ? Number(item.lon) : null,
+      return_period: numeroFinito(item && item.return_period)
+        ? Number(item.return_period) : null,
+      upstream_area_km2: numeroFinito(item && item.upstream_area_km2)
+        ? Number(item.upstream_area_km2) : null,
+      stream_order: numeroFinito(item && item.stream_order)
+        ? Number(item.stream_order) : null,
+      _tipo: tipoItemScreening(item),
+    })).filter(item => item.lat !== null && item.lon !== null);
+    const visibles = items.filter(item => item._tipo !== "excluida");
+    const excluidasLocales = items.length - visibles.length;
+    const senales = visibles.filter(item => item._tipo === "senal_cribado");
+    const escenarios = visibles.filter(item => item._tipo === "posible_escenario");
+    const pasos = [...new Set((Array.isArray(bruto.pasos_tiempo)
+      ? bruto.pasos_tiempo : []).filter(numeroFinito).map(Number))].sort((a, b) => a - b);
+    const numeroResumen = (clave, respaldo = 0) => numeroFinito(resumenBruto[clave])
+      ? Math.max(0, Number(resumenBruto[clave])) : respaldo;
+    return {
+      ok: bruto.ok !== false && bruto.disponible !== false
+        && !bruto.error && !bruto.construyendo,
+      resumen: {
+        catalogo_total: numeroResumen("catalogo_total"),
+        base_detalle: numeroResumen("base_detalle"),
+        senales_credibles: numeroResumen("senales_credibles", visibles.length),
+        senales_excluidas: numeroResumen("senales_excluidas", excluidasLocales),
+        inicio: resumenBruto.inicio || null,
+        fin: resumenBruto.fin || null,
+        generado: resumenBruto.generado || null,
+      },
+      items, visibles, senales, escenarios, pasos_tiempo: pasos,
+      mapserver_url: String(
+        (bruto.arcgis && bruto.arcgis.mapserver_url) || "").trim(),
+    };
+  }
+
+  function servicioExportArcGIS(mapserverUrl) {
+    const limpio = String(mapserverUrl || "").trim().replace(/\/+$/, "");
+    const capa = limpio.match(/\/MapServer\/(\d+)$/i);
+    if (capa) return {
+      exportUrl: `${limpio.replace(/\/\d+$/, "")}/export`,
+      layerId: Number(capa[1]),
+    };
+    if (/\/MapServer$/i.test(limpio))
+      return { exportUrl: `${limpio}/export`, layerId: null };
+    return { exportUrl: "", layerId: null };
+  }
+
+  function urlExportArcGIS(
+    mapserverUrl, paso, bbox, size = { x: 256, y: 256 }, spatialReference = 4326,
+  ) {
+    const servicio = servicioExportArcGIS(mapserverUrl);
+    if (!servicio.exportUrl || !numeroFinito(paso) || !Array.isArray(bbox)
+      || bbox.length !== 4) return "";
+    const params = new URLSearchParams({
+      bbox: bbox.map(Number).join(","),
+      bboxSR: String(spatialReference), imageSR: String(spatialReference),
+      size: `${Math.round(Number(size.x) || 256)},${Math.round(Number(size.y) || 256)}`,
+      format: "png32", transparent: "true", f: "image",
+      time: `${Number(paso)},${Number(paso) + PASO_SCREENING_MS - 1}`,
+    });
+    if (servicio.layerId !== null) params.set("layers", `show:${servicio.layerId}`);
+    return `${servicio.exportUrl}?${params.toString()}`;
+  }
+
+  function fechaPasoScreening(epoch) {
+    if (!numeroFinito(epoch)) return "—";
+    return new Intl.DateTimeFormat("es-EC", {
+      timeZone: "America/Guayaquil", day: "2-digit", month: "short",
+      hour: "2-digit", minute: "2-digit", hour12: false,
+    }).format(new Date(Number(epoch))).replace(",", " ·");
+  }
   // Dispositivo táctil (móvil/tablet): activa el área táctil ampliada y el bottom-sheet.
   const TOUCH = !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
 
@@ -41,7 +143,9 @@
   let estado, epocaGlobal = 0, _onTema = null;
   function crear() {
     estado = { mapa: null, tiles: null, capaRios: null, lienzoRios: null,
-               marcadores: null, items: [], selRid: null, detActual: null, epoca: ++epocaGlobal };
+               marcadores: null, marcadoresScreening: null, capaScreening: null,
+               screening: null, overlayActivo: false, overlayFallos: 0,
+               items: [], selRid: null, detActual: null, epoca: ++epocaGlobal };
   }
   function vigente(E) { return estado === E && E.epoca >= 0; }
 
@@ -70,14 +174,19 @@
           <div>
             <div class="gg-kicker">Hidrología · caudales modelados</div>
             <h2 class="gg-title">Caudales de ríos — GEOGLOWS</h2>
-            <p class="gg-sub">Pronóstico de caudal a 15 días por tramo de río (GEOGLOWS ECMWF v2).
-              <b>Busca o elige un río</b> en el selector, o pulsa cualquier punto del mapa.</p>
+            <p class="gg-sub">Cribado de la red fluvial nacional y pronóstico de caudal a 15 días
+              (GEOGLOWS ECMWF v2). <b>Las señales nacionales no sustituyen el detalle local</b>:
+              busca un río disponible o pulsa uno de sus marcadores.</p>
           </div>
           <div class="gg-actions">
             <button class="gg-btn" data-rol="glosario">📖 Guía</button>
             <button class="gg-btn primario" data-rol="actualizar">⟳ Actualizar</button>
           </div>
         </div>
+        <section class="gg-card gg-screening" data-rol="screening" aria-live="polite">
+          <div class="gg-screening-carga"><span class="spin"></span>
+            Examinando la red nacional…</div>
+        </section>
         <section class="gg-card gg-selector">
           <label class="gg-sel-lbl" for="gg-sel-input">Río</label>
           <div class="gg-sel-field" data-rol="combo">
@@ -93,7 +202,24 @@
         <div class="gg-main">
           <section class="gg-card gg-mapwrap">
             <div class="gg-map" data-rol="mapa"></div>
-            <div class="gg-map-hint">Pulsa un río o un punto del mapa</div>
+            <div class="gg-map-hint">Pulsa un río con detalle; las señales nacionales son contexto</div>
+            <div class="gg-overlay" data-rol="screening-overlay" hidden>
+              <div class="gg-overlay-head">
+                <button type="button" class="gg-overlay-toggle"
+                        data-rol="screening-overlay-toggle" aria-pressed="false">
+                  Capa oficial
+                </button>
+                <span class="gg-overlay-step">intervalo 3 h</span>
+              </div>
+              <label class="gg-overlay-label" for="gg-screening-time">
+                Hora del escenario <output data-rol="screening-time-label">—</output>
+              </label>
+              <input id="gg-screening-time" data-rol="screening-time" type="range"
+                     min="0" max="0" step="1" value="0" disabled>
+              <span class="gg-overlay-status" data-rol="screening-overlay-status">
+                Superposición desactivada
+              </span>
+            </div>
             <div class="gg-zoom">
               <button data-rol="zoom+" title="Acercar">+</button>
               <button data-rol="zoom-" title="Alejar">−</button>
@@ -115,6 +241,56 @@
         </section>
         <div class="gg-sheet" data-rol="sheet" hidden></div>
       </div>`;
+  }
+
+  function resumenScreeningHTML(screening, detalleDisponible = 0) {
+    if (!screening || !screening.ok) return `
+      <div class="gg-screening-fallback">
+        <b>Cribado nacional no disponible</b>
+        <span>El detalle de ${fmt(detalleDisponible)} ríos permanece operativo; no se
+          infieren señales nacionales sin el producto oficial.</span>
+      </div>`;
+    const r = screening.resumen;
+    const detalle = r.base_detalle || detalleDisponible;
+    const nSenales = screening.senales.length;
+    const nEscenarios = screening.escenarios.length;
+    const nExcluidas = r.senales_excluidas;
+    const ventana = [r.inicio, r.fin].filter(Boolean).join(" → ");
+    const generadoMs = r.generado ? Date.parse(r.generado) : NaN;
+    const generado = Number.isFinite(generadoMs) ? fechaPasoScreening(generadoMs) : null;
+    return `
+      <div class="gg-screening-grid" role="group" aria-label="Resumen del cribado nacional">
+        <div class="gg-screening-metrica">
+          <span>Red nacional examinada</span><strong>${fmt(r.catalogo_total)}</strong>
+          <small>tramos del catálogo oficial</small>
+        </div>
+        <div class="gg-screening-metrica">
+          <span>Señales creíbles</span><strong>${fmt(r.senales_credibles)}</strong>
+          <small>${ventana ? esc(ventana) : "ventana oficial disponible"}</small>
+        </div>
+        <div class="gg-screening-metrica">
+          <span>Ríos con detalle</span><strong>${fmt(detalle)}</strong>
+          <small>hidrograma y métricas locales</small>
+        </div>
+      </div>
+      <div class="gg-screening-estados">
+        <span class="gg-screening-badge senal"><i></i>
+          ${fmt(nSenales)} ${nSenales === 1
+            ? "señal oficial RP" : "señales oficiales RP"}</span>
+        <span class="gg-screening-badge escenario"><i></i>
+          ${fmt(nEscenarios)} ${nEscenarios === 1
+            ? "posible escenario" : "posibles escenarios"}</span>
+        <span class="gg-screening-excluidas">
+          ${fmt(nExcluidas)} ${nExcluidas === 1
+            ? "señal excluida" : "señales excluidas"} por control de calidad;
+          diagnóstico del paso inicial, no se dibujan como señal</span>
+        ${generado ? `<span class="gg-screening-generado">Generado ${esc(generado)}</span>` : ""}
+      </div>`;
+  }
+
+  function pintarResumenScreening(screening, detalleDisponible = 0) {
+    const cont = document.querySelector('[data-rol="screening"]');
+    if (cont) cont.innerHTML = resumenScreeningHTML(screening, detalleDisponible);
   }
 
   /* ---------------- bottom-sheet táctil (P15): valores del río al tap ---------------- */
@@ -155,9 +331,14 @@
 
   function leyendaHTML() {
     const it = (c, t) => `<span><i style="background:${c}"></i>${esc(t)}</span>`;
-    return it(COLOR_ALERTA[0], "Normal") + it(COLOR_ALERTA[2], "RP 2–5") +
+    return `<b class="gg-leyenda-titulo">Detalle local</b>`
+      + it(COLOR_ALERTA[0], "Normal") + it(COLOR_ALERTA[2], "RP 2–5") +
            it(COLOR_ALERTA[10], "RP 10–25") + it(COLOR_ALERTA[50], "RP 50") +
-           it(COLOR_ALERTA[100], "RP 100") + it("#6B7785", "Sin dato");
+           it(COLOR_ALERTA[100], "RP 100") + it("#6B7785", "Sin dato")
+      + `<span class="gg-leyenda-separa" aria-hidden="true"></span>`
+      + `<b class="gg-leyenda-titulo">Cribado nacional</b>`
+      + `<span><i class="gg-leyenda-screening senal"></i>Señal oficial RP</span>`
+      + `<span><i class="gg-leyenda-screening escenario"></i>Posible escenario</span>`;
   }
 
   /* ---------------- SELECTOR de río con búsqueda por nombre (reemplaza las pastillas) ----
@@ -173,12 +354,12 @@
     const caret = document.querySelector('[data-rol="combo-toggle"]');
     const cuenta = document.querySelector('[data-rol="combo-count"]');
     if (!campo || !input || !pop) return;
-    if (!items.length) { input.placeholder = "Sin ríos vigilados — pulsa ⟳ Actualizar"; return; }
+    if (!items.length) { input.placeholder = "Sin ríos con detalle — pulsa ⟳ Actualizar"; return; }
     input.disabled = false;
     input.placeholder = "Busca un río por nombre…";
     const enAlerta = items.filter(it => it.nivel_alerta && it.nivel_alerta.anios).length;
-    if (cuenta) cuenta.innerHTML = `${items.length} ríos vigilados`
-      + (enAlerta ? ` · <b style="color:${COLOR_ALERTA[50]}">${enAlerta} en alerta</b>` : "");
+    if (cuenta) cuenta.innerHTML = `${items.length} ríos con detalle`
+      + (enAlerta ? ` · <b style="color:${COLOR_ALERTA[50]}">${enAlerta} con señal local</b>` : "");
 
     let resaltado = -1, visibles = items.slice();
 
@@ -251,7 +432,10 @@
     // maquetado) → el encuadre inicial quedaba descentrado. Re-medir y re-encuadrar.
     setTimeout(() => { if (vigente(E) && E.mapa) { E.mapa.invalidateSize(); encuadrar(E.mapa); } }, 80);
     estado.tiles = L.tileLayer(urlTiles(), { subdomains: "abcd", maxZoom: 19, crossOrigin: true }).addTo(map);
+    map.createPane("pScreeningRaster").style.zIndex = 350;
+    map.getPane("pScreeningRaster").style.pointerEvents = "none";
     map.createPane("pRios").style.zIndex = 370;
+    map.createPane("pScreeningSignals").style.zIndex = 390;
     estado.lienzoRios = L.canvas({ padding: 0.5, pane: "pRios" });
     // Clic libre = consulta por lat/lon (on-demand, requiere backend). En el visor (sin
     // backend) solo se navegan los tramos vigilados con river_id congelado: el tap/clic
@@ -329,6 +513,153 @@
     }
     grupo.addTo(estado.mapa);
     estado.marcadores = grupo;
+  }
+
+  function pintarMarcadoresScreening(screening) {
+    if (!estado.mapa) return;
+    if (estado.marcadoresScreening)
+      estado.mapa.removeLayer(estado.marcadoresScreening);
+    const grupo = L.layerGroup();
+    for (const item of ((screening && screening.ok && screening.visibles) || [])) {
+      // Los elementos excluidos se filtran en ``normalizarScreening`` y nunca
+      // llegan a esta capa: no pueden adquirir semántica ni color de alerta.
+      if (item._tipo === "excluida") continue;
+      const senal = item._tipo === "senal_cribado";
+      const marcador = L.circleMarker([item.lat, item.lon], {
+        pane: "pScreeningSignals", radius: senal ? 9 : 7,
+        color: senal ? COLOR_SCREENING_SENAL : COLOR_SCREENING_ESCENARIO,
+        weight: senal ? 2.0 : 1.8,
+        dashArray: senal ? null : "4 3",
+        fillColor: senal ? COLOR_SCREENING_SENAL : COLOR_SCREENING_ESCENARIO,
+        fillOpacity: senal ? 0.13 : 0.05,
+        bubblingMouseEvents: false,
+      });
+      const picoMs = numeroFinito(item.peak_time)
+        ? Number(item.peak_time) : (item.peak_time ? Date.parse(item.peak_time) : NaN);
+      const pico = Number.isFinite(picoMs) ? fechaPasoScreening(picoMs) : "hora no informada";
+      const tipo = senal ? "Señal oficial RP" : "Posible escenario";
+      marcador.bindTooltip(
+        `<b>${esc(tipo)}</b><br>COMID ${esc(item.river_id || "—")}`
+        + `<br>Periodo de retorno: ${item.return_period == null ? "—"
+          : "RP " + esc(fmt1(item.return_period))}`
+        + `<br>Pico: ${esc(pico)}`,
+        { direction: "top", sticky: true },
+      );
+      grupo.addLayer(marcador);
+    }
+    grupo.addTo(estado.mapa);
+    estado.marcadoresScreening = grupo;
+  }
+
+  function marcarFalloOverlay(E, mensaje) {
+    if (!vigente(E) || !E.mapa) return;
+    E.overlayFallos += 1;
+    if (E.overlayFallos < 4) return;
+    if (E.capaScreening && E.mapa.hasLayer(E.capaScreening))
+      E.mapa.removeLayer(E.capaScreening);
+    E.overlayActivo = false;
+    const panel = document.querySelector('[data-rol="screening-overlay"]');
+    const boton = document.querySelector('[data-rol="screening-overlay-toggle"]');
+    const rango = document.querySelector('[data-rol="screening-time"]');
+    const status = document.querySelector('[data-rol="screening-overlay-status"]');
+    if (panel) panel.classList.add("fallo");
+    if (boton) {
+      boton.setAttribute("aria-pressed", "false");
+      boton.disabled = true;
+    }
+    if (rango) rango.disabled = true;
+    if (status) status.textContent = mensaje
+      || "La capa oficial no respondió; el mapa y el detalle siguen disponibles.";
+  }
+
+  function crearGridLayerScreening(mapserverUrl, obtenerPaso, E) {
+    const GridOficial = L.GridLayer.extend({
+      createTile(coords, done) {
+        const tile = document.createElement("img");
+        tile.alt = "";
+        tile.setAttribute("role", "presentation");
+        tile.crossOrigin = "anonymous";
+        const size = this.getTileSize();
+        tile.width = size.x; tile.height = size.y;
+        const limites = this._tileCoordsToBounds(coords);
+        // La tesela Leaflet vive en Web Mercator: pedir la imagen en EPSG:3857
+        // evita deformar un bbox geográfico dentro del cuadrado de la tesela.
+        const so = L.CRS.EPSG3857.project(limites.getSouthWest());
+        const ne = L.CRS.EPSG3857.project(limites.getNorthEast());
+        const url = urlExportArcGIS(
+          mapserverUrl, obtenerPaso(), [so.x, so.y, ne.x, ne.y], size, 3857);
+        L.DomEvent.on(tile, "load", () => done(null, tile));
+        L.DomEvent.on(tile, "error", () => {
+          const error = new Error("MapServer /export no devolvió una tesela válida.");
+          marcarFalloOverlay(E, error.message);
+          done(error, tile);
+        });
+        if (url) tile.src = url;
+        else {
+          setTimeout(() => {
+            const error = new Error("MapServer oficial sin URL /export válida.");
+            marcarFalloOverlay(E, error.message);
+            done(error, tile);
+          }, 0);
+        }
+        return tile;
+      },
+    });
+    return new GridOficial({
+      pane: "pScreeningRaster", tileSize: 256, opacity: 0.68,
+      updateWhenIdle: true, keepBuffer: 1, zIndex: 350,
+    });
+  }
+
+  function montarOverlayTemporal(screening) {
+    const panel = document.querySelector('[data-rol="screening-overlay"]');
+    const boton = document.querySelector('[data-rol="screening-overlay-toggle"]');
+    const rango = document.querySelector('[data-rol="screening-time"]');
+    const etiqueta = document.querySelector('[data-rol="screening-time-label"]');
+    const status = document.querySelector('[data-rol="screening-overlay-status"]');
+    const E = estado;
+    if (!panel || !boton || !rango || !etiqueta || !status || !E.mapa) return;
+    const pasos = (screening && screening.ok && screening.pasos_tiempo) || [];
+    const servicio = servicioExportArcGIS(screening && screening.mapserver_url);
+    if (!pasos.length || !servicio.exportUrl) {
+      panel.hidden = true;
+      return;
+    }
+    panel.hidden = false;
+    panel.classList.remove("fallo");
+    rango.min = "0"; rango.max = String(pasos.length - 1);
+    rango.value = String(pasos.length - 1);
+    const pasoActual = () => pasos[Math.max(0, Math.min(
+      pasos.length - 1, Number(rango.value) || 0))];
+    const actualizarEtiqueta = () => {
+      etiqueta.value = fechaPasoScreening(pasoActual());
+      etiqueta.textContent = etiqueta.value;
+    };
+    actualizarEtiqueta();
+    E.overlayFallos = 0;
+    E.capaScreening = crearGridLayerScreening(
+      screening.mapserver_url, pasoActual, E);
+    const activar = activo => {
+      if (!vigente(E) || !E.mapa || !E.capaScreening) return;
+      E.overlayActivo = activo;
+      boton.setAttribute("aria-pressed", String(activo));
+      rango.disabled = !activo;
+      if (activo) {
+        E.overlayFallos = 0;
+        E.capaScreening.addTo(E.mapa);
+        status.textContent = "Capa oficial activa · producto temporal de 3 h";
+      } else {
+        if (E.mapa.hasLayer(E.capaScreening))
+          E.mapa.removeLayer(E.capaScreening);
+        status.textContent = "Superposición desactivada";
+      }
+    };
+    boton.onclick = () => activar(boton.getAttribute("aria-pressed") !== "true");
+    rango.oninput = () => {
+      actualizarEtiqueta();
+      if (vigente(E) && E.capaScreening && E.overlayActivo)
+        E.capaScreening.redraw();
+    };
   }
 
   /* ---------------- hidrograma ---------------- */
@@ -541,17 +872,34 @@
       if (estado.tiles) estado.tiles.setUrl(urlTiles());
       if (estado.capaRios) estado.capaRios.setStyle(estiloRios);
       pintarMarcadores(estado.items || []);
+      pintarMarcadoresScreening(estado.screening);
     };
     document.addEventListener("temacambiado", _onTema);
 
-    let w;
-    try { w = await App.api("/geoglows/watchlist"); }
-    catch (e) { App.aviso("GEOGLOWS: " + e.message, "error"); return; }
-    if (!vigente(estado)) return;
-    if (w && w.disponible === false) App.aviso(w.error || "GEOGLOWS no disponible.", "error", 8000);
-    estado.items = (w && w.items) || [];
+    const E = estado;
+    const [watchlistReq, screeningReq] = await Promise.allSettled([
+      App.api("/geoglows/watchlist"),
+      App.api("/geoglows/screening"),
+    ]);
+    if (!vigente(E)) return;
+    const w = watchlistReq.status === "fulfilled" ? watchlistReq.value : null;
+    if (watchlistReq.status === "rejected")
+      App.aviso("GEOGLOWS (detalle): " + watchlistReq.reason.message, "error");
+    else if (w && w.disponible === false)
+      App.aviso(w.error || "Detalle GEOGLOWS no disponible.", "error", 8000);
+    estado.items = (w && Array.isArray(w.items)) ? w.items : [];
     montarSelector(estado.items);
     pintarMarcadores(estado.items);
+    if (screeningReq.status === "fulfilled") {
+      const screening = normalizarScreening(screeningReq.value);
+      estado.screening = screening;
+      pintarResumenScreening(screening, estado.items.length);
+      pintarMarcadoresScreening(screening);
+      montarOverlayTemporal(screening);
+    } else {
+      estado.screening = null;
+      pintarResumenScreening(null, estado.items.length);
+    }
   }
 
   function limpiar() {
@@ -562,6 +910,14 @@
     // También los Plotly propios (hidrograma/retrospectiva) — dejan listeners de window.
     if (window.Plotly) document.querySelectorAll("#vista .js-plotly-plot").forEach(el => { try { Plotly.purge(el); } catch (e) { /* ya purgado */ } });
   }
+
+  window.GEOGLOWS_SCREENING_UI = Object.freeze({
+    _tipoItemScreening: tipoItemScreening,
+    _normalizarScreening: normalizarScreening,
+    _servicioExportArcGIS: servicioExportArcGIS,
+    _urlExportArcGIS: urlExportArcGIS,
+    _resumenScreeningHTML: resumenScreeningHTML,
+  });
 
   App.panel("geoglows", render);
   App.panel("geoglows:purgar", limpiar);

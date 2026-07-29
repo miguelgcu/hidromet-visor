@@ -1,1 +1,1 @@
-{"agg_precip":"sum_07_07","codigo":"CP02","dias":3,"fecha":"2026-07-31","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":9,"prob_fuerte":0,"q25":0.3,"q75":1.0,"texto":"NO"},"nombre":"Cuenca","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_07_07","codigo":"CP02","dias":3,"fecha":"2026-07-31","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":17,"prob_fuerte":6,"q25":0.0,"q75":0.7,"texto":"NO"},"nombre":"Cuenca","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

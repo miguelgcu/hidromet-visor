@@ -34,7 +34,11 @@
       .replace(/^IFSHRES$/i, "IFS HRES")
       .replace(/^AIFS025$/i, "AIFS 0.25°")
       .replace(/^IFS025$/i, "IFS 0.25°")
-      .replace(/^GFS05$/i, "GFS 0.5°");
+      .replace(/^GFS05$/i, "GFS 0.5°")
+      .replace(/_/g, " ")
+      .replace(/\s*·\s*/g, " · ")
+      .replace(/\s+/g, " ")
+      .trim();
     return abreviado.length <= maximo
       ? abreviado : `${abreviado.slice(0, Math.max(1, maximo - 1)).trimEnd()}…`;
   }
@@ -162,6 +166,12 @@
   };
   const claveModeloPNG = modelo => String(
     (modelo && (modelo.model_key ?? modelo.modelo)) || "").trim();
+  const aliasModeloPNG = (modelo, maximo = 14) => {
+    const explicito = String((modelo && (
+      modelo.alias ?? modelo.model_alias ?? modelo.alias_modelo
+      ?? modelo.nombre_corto)) || "").trim();
+    return abreviarModeloLeyenda(explicito || claveModeloPNG(modelo), maximo);
+  };
 
   function colorModeloPNG(modelo) {
     const clave = claveModeloPNG(modelo);
@@ -262,21 +272,24 @@
 
   function anotacionesCabeceraPNG(meta, variableLabel, agregacionLabel) {
     const texto = metadatosFiguraPNG(meta, variableLabel, agregacionLabel);
-    const comun = { xref: "paper", yref: "paper", showarrow: false,
-      xanchor: "center", align: "center" };
+    const detalle = [texto.identidad, texto.geografia].filter(Boolean).join("  ·  ");
+    const longitud = Array.from(`${texto.titulo} ${detalle}`).length;
+    const tamano = longitud >= 150 ? 8.15 : longitud >= 118 ? 8.8 : 9.6;
     const salida = [
-      { ...comun, x: 0.5, y: 0.955, yanchor: "middle", text: `<b>${esc(texto.titulo)}</b>`,
-        font: { family: PNG_SERIE.font, size: pxDesdePt(27.75), color: PNG_SERIE.title } },
-      { ...comun, x: 0.5, y: 0.869, yanchor: "top", text: `<i>${esc(texto.identidad)}</i>`,
-        font: { family: PNG_SERIE.font, size: pxDesdePt(14.4), color: PNG_SERIE.metadata } },
+      {
+        name: "png-header", xref: "paper", yref: "paper",
+        x: 0.075, y: 0.925, showarrow: false,
+        xanchor: "left", yanchor: "middle", align: "left",
+        text: `<b>${esc(texto.titulo)}</b>`
+          + `<span style="color:${PNG_SERIE.metadata}">  ·  ${esc(detalle)}</span>`,
+        font: {
+          family: PNG_SERIE.font, size: pxDesdePt(tamano), color: PNG_SERIE.title,
+        },
+      },
     ];
-    if (texto.geografia) salida.push(
-      { ...comun, x: 0.5, y: 0.803, yanchor: "top",
-        text: `<i>${esc(texto.geografia)}</i>`,
-        font: { family: PNG_SERIE.font, size: pxDesdePt(14.4), color: PNG_SERIE.metadata } },
-    );
     salida.push({
-      xref: "paper", yref: "paper", x: 0.014, y: 0.105, showarrow: false,
+      name: "png-credit", xref: "paper", yref: "paper",
+      x: 0.014, y: 0.105, showarrow: false,
       xanchor: "left", yanchor: "bottom", text: "<i>Elaborado por M.G.</i>",
       font: { family: PNG_SERIE.font, size: pxDesdePt(10.2), color: PNG_SERIE.credit },
       opacity: 0.88,
@@ -303,7 +316,8 @@
     const nObs = obsFechas.filter((fecha, i) => fecha >= inicio && fecha <= fin
       && esFinito(obsValores[i])).length;
     anotaciones.push({
-      xref: "paper", yref: "paper", x: 0.5, y: 0.145, showarrow: false,
+      name: "png-observation-status", xref: "paper", yref: "paper",
+      x: 0.5, y: 0.145, showarrow: false,
       xanchor: "center", yanchor: "middle",
       text: hayObs
         ? `<i>Observación local disponible · ${nObs} fecha(s)</i>`
@@ -333,7 +347,7 @@
         if (valor !== null) valoresY.push(valor);
         // Presente/futuro: únicamente los tres mejores, nunca los primeros
         // accidentales de la respuesta.
-        if (rango < 3 && fecha >= hoy && valor !== null) {
+        if (!esPrecip && rango < 3 && fecha >= hoy && valor !== null) {
           anotaciones.push({
             xref: "x", yref: "y", x: fecha, y: valor, showarrow: false,
             text: `<b>${valor.toFixed(1)}</b>`, textangle: esPrecip ? 90 : 0,
@@ -349,8 +363,11 @@
         }
       });
       if (esPrecip) {
+        const etiquetas = fechas.map((fecha, i) =>
+          rango < 3 && fecha >= hoy && valores[i] !== null
+            ? `<b>${valores[i].toFixed(1)}</b>` : null);
         trazas.push({
-          type: "bar", x: fechas, y: valores, name: claveModeloPNG(modelo),
+          type: "bar", x: fechas, y: valores, name: aliasModeloPNG(modelo),
           width: 0.070 * DIA_MS,
           marker: { color, line: { color: "#FFFFFF", width: pxDesdePt(0.16) } },
           opacity: alpha,
@@ -358,6 +375,12 @@
           alignmentgroup: "png-precipitacion-diaria",
           legendrank: rango + 1,
           zorder: 3 + 0.01 * (modelos.length - rango),
+          text: etiquetas, textposition: rango < 3 ? "outside" : "none",
+          textangle: -90, cliponaxis: false, constraintext: "none",
+          textfont: {
+            family: PNG_SERIE.font, size: pxDesdePt(6.225),
+            color: "#1B1B1B", shadow: ETIQUETA_SOMBRA,
+          },
           hoverinfo: "skip",
         });
       } else {
@@ -368,7 +391,7 @@
         const calidad = Math.pow(baseCalidad, 2.15);
         trazas.push({
           type: "scatter", mode: "lines+markers", x: fechas, y: valores,
-          name: claveModeloPNG(modelo), opacity: alpha, connectgaps: false,
+          name: aliasModeloPNG(modelo), opacity: alpha, connectgaps: false,
           line: { color, width: pxDesdePt(
             Math.max(0.45, Math.min(1.47, 0.45 + 1.02 * calidad))) },
           marker: { color, size: pxDesdePt(
@@ -414,19 +437,30 @@
     const entradasLeyenda = [];
     if (hayObs) entradasLeyenda.push({ texto: "Obs", color: PNG_SERIE.observation,
       simbolo: "━" });
+    const maximoAliasLeyenda = modelos.length + (hayObs ? 1 : 0) >= 8 ? 15 : 17;
     modelos.forEach(modelo => {
       const score = scoreModeloPNG(modelo);
       entradasLeyenda.push({
-        texto: `${claveModeloPNG(modelo)}\u2002${score === null ? "s/d" : score.toFixed(1)}`,
+        texto: `${aliasModeloPNG(modelo, maximoAliasLeyenda)}`
+          + ` · ${score === null ? "s/d" : score.toFixed(1)}`,
         color: colorModeloPNG(modelo), simbolo: esPrecip ? "■" : "━",
       });
     });
-    const legendSize = pxDesdePt(entradasLeyenda.length >= 10 ? 8.45
-      : entradasLeyenda.length >= 8 ? 8.75 : 9.05);
+    const legendSize = pxDesdePt(entradasLeyenda.length >= 8 ? 7.0 : 8.05);
+    const pesosLeyenda = entradasLeyenda.map(entrada =>
+      Math.max(5, Math.min(20, Array.from(entrada.texto).length + 1.5)));
+    const separacionLeyenda = 2.2;
+    const totalLeyenda = pesosLeyenda.reduce((suma, peso) => suma + peso, 0)
+      + separacionLeyenda * Math.max(0, entradasLeyenda.length - 1);
+    let cursorLeyenda = 0;
     entradasLeyenda.forEach((entrada, i) => {
-      const x = 0.075 + ((i + 0.5) / entradasLeyenda.length) * (0.955 - 0.075);
+      const peso = pesosLeyenda[i];
+      const x = 0.075 + ((cursorLeyenda + peso / 2) / totalLeyenda)
+        * (0.955 - 0.075);
+      cursorLeyenda += peso + separacionLeyenda;
       anotaciones.push({
-        xref: "paper", yref: "paper", x, y: 0.727, showarrow: false,
+        name: "png-legend-item", xref: "paper", yref: "paper",
+        x, y: 0.795, showarrow: false,
         xanchor: "center", yanchor: "middle",
         text: `<span style="color:${entrada.color}">${entrada.simbolo}</span> ${esc(entrada.texto)}`,
         font: { family: PNG_SERIE.legendFont, size: legendSize, color: "#283550" },
@@ -445,8 +479,13 @@
     const xRange = [inicioMs - 0.62 * DIA_MS, finMs + 1.05 * DIA_MS];
     const shapes = [{
       type: "line", xref: "x", yref: "paper", x0: hoy, x1: hoy,
-      y0: 0.190, y1: 0.700,
+      y0: 0.190, y1: 0.755,
       line: { color: "#999999", width: pxDesdePt(0.8), dash: "dot" },
+    }, {
+      name: "png-plot-frame", type: "rect", xref: "paper", yref: "paper",
+      x0: 0.075, x1: 0.955, y0: 0.190, y1: 0.755,
+      line: { color: "#465364", width: pxDesdePt(0.9) },
+      fillcolor: "rgba(0,0,0,0)", layer: "above",
     }];
     const axisBase = {
       showline: true, mirror: true, linecolor: PNG_SERIE.frame,
@@ -472,7 +511,7 @@
           tickfont: { family: PNG_SERIE.font, size: pxDesdePt(9.6), color: "#303030" },
           showgrid: !esPrecip, gridcolor: "rgba(80,80,80,.16)",
           gridwidth: pxDesdePt(0.45) },
-        yaxis: { ...axisBase, domain: [0.190, 0.700], range: rangoY,
+        yaxis: { ...axisBase, domain: [0.190, 0.755], range: rangoY,
           title: { text: d.unidad || (esPrecip ? "mm" : "°C"),
             font: { family: PNG_SERIE.font, size: pxDesdePt(11.7), color: "#303030" },
             standoff: 10 },
@@ -520,7 +559,8 @@
     const anotaciones = anotacionesCabeceraPNG(
       meta, "Precipitación probabilística", contexto.agregacionLabel);
     anotaciones.push({
-      xref: "paper", yref: "paper", x: 0.5, y: 0.145, showarrow: false,
+      name: "png-observation-status", xref: "paper", yref: "paper",
+      x: 0.5, y: 0.145, showarrow: false,
       xanchor: "center", yanchor: "middle",
       text: hayObs
         ? `<i>Observación local disponible · ${nObs} fecha(s)</i>`
@@ -555,7 +595,13 @@
         plot_bgcolor: "rgba(107,107,107,.85)",
         margin: { l: 0, r: 0, t: 0, b: 0, pad: 0 },
         font: { family: PNG_SERIE.font, color: "#1B1B1B" },
-        showlegend: false, hovermode: false, annotations: anotaciones, shapes: [],
+        showlegend: false, hovermode: false, annotations: anotaciones,
+        shapes: [{
+          name: "png-plot-frame", type: "rect", xref: "paper", yref: "paper",
+          x0: 0.095, x1: 0.955, y0: 0.190, y1: 0.727,
+          line: { color: "#465364", width: pxDesdePt(0.9) },
+          fillcolor: "rgba(0,0,0,0)", layer: "above",
+        }],
         xaxis: {
           domain: [0.095, 0.955], type: "date",
           range: [fechaMs(fechas[0]) - 0.5 * DIA_MS,
@@ -2038,6 +2084,7 @@
     _margenesEjeDesdeTicks: margenesEjeDesdeTicks,
     _configPNGSerie: PNG_SERIE,
     _colorModeloPNG: colorModeloPNG,
+    _aliasModeloPNG: aliasModeloPNG,
     _seleccionarModelosPNG: seleccionarModelosPNG,
     _nombreArchivoSeriePNG: nombreArchivoSeriePNG,
     _figuraTemporalPNG: figuraTemporalPNG,

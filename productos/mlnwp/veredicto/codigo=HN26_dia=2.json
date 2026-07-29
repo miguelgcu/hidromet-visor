@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"HN26","dias":2,"fecha":"2026-07-30","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":23,"prob_fuerte":2,"q25":1.6,"q75":2.0,"texto":"NO"},"nombre":"Rio Congo","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"HN26","dias":2,"fecha":"2026-07-30","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":44,"prob_fuerte":21,"q25":2.3,"q75":12.7,"texto":"NO"},"nombre":"Rio Congo","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

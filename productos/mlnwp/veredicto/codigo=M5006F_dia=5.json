@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"M5006F","dias":5,"fecha":"2026-08-02","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":9,"prob_fuerte":2,"q25":0.0,"q75":1.4,"texto":"NO"},"nombre":"Pluviométrica Aglla en captación","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"M5006F","dias":5,"fecha":"2026-08-02","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":26,"prob_fuerte":21,"q25":0.0,"q75":0.2,"texto":"NO"},"nombre":"Pluviométrica Aglla en captación","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}

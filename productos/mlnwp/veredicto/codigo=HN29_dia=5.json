@@ -1,1 +1,1 @@
-{"agg_precip":"sum_00_24","codigo":"HN29","dias":5,"fecha":"2026-08-02","hoy":"2026-07-28","lluvia":{"llueve":false,"prob":45,"prob_fuerte":24,"q25":9.9,"q75":10.3,"texto":"NO"},"nombre":"Union 71","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
+{"agg_precip":"sum_00_24","codigo":"HN29","dias":5,"fecha":"2026-08-02","hoy":"2026-07-28","lluvia":{"llueve":true,"prob":53,"prob_fuerte":37,"q25":4.9,"q75":8.7,"texto":"SÍ"},"nombre":"Union 71","sin_datos":false,"tendencia":null,"tmax":null,"tmin":null}
