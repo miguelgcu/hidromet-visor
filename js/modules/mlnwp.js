@@ -957,7 +957,12 @@
     const selVar = c.querySelector("#ml-sel-var");
     if (selVar) selVar.onchange = () => { S.variable = selVar.value; cargarValidacion(); };
     const selFam = c.querySelector("#ml-sel-fam");
-    if (selFam) selFam.onchange = () => { S.familia = selFam.value; cargarValidacion(); };
+    // La familia solo filtra curvas y métricas de la estación ya elegida. Volver
+    // a pedir el resumen nacional aquí hacía depender toda la vista de un
+    // artefacto por familia y podía ocultar también observaciones válidas cuando
+    // ese resumen no estaba disponible. El catálogo permanece completo y solo
+    // se recarga la estación.
+    if (selFam) selFam.onchange = () => { S.familia = selFam.value; pintarVistaAmbito(); };
     const combo = c.querySelector("#ml-combo-est");
     if (combo) bindComboEst(combo);
   }
@@ -1098,7 +1103,10 @@
     cont.innerHTML = cargando("Calculando validación…");
     const bloque = VAR_A_BLOQUE[S.variable];
     const vent = VENTANA_VALID;
-    const famQS = "&familia=" + encodeURIComponent(S.familia);
+    // Este endpoint alimenta exclusivamente el catálogo estable de estaciones.
+    // Siempre se solicita la cohorte completa; el filtro de familia se aplica
+    // después, en los productos por estación.
+    const famQS = "&familia=Todos";
     let d;
     try {
       d = await App.api(`/mlnwp/validacion?bloque=${bloque}&ventana=${vent}&${depsQS()}${famQS}`);
