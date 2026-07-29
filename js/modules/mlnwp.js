@@ -1539,15 +1539,18 @@
       <div class="ml-serie-subtitulo">${esc(varMet)}<span aria-hidden="true"> · </span>${esc(aggMet)}</div>
     </header>`;
     const modelosRespuesta = Array.isArray(d.modelos) ? d.modelos : [];
-    if (!modelosRespuesta.length) {
-      const fam = d.familia_activa || d.familia || "seleccionada";
-      card.innerHTML = `${cabecera}<div class="ml-serie-vacia" role="status">
+    // La observación pertenece a la estación/variable, no a la familia de
+    // pronóstico seleccionada. Antes se retornaba aquí cuando la familia no
+    // tenía curvas y eso ocultaba también observaciones reales (caso frecuente
+    // en estaciones nuevas EPMAPS que aún no califican modelos). Mantener el
+    // aviso, pero continuar hasta construir la traza observada y su estado.
+    const famSinModelos = d.familia_activa || d.familia || "seleccionada";
+    const avisoSinModelos = modelosRespuesta.length ? "" : `
+      <div class="ml-serie-vacia ml-serie-vacia-modelos" role="status">
         <div class="icono">∅</div>
         <b>Sin curvas para esta selección.</b>
-        <span>No hay modelos de ${esc(fam)} con datos en esta estación y variable.</span>
+        <span>No hay modelos de ${esc(famSinModelos)} con datos en esta estación y variable; la observación disponible se conserva debajo.</span>
       </div>`;
-      return;
-    }
     card.innerHTML = `
       ${cabecera}
       <div class="ml-serie-acciones" aria-label="Descargas de la estación">
@@ -1571,6 +1574,7 @@
           </svg><span class="ml-descarga-tipo" aria-hidden="true">P</span>
         </button>` : ""}
       </div>
+      ${avisoSinModelos}
       <div class="ml-obs-estado" id="ml-obs-estado" role="status"></div>
       <div class="ml-time-scroll" role="region" tabindex="0"
            aria-label="Serie y probabilidades alineadas por fecha">

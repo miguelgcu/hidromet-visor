@@ -243,6 +243,9 @@ html[data-tema="oscuro"] .ml-tabla-modelos tbody tr { border-bottom-color: var(-
 .ml-serie-vacia .icono { font-size: 28px; color: var(--faint); }
 .ml-serie-vacia b { color: var(--ink-2); }
 .ml-serie-vacia span { max-width: 520px; font-size: 12px; }
+.ml-serie-vacia-modelos { min-height: 0; margin: 4px auto 8px; padding: 7px 11px;
+  flex-direction: row; flex-wrap: wrap; gap: 5px 8px; }
+.ml-serie-vacia-modelos .icono { font-size: 15px; }
 .ml-time-scroll { width: 100%; overflow-x: clip; }
 .ml-time-scroll:focus-visible { outline: 2px solid var(--ml-purple);
   outline-offset: 3px; border-radius: 6px; }
