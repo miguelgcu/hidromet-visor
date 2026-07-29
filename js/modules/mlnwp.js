@@ -817,11 +817,9 @@
   const riesgoColor = r => RIESGO_COLOR[r] || "var(--ink-2)";
 
   /* ---------------- estado del módulo ---------------- */
-  // Redes SIEMPRE incluidas (los chips INAMHI/CELEC/Hidronación se retiraron a
-  // pedido del dueño): el filtrado client-side por red se conserva internamente
-  // para no romper los productos congelados, pero sin UI. La red de cada
-  // estación sigue visible por fila en el combobox.
-  const DEPS = ["INAMHI", "CELEC", "Hidronación"];
+  // Cohorte científica completa. La dependencia no es un filtro visual, pero
+  // todas las redes del catálogo operativo deben poder abrir su serie.
+  const DEPS = ["INAMHI", "CELEC", "Hidronación", "EPMAPS"];
 
   const S = {
     ctx: null,
@@ -971,9 +969,26 @@
   const normTxt = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const redEst = e => e ? (e.red_etiqueta || App.redEtiqueta(e.dependencia || e.red_id || "")) : "";
 
+  function estacionesSelector(contexto, validadas) {
+    const catalogo = Array.isArray(contexto) && contexto.length
+      ? contexto : (Array.isArray(validadas) ? validadas : []);
+    const porCodigo = new Map((validadas || []).map(e => [String(e.codigo), e]));
+    return catalogo.map(meta => {
+      const codigo = String(meta.codigo);
+      const validada = porCodigo.get(codigo);
+      return {
+        ...(validada || {}), ...meta, codigo,
+        nombre: String(meta.nombre || (validada && validada.nombre) || codigo),
+        region: String(meta.region || (validada && validada.region) || "—"),
+        dependencia: redEst(meta) || redEst(validada) || "",
+        tiene_validacion: !!validada,
+      };
+    });
+  }
+
   function etiquetaEst() {
     const e = comboEsts.find(x => String(x.codigo) === String(S.estacion));
-    return e ? `${e.codigo} · ${e.nombre} (${App.redEtiqueta(e.region)})` : "";
+    return e ? `${e.codigo} · ${e.nombre} · ${redEst(e)}` : "";
   }
 
   // Lista agrupada por REGIÓN (encabezados) con la dependencia visible por fila:
@@ -1003,7 +1018,9 @@
     const lista = document.getElementById("ml-est-lista");
     if (!input || !lista) return;
     input.disabled = !ests.length;
-    input.placeholder = ests.length ? "Buscar por código, nombre, región o red…" : "Sin estaciones";
+    input.placeholder = ests.length
+      ? "Buscar por código, nombre, región o dependencia…"
+      : "Sin estaciones";
     if (document.activeElement !== input) input.value = etiquetaEst();
     if (!lista.hidden) lista.innerHTML = opcionesComboHTML(input.value);
   }
@@ -1094,14 +1111,14 @@
     // variable/ventana/familia/deps), cae a la primera disponible.
     if (d.aviso) App.aviso(d.aviso, "info");
 
-    // El visor incluye todas las estaciones. La procedencia se usa solo como
-    // etiqueta secundaria; la agrupación y el orden visibles son por región
-    // meteorológica real, nunca por entidad de origen.
-    const depMap = {};
-    for (const e of (S.ctx && S.ctx.estaciones) || []) depMap[String(e.codigo)] = redEst(e);
-    const todas = d.estaciones || [];
-    const ests = todas
-      .map(e => ({ ...e, dependencia: depMap[String(e.codigo)] || "" }));
+    // El selector representa el catálogo operativo completo, no solo la
+    // submuestra con >=3 pares as-issued. Una estación nueva o sin observación
+    // reciente conserva así su serie NWP y muestra una tabla de validación vacía
+    // en vez de desaparecer de la interfaz.
+    const ests = estacionesSelector(
+      (S.ctx && S.ctx.estaciones) || [],
+      d.estaciones || [],
+    );
     ests.sort((a, b) => String(a.region).localeCompare(String(b.region))
       || String(a.nombre).localeCompare(String(b.nombre)));
     if (!ests.length) {
@@ -1514,7 +1531,7 @@
       min: "mínima diaria" })[d.agregacion] || String(d.agregacion || "");
     const chips = [
       `Código ${meta.codigo || d.codigo || "—"}`,
-      coord(meta.lat, "Lat"), coord(meta.lon, "Lon"), altitud, region,
+      redEst(meta), coord(meta.lat, "Lat"), coord(meta.lon, "Lon"), altitud, region,
     ].filter(Boolean).map(x => `<span class="ml-serie-chip">${esc(x)}</span>`).join("");
     const cabecera = `<header class="ml-serie-cabecera">
       <h2>${esc(meta.nombre || d.nombre || d.codigo || "Estación")}</h2>
@@ -1912,9 +1929,9 @@
           const sinValor = !fila.valores.some(esFinito);
           const estadoFila = sinValor
             ? (fila.cobertura && fila.cobertura.estado === "no_emitido"
-              ? "no emitido"
+              ? "sin soporte validado"
               : (fila.cobertura && fila.cobertura.estado === "sin_emision_reciente"
-                ? "sin emisión vigente" : "sin dato en ventana"))
+                ? "producto no vigente" : "sin dato explicado"))
             : "";
           const detalle = fila.cobertura && fila.cobertura.motivo
             ? ` title="${esc(fila.cobertura.motivo)}"` : "";
@@ -1933,11 +1950,11 @@
         if (sinEmisionReciente.length) avisos.push(
           `<span class="parcial">${sinEmisionReciente.map(item =>
             `${Number(item.umbral) === 0.1 ? "P(lluvia)" : `≥${item.umbral} mm`} ${
-              item.fecha_hasta ? `solo hasta ${item.fecha_hasta}` : "no emitido"
+              item.fecha_hasta ? `validado hasta ${item.fecha_hasta}` : "sin soporte validado"
             }`
-          ).join(" · ")}; no se inventaron ni extrapolaron valores.</span>`);
+          ).join(" · ")}; el producto se retuvo sin inventar ni extrapolar valores.</span>`);
         if (ausencias || (diag.umbrales_ausentes || []).length) avisos.push(
-          `<span class="parcial">Emisión parcial real: faltan uno o más umbrales en ${ausencias || "la"} fecha(s).</span>`);
+          `<span class="parcial">Cobertura válida en lo emitido: ${ausencias || "una"} fecha(s) tienen uno o más umbrales deliberadamente no emitidos; no son archivos perdidos ni ceros.</span>`);
         if (Number(diag.curvas_reparadas) > 0) avisos.push(
           `<span>Coherencia física aplicada a ${Number(diag.curvas_reparadas)} curva(s): P(lluvia) ≥ P(1) ≥ … ≥ P(50).</span>`);
         const diagnosticoHTML = avisos.length
@@ -2089,6 +2106,7 @@
     _nombreArchivoSeriePNG: nombreArchivoSeriePNG,
     _figuraTemporalPNG: figuraTemporalPNG,
     _figuraProbabilidadesPNG: figuraProbabilidadesPNG,
+    _estacionesSelector: estacionesSelector,
     async render(vista) {
       // La cabecera global ya la gestiona el módulo anfitrión (Pronóstico):
       // aquí no se toca #cabecera-vista.

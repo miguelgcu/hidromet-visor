@@ -39,7 +39,8 @@
   // Redes fijas (mismo contrato que mlnwp.js). En el visor el slug de mlnwp/*
   // descarta 'deps' (core.js/rutaAProducto = exportar_web): QS inocuo allí y
   // correcto contra el backend vivo.
-  const DEPS_QS = "deps=" + encodeURIComponent("INAMHI,CELEC,Hidronación");
+  const DEPS_QS = "deps=" + encodeURIComponent(
+    "INAMHI,CELEC,Hidronación,EPMAPS");
   // Ventana de la VALIDACIÓN de las decisiones (nº de fechas; producto congelado).
   const VENTANA = "30";
   const DIA_MIN = 1, DIA_MAX = 5;   // horizonte navegable: mañana .. +5 días
@@ -334,7 +335,7 @@
      ============================================================ */
   function etiquetaEst() {
     const e = S.ests.find(x => String(x.codigo) === String(S.sel));
-    return e ? `${e.codigo} · ${e.nombre} (${App.redEtiqueta(e.region)})` : "";
+    return e ? `${e.codigo} · ${e.nombre} · ${redEst(e)}` : "";
   }
 
   const redEst = e => e ? (e.red_etiqueta || App.redEtiqueta(e.dependencia || e.red_id || "")) : "";
@@ -587,7 +588,7 @@
           <div class="dec-buscador">
             <div class="ml-loc ml-combo" id="dec-combo-est">
               ${MIRA}
-              <input id="dec-est-input" type="text" placeholder="Buscar estación por código, nombre, región o red…" autocomplete="off" spellcheck="false">
+              <input id="dec-est-input" type="text" placeholder="Buscar estación por código, nombre, región o dependencia…" autocomplete="off" spellcheck="false">
               ${CHEV}
               <div class="ml-combo-lista" id="dec-est-lista" tabindex="-1" hidden></div>
             </div>

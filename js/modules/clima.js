@@ -44,6 +44,28 @@
   const MESES = ["Anual", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
   const COL = { precip: "#2f7fc1", pet: "#d08a2e", tmax: "#e0562d", tmin: "#2e8bc0", obs: "#10243f" };
 
+  function dependenciaEstacion(estacion) {
+    const value = estacion && (estacion.red_etiqueta || estacion.dependencia || estacion.Dependencia);
+    return App.redEtiqueta(value || "Sin dependencia");
+  }
+
+  function regionEstacion(estacion) {
+    return String(estacion && (estacion.region || estacion.Region) || "Sin región");
+  }
+
+  function opcionEstacion(estacion, sufijo = "") {
+    const codigo = String(estacion.codigo || estacion.Codigo || "");
+    const nombre = estacion.nombre || estacion.Nombre || codigo;
+    return `${esc(nombre)} (${esc(codigo)}) · ${esc(regionEstacion(estacion))} · ${esc(dependenciaEstacion(estacion))}${sufijo}`;
+  }
+
+  function coincideEstacion(estacion, consulta) {
+    const codigo = estacion.codigo || estacion.Codigo || "";
+    const nombre = estacion.nombre || estacion.Nombre || "";
+    return `${codigo} ${nombre} ${regionEstacion(estacion)} ${dependenciaEstacion(estacion)}`
+      .toLowerCase().includes(String(consulta || "").trim().toLowerCase());
+  }
+
   // Estilos del módulo: viven en ui/css/clima.css (cargado desde index.html).
   // Se conserva la función como no-op para no tocar los call-sites de cada pestaña.
   function inyectarCSS() {}
@@ -339,7 +361,7 @@
             <select data-rol="mini-area" class="cl-mini-select"><option value="">Provincia (promedio areal)…</option></select>
           </div>
           <div class="cl-mini-sel">
-            <input class="cl-buscar" data-rol="mini-buscar" type="search" placeholder="Buscar por nombre, código o región…" autocomplete="off">
+            <input class="cl-buscar" data-rol="mini-buscar" type="search" placeholder="Buscar nombre, código, región o dependencia…" autocomplete="off">
             <select data-rol="mini-est" class="cl-mini-select"></select>
           </div>
           <div class="cl-est-cuerpo" data-rol="mini">${vacio("📍", "Elige una provincia para su climatología ponderada por superficie, o toca una estación para consultar su punto y observaciones.")}</div></div>
@@ -403,15 +425,14 @@
         return `<option value="" disabled selected>Elige una estación…</option>` +
           [...grupos.keys()].sort((a, b) => a.localeCompare(b, "es")).map(rg =>
             `<optgroup label="${esc(App.redEtiqueta(rg))}">${grupos.get(rg).map(e =>
-              `<option value="${esc(String(e.codigo))}">${esc(e.nombre || e.codigo)} (${esc(String(e.codigo))})</option>`).join("")}</optgroup>`).join("");
+              `<option value="${esc(String(e.codigo))}">${opcionEstacion(e)}</option>`).join("")}</optgroup>`).join("");
       };
       selEst.innerHTML = opciones(ests);
       const nomDe = cod => (ests.find(e => String(e.codigo) === String(cod)) || {}).nombre || cod;
       selEst.onchange = () => { if (selEst.value) miniFicha(selEst.value, nomDe(selEst.value)); };
       if (busc) busc.oninput = () => {
         const q = busc.value.trim().toLowerCase();
-        const lista = !q ? ests : ests.filter(e =>
-          `${e.codigo} ${e.nombre || ""} ${e.region || ""}`.toLowerCase().includes(q));
+        const lista = !q ? ests : ests.filter(e => coincideEstacion(e, q));
         const previa = selEst.value;
         selEst.innerHTML = opciones(lista);
         if (lista.some(e => String(e.codigo) === String(previa))) selEst.value = previa;
@@ -508,12 +529,12 @@
       }
       return [...grupos.keys()].sort((a, b) => a.localeCompare(b, "es")).map(rg =>
         `<optgroup label="${esc(App.redEtiqueta(rg))}">${grupos.get(rg).map(e =>
-          `<option value="${esc(e.codigo)}">${esc(e.nombre || e.codigo)} (${esc(e.codigo)})${e.fuera_dominio ? " · sin climatología grillada" : ""}</option>`).join("")}</optgroup>`).join("");
+          `<option value="${esc(e.codigo)}">${opcionEstacion(e, e.fuera_dominio ? " · sin climatología grillada" : "")}</option>`).join("")}</optgroup>`).join("");
     };
     c.innerHTML = `<div class="cl-wrap">
       <div class="cl-toolbar">
         <div class="cl-grupo" style="flex:1;min-width:340px"><span>Estación</span>
-          <input class="cl-buscar" data-rol="buscar" type="search" placeholder="Filtrar por nombre, código o región…" autocomplete="off">
+          <input class="cl-buscar" data-rol="buscar" type="search" placeholder="Filtrar nombre, código, región o dependencia…" autocomplete="off">
           <select data-rol="est" style="flex:1;border:1px solid var(--line,#d7dde6);border-radius:9px;padding:8px 11px;font:500 13px var(--fuente,sans-serif);background:var(--surface,#fff);color:var(--ink,#1f2a3a)">${opciones(ests)}</select></div>
       </div>
       <div class="cl-grid2">
@@ -548,8 +569,7 @@
     // Buscador en vivo: filtra las opciones sin perder la selección (patrón datos.js).
     buscar.oninput = () => {
       const q = buscar.value.trim().toLowerCase();
-      const lista = !q ? ests : ests.filter(e =>
-        `${e.codigo} ${e.nombre || ""} ${e.region || ""}`.toLowerCase().includes(q));
+      const lista = !q ? ests : ests.filter(e => coincideEstacion(e, q));
       const previa = sel.value;
       sel.innerHTML = opciones(lista);
       if (lista.some(e => String(e.codigo) === String(previa))) sel.value = previa;
@@ -738,7 +758,7 @@
       const previa = sel.value;
       const validas = ests.filter(e => mide(e, estVar));
       sel.innerHTML = validas.map(e =>
-        `<option value="${esc(e.codigo)}">${esc(e.nombre || e.codigo)} (${esc(e.codigo)})${e.region ? " · " + esc(App.redEtiqueta(e.region)) : ""}</option>`).join("");
+        `<option value="${esc(e.codigo)}">${opcionEstacion(e)}</option>`).join("");
       if (validas.some(e => String(e.codigo) === String(previa))) sel.value = previa;
     }
     let ultimo = null;   // último payload pintado (redibujo al cambiar tema)
@@ -915,7 +935,7 @@
         el impacto local y no presupone que todas las regiones respondan igual.</p>
       </div>
       <div class="cl-toolbar cl-enso-toolbar">
-        <div class="cl-grupo"><span>Buscar</span><input class="cl-buscar" data-rol="buscar" placeholder="Estación, código o región"></div>
+        <div class="cl-grupo"><span>Buscar</span><input class="cl-buscar" data-rol="buscar" placeholder="Estación, código, región o dependencia"></div>
         <div class="cl-grupo cl-enso-est"><span>Estación</span><select data-rol="est" style="${controlStyle}"></select></div>
         <div class="cl-grupo cl-enso-evt"><span>Episodio</span><select data-rol="evento" style="${controlStyle}"></select></div>
       </div>
@@ -948,8 +968,10 @@
     function fillStations() {
       const previous = station.value;
       const query = search.value.trim().toLowerCase();
-      const filtered = stations.filter(s => !query || `${s.codigo} ${s.nombre || ""} ${s.region || ""} ${s.dependencia || ""}`.toLowerCase().includes(query));
-      station.innerHTML = filtered.map(s => `<option value="${esc(s.codigo)}">${esc(s.nombre || s.codigo)} (${esc(s.codigo)}) · ${esc(App.redEtiqueta(s.region || s.dependencia || ""))} · ${s.episodios_posibles} episodios posibles</option>`).join("");
+      const filtered = stations.filter(s => !query || coincideEstacion(s, query));
+      station.innerHTML = filtered.map(s =>
+        `<option value="${esc(s.codigo)}">${opcionEstacion(s, ` · ${s.episodios_posibles} episodios posibles`)}</option>`
+      ).join("");
       if ([...station.options].some(o => o.value === previous)) station.value = previous;
     }
 
@@ -1257,7 +1279,9 @@
     // El histórico completo permanece consultable en local, pero abrir la pestaña
     // nunca debe agregar de oficio varias décadas ni dibujar una serie ilegible.
     const start0 = mapInv.desde && mapInv.desde > recentStart ? mapInv.desde : recentStart;
-    const options = stations.map(e => `<option value="${esc(e.codigo)}">${esc(e.nombre || e.codigo)} (${esc(e.codigo)}) · ${esc(App.redEtiqueta(e.dependencia || e.region || ""))}</option>`).join("");
+    const options = stations.map(e =>
+      `<option value="${esc(e.codigo)}">${opcionEstacion(e)}</option>`
+    ).join("");
     c.innerHTML = `<div class="cl-wrap cl-diario-wrap">
       <div class="cl-toolbar cl-diario-toolbar">
         <div class="cl-grupo"><span>Desde</span><input type="date" data-rol="desde" min="${esc(mapInv.desde || "1990-01-01")}" max="${esc(end0)}" value="${esc(start0)}"></div>
@@ -1269,7 +1293,7 @@
         <div class="cl-plot cl-plot-mapa cl-rango-mapa" data-rol="mapa"></div><div class="ct-leyenda-carta cl-leyenda" data-rol="leyenda"></div>
         <p class="cl-nota" data-rol="map-nota">Se exige cobertura completa en cada píxel para el período seleccionado.</p></div>
       <div class="cl-card"><div class="cl-serie-head"><h3 class="cl-maptit">Cruce y relleno por estación</h3>
-        <div class="cl-serie-controles"><input class="cl-buscar" data-rol="buscar" type="search" placeholder="Buscar estación…">
+        <div class="cl-serie-controles"><input class="cl-buscar" data-rol="buscar" type="search" placeholder="Buscar nombre, región o dependencia…">
           <select data-rol="est">${options}</select><select data-rol="variable"><option value="precip">Precipitación</option><option value="tmax">T. máxima</option><option value="tmin">T. mínima</option></select></div></div>
         <div class="cl-plot" data-rol="serie"></div><div data-rol="metricas"></div>
         <div class="cl-aviso"><span class="ic">ⓘ</span><p data-rol="metodo">Los huecos se rellenan únicamente con una grilla de ventana temporal compatible. Cada valor conserva su procedencia y QC.</p></div></div>
@@ -1313,8 +1337,8 @@
     station.onchange = loadSeries; variable.onchange = loadSeries; operation.onchange = loadMap;
     search.oninput = () => {
       const q = search.value.trim().toLowerCase(), selected = station.value;
-      station.innerHTML = stations.filter(e => !q || `${e.codigo} ${e.nombre || ""} ${e.dependencia || ""}`.toLowerCase().includes(q))
-        .map(e => `<option value="${esc(e.codigo)}">${esc(e.nombre || e.codigo)} (${esc(e.codigo)}) · ${esc(App.redEtiqueta(e.dependencia || e.region || ""))}</option>`).join("");
+      station.innerHTML = stations.filter(e => !q || coincideEstacion(e, q))
+        .map(e => `<option value="${esc(e.codigo)}">${opcionEstacion(e)}</option>`).join("");
       if ([...station.options].some(o => o.value === selected)) station.value = selected;
       else if (station.value) loadSeries();
     };

@@ -72,8 +72,11 @@
 .ml-combo-op:hover, .ml-combo-op.sel { background: var(--surface-3); }
 .ml-combo-op.activa { color: var(--ml-purple); font-weight: 600; }
 .ml-combo-op .cod { font: 600 11px var(--mono); color: var(--muted); flex: none; }
-.ml-combo-op .nom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ml-combo-op .dep { margin-left: auto; flex: none; font: 600 9.5px var(--mono); letter-spacing: .05em;
+.ml-combo-op .nom { flex: 1 1 auto; min-width: 0; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.ml-combo-op .dep { margin-left: auto; flex: 0 1 auto; min-width: 0; max-width: 9rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font: 600 9.5px var(--mono); letter-spacing: .05em;
   text-transform: uppercase; color: var(--faint); }
 .ml-combo-vacia { padding: 10px 12px; font-size: 12px; color: var(--muted); }
 

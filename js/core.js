@@ -875,26 +875,23 @@ const App = (() => {
   }
 
   /* ---------------- utilidades compartidas ---------------- */
-  /* P20 — etiqueta NEUTRA de red/dependencia para TODO lo visible al usuario.
+  /* Etiqueta institucional de red/dependencia para lo visible al usuario.
      Los VALORES internos de datos/API (deps=, columnas, claves de config) NO
      cambian: esto traduce SOLO en el momento de pintar. */
   function redEtiqueta(v) {
     const s = String(v == null ? "" : v).trim();
     const k = s.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase();
-    if (k === "INAMHI") return "Red meteorológica principal";
-    if (k === "CELEC") return "Red meteorológica energética";
-    if (k === "HIDRONACION") return "Red meteorológica complementaria";
-    if (k === "PRINCIPAL") return "Red meteorológica principal";
-    if (k === "ENERGETICA") return "Red meteorológica energética";
-    if (k === "COMPLEMENTARIA") return "Red meteorológica complementaria";
+    if (k === "INAMHI" || k === "PRINCIPAL") return "INAMHI";
+    if (k === "CELEC" || k === "ENERGETICA") return "CELEC";
+    if (k === "HIDRONACION" || k === "COMPLEMENTARIA") return "Hidronación";
+    if (k === "EPMAPS") return "EPMAPS";
     return s;
   }
 
   function nombreEstacion(v, codigo) {
     let s = String(v == null ? "" : v);
-    s = s.replace(/pisco|inamhi|celec|hidronaci[oó]n/gi, " ")
-         .replace(/[·|/]+/g, " ").replace(/\s+/g, " ")
-         .replace(/^[\s\-–—·,;()]+|[\s\-–—·,;()]+$/g, "");
+    // Conserva la puntuación canónica: barras y paréntesis distinguen estaciones.
+    s = s.replace(/pisco/gi, " ").replace(/\s+/g, " ").trim();
     return s || (codigo ? `Estación ${codigo}` : "Estación meteorológica");
   }
 
