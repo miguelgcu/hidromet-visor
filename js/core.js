@@ -633,6 +633,9 @@ const App = (() => {
      casual), no seguridad criptográfica de servidor. */
   async function exigirAcceso() {
     const raiz = document.documentElement;
+    // ACCESO_LIBRE (2026-08-06): cortina y autenticación deshabilitadas temporalmente
+    // a pedido del dueño (también en index.html). Para reactivar: HM_ACCESO_LIBRE=false.
+    if (window.HM_ACCESO_LIBRE) { raiz.classList.remove("hm-prelogin"); return; }
     if (!window.HIDROMET_VISOR) { raiz.classList.remove("hm-prelogin"); return; }
     // Autenticación real: si el exportador declaró un backend, las banderas del
     // antiguo login estático NO autorizan nada. El gestor valida contraseña,

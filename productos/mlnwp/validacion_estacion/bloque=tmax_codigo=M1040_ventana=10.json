@@ -1,1 +1,0 @@
-{"altitud_m":1144,"aviso":null,"bloque":"tmax","codigo":"M1040","familia":"Todos","lat":-2.22982,"lon":-78.12501,"met_cols":["mae","rmse","bias","corr","mae_delta","corr_delta","sign_hit_active","flat_miss_rate"],"modelos":[],"modo":"continuous","nombre":"Macas INA","region":"Amazonia","resumen":null,"ventana":"10"}

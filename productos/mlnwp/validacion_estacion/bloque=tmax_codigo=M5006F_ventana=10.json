@@ -1,1 +1,0 @@
-{"altitud_m":3765,"aviso":null,"bloque":"tmax","codigo":"M5006F","familia":"Todos","lat":-0.16582,"lon":-78.19924,"met_cols":["mae","rmse","bias","corr","mae_delta","corr_delta","sign_hit_active","flat_miss_rate"],"modelos":[],"modo":"continuous","nombre":"Pluviométrica Aglla en captación","region":"Interandina","resumen":null,"ventana":"10"}

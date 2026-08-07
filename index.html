@@ -12,26 +12,29 @@
 <script>
 /* P19 — guard SÍNCRONO pre-paint: si el visor exige acceso y no hay sesión, la app
    queda oculta ANTES del primer pintado (cero parpadeo, también con caché fría).
-   P22 — la sidebar colapsada recordada se aplica también antes de pintar. */
+   P22 — la sidebar colapsada recordada se aplica también antes de pintar.
+   ACCESO_LIBRE (2026-08-06): login deshabilitado temporalmente a pedido del dueño;
+   para reactivar, poner HM_ACCESO_LIBRE en false aquí y en js/core.js. */
 (function(){var h=document.documentElement;
-try{if(window.HIDROMET_VISOR&&(window.HIDROMET_AUTH_BASE||(localStorage.getItem("hm-acceso-v1")!=="1"&&sessionStorage.getItem("hm-acceso-v1")!=="1")))h.classList.add("hm-prelogin");}
-catch(e){if(window.HIDROMET_VISOR)h.classList.add("hm-prelogin");}
+window.HM_ACCESO_LIBRE=true;
+try{if(!window.HM_ACCESO_LIBRE&&window.HIDROMET_VISOR&&(window.HIDROMET_AUTH_BASE||(localStorage.getItem("hm-acceso-v1")!=="1"&&sessionStorage.getItem("hm-acceso-v1")!=="1")))h.classList.add("hm-prelogin");}
+catch(e){if(!window.HM_ACCESO_LIBRE&&window.HIDROMET_VISOR)h.classList.add("hm-prelogin");}
 try{if(localStorage.getItem("hm-sidebar")==="min")h.classList.add("hm-sb-min");}catch(e){}})();
 </script>
 <style>html.hm-prelogin #capa-app{visibility:hidden}</style>
 <link rel="stylesheet" href="lib/leaflet/leaflet.css">
 <link rel="stylesheet" href="lib/leaflet/MarkerCluster.css">
 <link rel="stylesheet" href="lib/leaflet/MarkerCluster.Default.css">
-<link rel="stylesheet" href="css/fonts.css?v=ffd122333dec">
-<link rel="stylesheet" href="css/base.css?v=ffd122333dec">
-<link rel="stylesheet" href="css/mlnwp.css?v=ffd122333dec">
-<link rel="stylesheet" href="css/cartas.css?v=ffd122333dec">
-<link rel="stylesheet" href="css/sngr.css?v=ffd122333dec">
-<link rel="stylesheet" href="css/geoglows.css?v=ffd122333dec">
-<link rel="stylesheet" href="css/datos.css?v=ffd122333dec">
-<link rel="stylesheet" href="css/configuracion.css?v=ffd122333dec">
-<link rel="stylesheet" href="css/clima.css?v=ffd122333dec">
-<link rel="stylesheet" href="css/decisiones.css?v=ffd122333dec">
+<link rel="stylesheet" href="css/fonts.css?v=42b98e12aea7">
+<link rel="stylesheet" href="css/base.css?v=42b98e12aea7">
+<link rel="stylesheet" href="css/mlnwp.css?v=42b98e12aea7">
+<link rel="stylesheet" href="css/cartas.css?v=42b98e12aea7">
+<link rel="stylesheet" href="css/sngr.css?v=42b98e12aea7">
+<link rel="stylesheet" href="css/geoglows.css?v=42b98e12aea7">
+<link rel="stylesheet" href="css/datos.css?v=42b98e12aea7">
+<link rel="stylesheet" href="css/configuracion.css?v=42b98e12aea7">
+<link rel="stylesheet" href="css/clima.css?v=42b98e12aea7">
+<link rel="stylesheet" href="css/decisiones.css?v=42b98e12aea7">
 </head>
 <body>
 <div id="capa-app">
@@ -79,14 +82,14 @@ try{if(localStorage.getItem("hm-sidebar")==="min")h.classList.add("hm-sb-min");}
 <script src="lib/leaflet/leaflet.js"></script>
 <script src="lib/leaflet/leaflet.markercluster.js"></script>
 <script src="lib/plotly/plotly.min.js"></script>
-<script src="js/core.js?v=ffd122333dec"></script>
-<script src="js/modules/mlnwp.js?v=ffd122333dec"></script>
-<script src="js/modules/decisiones.js?v=ffd122333dec"></script>
-<script src="js/modules/cartas.js?v=ffd122333dec"></script>
-<script src="js/modules/sngr.js?v=ffd122333dec"></script>
-<script src="js/modules/geoglows.js?v=ffd122333dec"></script>
-<script src="js/modules/clima.js?v=ffd122333dec"></script>
-<script src="js/modules/glosario.js?v=ffd122333dec"></script>
+<script src="js/core.js?v=42b98e12aea7"></script>
+<script src="js/modules/mlnwp.js?v=42b98e12aea7"></script>
+<script src="js/modules/decisiones.js?v=42b98e12aea7"></script>
+<script src="js/modules/cartas.js?v=42b98e12aea7"></script>
+<script src="js/modules/sngr.js?v=42b98e12aea7"></script>
+<script src="js/modules/geoglows.js?v=42b98e12aea7"></script>
+<script src="js/modules/clima.js?v=42b98e12aea7"></script>
+<script src="js/modules/glosario.js?v=42b98e12aea7"></script>
 <script>App.iniciar();</script>
 </body>
 </html>

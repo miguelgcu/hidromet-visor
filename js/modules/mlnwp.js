@@ -26,7 +26,7 @@
     const original = String(nombre || "").trim();
     const abreviado = original
       .replace(/^CONSENSO_OP_TOP10$/i, "Consenso Top10")
-      .replace(/^BEST_OP_CV$/i, "Mejor OOS")
+      .replace(/^BEST_OP_CV$/i, "Selector operativo")
       .replace(/^BC_CLASSIC_/i, "BC · ")
       .replace(/^ML_LGBM_STATION$/i, "ML LGBM est.")
       .replace(/^ML_XGB_STATION$/i, "ML XGB est.")
@@ -45,8 +45,8 @@
   const OPACIDAD_SKILL_MIN = 0.28;
   const OPACIDAD_SKILL_MAX = 0.92;
   function opacidadPorSkill(rating, score = null, oscuro = false) {
-    const r = Number(rating);
-    const s = Number(score);
+    const r = esNumeroDeclarado(rating) ? Number(rating) : NaN;
+    const s = esNumeroDeclarado(score) ? Number(score) : NaN;
     // rating es 1–10; score alternativo es 0–1. La ausencia cae al piso visible,
     // nunca oculta una serie. La curva es estrictamente monótona con el skill.
     const t = Number.isFinite(r)
@@ -57,6 +57,10 @@
     // En oscuro se eleva todo el rango sin alterar el orden ni saturar al recomendado.
     return Number(Math.min(oscuro ? 0.97 : OPACIDAD_SKILL_MAX,
       base + (oscuro ? 0.10 : 0)).toFixed(3));
+  }
+  function esNumeroDeclarado(valor) {
+    return valor !== null && valor !== undefined && valor !== ""
+      && Number.isFinite(Number(valor));
   }
   const indiceRecomendadoModelos = modelos =>
     (modelos || []).findIndex(modelo => modelo && modelo.operacional);
@@ -158,10 +162,71 @@
   ]);
   const DIA_MS = 86400000;
   const pxDesdePt = puntos => Number((Number(puntos) * PNG_SERIE.dpi / 72).toFixed(3));
+  const crc32PNG = bytes => {
+    let crc = 0xFFFFFFFF;
+    for (const byte of bytes) {
+      crc ^= byte;
+      for (let bit = 0; bit < 8; bit += 1)
+        crc = (crc >>> 1) ^ ((crc & 1) ? 0xEDB88320 : 0);
+    }
+    return (crc ^ 0xFFFFFFFF) >>> 0;
+  };
+  function pngConDpi(dataUrl, dpi) {
+    // Plotly fija los píxeles, pero el canvas no escribe la densidad física.
+    // Se añade el chunk PNG pHYs (píxeles por metro) para que 2310×1144 px
+    // también se reconozcan como 10.5×5.2 in a 220 dpi en software de oficina.
+    const encoded = String(dataUrl || "").split(",", 2)[1];
+    if (!encoded || typeof atob !== "function") return { href: dataUrl, revoke: false };
+    const binary = atob(encoded);
+    const input = Uint8Array.from(binary, char => char.charCodeAt(0));
+    const signature = [137, 80, 78, 71, 13, 10, 26, 10];
+    if (input.length < 33 || signature.some((byte, i) => input[i] !== byte))
+      return { href: dataUrl, revoke: false };
+
+    const ppm = Math.max(1, Math.round(Number(dpi) / 0.0254));
+    const chunk = new Uint8Array(21);
+    const view = new DataView(chunk.buffer);
+    view.setUint32(0, 9, false);
+    chunk.set([112, 72, 89, 115], 4); // pHYs
+    view.setUint32(8, ppm, false);
+    view.setUint32(12, ppm, false);
+    chunk[16] = 1; // unidad: metro
+    view.setUint32(17, crc32PNG(chunk.subarray(4, 17)), false);
+
+    // IHDR termina siempre en el byte 33. Si Plotly ya incluyera pHYs, se
+    // reemplaza para no dejar metadatos contradictorios.
+    let offset = 8, existingStart = -1, existingEnd = -1;
+    while (offset + 12 <= input.length) {
+      const length = new DataView(
+        input.buffer, input.byteOffset + offset, 4,
+      ).getUint32(0, false);
+      const end = offset + 12 + length;
+      if (end > input.length) break;
+      const type = String.fromCharCode(...input.subarray(offset + 4, offset + 8));
+      if (type === "pHYs") {
+        existingStart = offset;
+        existingEnd = end;
+        break;
+      }
+      if (type === "IEND") break;
+      offset = end;
+    }
+    const before = existingStart >= 0 ? existingStart : 33;
+    const after = existingEnd >= 0 ? existingEnd : 33;
+    const output = new Uint8Array(input.length - (after - before) + chunk.length);
+    output.set(input.subarray(0, before), 0);
+    output.set(chunk, before);
+    output.set(input.subarray(after), before + chunk.length);
+    return {
+      href: URL.createObjectURL(new Blob([output], { type: "image/png" })),
+      revoke: true,
+    };
+  }
   const esFinito = valor => valor !== null && valor !== undefined
     && valor !== "" && Number.isFinite(Number(valor));
   const scoreModeloPNG = modelo => {
-    const bruto = modelo && (modelo.model_score ?? modelo.rating);
+    const bruto = modelo && [modelo.model_score, modelo.rating, modelo.score, modelo.skill]
+      .find(esFinito);
     return esFinito(bruto) ? Math.max(1, Math.min(10, Number(bruto))) : null;
   };
   const claveModeloPNG = modelo => String(
@@ -305,11 +370,11 @@
     const inicio = fechasEje[0], fin = fechasEje[fechasEje.length - 1];
     const esPrecip = !!d.es_precip;
     const modelos = seleccionarModelosPNG(d.modelos, inicio, fin, 7);
-    if (!modelos.length) return null;
     const obsFechas = (d.observado && d.observado.fechas) || [];
     const obsValores = (d.observado && d.observado.valores) || [];
     const hayObs = obsFechas.some((fecha, i) => fecha >= inicio && fecha <= fin
       && esFinito(obsValores[i]));
+    if (!modelos.length && !hayObs) return null;
     const trazas = [];
     const anotaciones = anotacionesCabeceraPNG(
       meta, contexto.variableLabel, contexto.agregacionLabel);
@@ -568,6 +633,23 @@
       font: { family: PNG_SERIE.font, size: pxDesdePt(9.2),
         color: hayObs ? "#4B5D72" : "#8A4F19" },
     });
+    const acreditado = (
+      (pu.diagnostico || {}).estado_promocion === "ACCREDITED");
+    const ensambleFisico = (
+      (pu.diagnostico || {}).validation_standard
+        === "PHYSICAL_ENSEMBLE_AS_ISSUED");
+    anotaciones.push({
+      name: "png-probability-evidence", xref: "paper", yref: "paper",
+      x: 0.5, y: 0.112, showarrow: false,
+      xanchor: "center", yanchor: "middle",
+      text: ensambleFisico
+        ? "<i>Ensamble NWP físico · no calibrado ML</i>"
+        : (acreditado
+          ? "<i>Calibración acreditada strict-as-issued</i>"
+          : "<i>Producto provisional no calibrado · solo informativo</i>"),
+      font: { family: PNG_SERIE.font, size: pxDesdePt(8.8),
+        color: acreditado ? "#1E6A43" : "#8A4F19" },
+    });
     filas.forEach(fila => fila.valores.forEach((valor, i) => {
       if (!esFinito(valor)) return;
       const visible = Math.max(0, Math.min(100, Number(valor)));
@@ -651,12 +733,14 @@
       const dataUrl = await Plotly.toImage(host, {
         format: "png", width: figura.width, height: figura.height, scale: 1,
       });
+      const descarga = pngConDpi(dataUrl, PNG_SERIE.dpi);
       const enlace = document.createElement("a");
-      enlace.href = dataUrl;
+      enlace.href = descarga.href;
       enlace.download = figura.filename;
       document.body.appendChild(enlace);
       enlace.click();
       enlace.remove();
+      if (descarga.revoke) setTimeout(() => URL.revokeObjectURL(descarga.href), 0);
       if (App.aviso) App.aviso(`PNG descargado: ${figura.filename}`, "ok", 5000);
     } finally {
       try { Plotly.purge(host); } catch (e) { /* figura temporal ya liberada */ }
@@ -884,14 +968,11 @@
   // ámbito Nacional (retirado): la vista es siempre por estación.
   function deckHTML() {
     const vars = [["precip", "Precipitación"], ["tmax", "T. máxima"], ["tmin", "T. mínima"]];
-    // Las temperaturas solo existen en la red INAMHI: sin ella se deshabilitan
-    // (con el motivo en el title) en vez de caer a otro bloque en silencio.
-    // (Con DEPS fijas siempre está INAMHI; se conserva por robustez.)
-    const sinTemp = !DEPS.includes("INAMHI");
-    const optsVar = vars.map(([id, t]) => {
-      const des = sinTemp && (id === "tmax" || id === "tmin");
-      return `<option value="${id}" ${S.variable === id ? "selected" : ""}${des ? ` disabled title="Requiere la red meteorológica"` : ""}>${t}</option>`;
-    }).join("");
+    // La disponibilidad es por estación y variable, no por dependencia. Varias
+    // redes tienen temperatura y una misma red puede mezclar sensores distintos.
+    const optsVar = vars.map(([id, t]) =>
+      `<option value="${id}" ${S.variable === id ? "selected" : ""}>${t}</option>`
+    ).join("");
     const optsFam = FAMILIAS_UI.map(([val, et]) =>
       `<option value="${esc(val)}" ${S.familia === val ? "selected" : ""}>${esc(et)}</option>`).join("");
     const chev = `<span class="ml-loc-chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#95A1B2" stroke-width="2.5"><path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>`;
@@ -903,19 +984,22 @@
         <div class="ml-deck-cuerpo">
           <div class="ml-grupo">
             <span class="ml-grupo-lab">Variable</span>
-            <div class="ml-loc"${sinTemp ? ` title="T. máxima y T. mínima requieren la red meteorológica"` : ""}>
+            <div class="ml-loc">
               <select id="ml-sel-var">${optsVar}</select>
               ${chev}
             </div>
           </div>
           <div class="ml-deck-div"></div>
           <div class="ml-grupo ml-loc-grp">
-            <span class="ml-grupo-lab">Estación</span>
+            <span class="ml-grupo-lab" id="ml-est-label">Estación</span>
             <div class="ml-loc ml-combo" id="ml-combo-est">
               <span class="ml-loc-mira"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6A47CE" stroke-width="2"><circle cx="12" cy="12" r="6"></circle><path d="M12 1v4M12 19v4M1 12h4M19 12h4" stroke-linecap="round"></path></svg></span>
-              <input id="ml-est-input" type="text" placeholder="Cargando…" autocomplete="off" spellcheck="false">
+              <input id="ml-est-input" type="text" placeholder="Cargando…" autocomplete="off" spellcheck="false"
+                role="combobox" aria-labelledby="ml-est-label" aria-autocomplete="list"
+                aria-controls="ml-est-lista" aria-expanded="false">
               ${chev}
-              <div class="ml-combo-lista" id="ml-est-lista" tabindex="-1" hidden></div>
+              <div class="ml-combo-lista" id="ml-est-lista" role="listbox"
+                aria-labelledby="ml-est-label" tabindex="-1" hidden></div>
             </div>
           </div>
           <div class="ml-deck-div ml-deck-div-ancha"></div>
@@ -941,13 +1025,6 @@
   }
 
   async function tabValidacion(c) {
-    // Sin INAMHI no existe el bloque de temperaturas: se fuerza precipitación
-    // ANTES de pintar el deck (que además deshabilita tmax/tmin con el motivo),
-    // en vez de dejar que el backend caiga a otro bloque en silencio.
-    if (!DEPS.includes("INAMHI") && (S.variable === "tmax" || S.variable === "tmin")) {
-      S.variable = "precip";
-      App.aviso("Las temperaturas solo existen en la red meteorológica: se muestra precipitación.", "info");
-    }
     c.innerHTML = deckHTML() + `<div id="ml-vista-est"></div>`;
     bindDeck(c);
     await cargarValidacion();
@@ -974,11 +1051,17 @@
   const normTxt = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const redEst = e => e ? (e.red_etiqueta || App.redEtiqueta(e.dependencia || e.red_id || "")) : "";
 
-  function estacionesSelector(contexto, validadas) {
+  function estacionesSelector(contexto, validadas, variable = S.variable) {
     const catalogo = Array.isArray(contexto) && contexto.length
       ? contexto : (Array.isArray(validadas) ? validadas : []);
     const porCodigo = new Map((validadas || []).map(e => [String(e.codigo), e]));
-    return catalogo.map(meta => {
+    return catalogo.filter(meta => {
+      // El contexto nuevo declara explícitamente sus objetivos canónicos. Se
+      // conserva compatibilidad con snapshots antiguos sin ese campo durante
+      // una publicación transaccional, pero nunca se infiere disponibilidad a
+      // partir de la dependencia.
+      return !Array.isArray(meta.variables) || meta.variables.includes(variable);
+    }).map(meta => {
       const codigo = String(meta.codigo);
       const validada = porCodigo.get(codigo);
       return {
@@ -1009,7 +1092,9 @@
         region = e.region;
         html += `<div class="ml-combo-grupo">${esc(App.redEtiqueta(region))}</div>`;
       }
-      html += `<button type="button" class="ml-combo-op ${String(e.codigo) === String(S.estacion) ? "activa" : ""}" data-cod="${esc(e.codigo)}">
+      html += `<button type="button" role="option"
+        aria-selected="${String(e.codigo) === String(S.estacion) ? "true" : "false"}"
+        class="ml-combo-op ${String(e.codigo) === String(S.estacion) ? "activa" : ""}" data-cod="${esc(e.codigo)}">
         <span class="cod">${esc(e.codigo)}</span><span class="nom">${esc(e.nombre)}</span>
         <span class="dep">${esc(redEst(e))}</span></button>`;
     }
@@ -1044,10 +1129,15 @@
     const abrir = () => {
       if (input.disabled) return;
       lista.hidden = false;
+      input.setAttribute("aria-expanded", "true");
       refrescar("");
       input.select();
     };
-    const cerrar = () => { lista.hidden = true; input.value = etiquetaEst(); };
+    const cerrar = () => {
+      lista.hidden = true;
+      input.setAttribute("aria-expanded", "false");
+      input.value = etiquetaEst();
+    };
     const elegir = cod => {
       S.estacion = String(cod);
       input.blur();   // blur → cerrar() repone la etiqueta de la selección nueva
@@ -1060,7 +1150,11 @@
       if (combo.contains(document.activeElement)) { input.focus(); return; }
       cerrar();
     }, 0);
-    input.oninput = () => { lista.hidden = false; refrescar(input.value); };
+    input.oninput = () => {
+      lista.hidden = false;
+      input.setAttribute("aria-expanded", "true");
+      refrescar(input.value);
+    };
     input.onkeydown = ev => {
       if (ev.key === "Escape") { input.blur(); return; }
       if (lista.hidden && (ev.key === "ArrowDown" || ev.key === "Enter")) { ev.preventDefault(); abrir(); return; }
@@ -1126,6 +1220,7 @@
     const ests = estacionesSelector(
       (S.ctx && S.ctx.estaciones) || [],
       d.estaciones || [],
+      S.variable,
     );
     ests.sort((a, b) => String(a.region).localeCompare(String(b.region))
       || String(a.nombre).localeCompare(String(b.nombre)));
@@ -1203,7 +1298,7 @@
     // Cabeceras de métricas según el modo (detección vs continuo/cuantificación).
     const metHead = esDet
       ? [["pod", "POD"], ["far", "FAR"], ["csi", "CSI"]]
-      : [["mae", "MAE"], ["rmse", "RMSE"], ["bias", "Sesgo"], ["corr", "Corr"],
+      : [["mae", "MAE"], ["rmse", "RMSE"], ["bias", "Sesgo"], ["corr", "Corr"], ["r2", "R²"],
          ...(esTemp ? [["mae_delta", "MAE ΔT"], ["corr_delta", "Corr ΔT"],
            ["sign_hit_active", "Acierto ΔT"], ["flat_miss_rate", "Fallo plano"]] : [])];
     const metHeadHTML = metHead.map(([, t]) => `<th class="der">${t}</th>`).join("");
@@ -1213,7 +1308,7 @@
       const v = m[k];
       if (v === null || v === undefined || Number.isNaN(v)) return "—";
       if (k === "bias") return sgn(v);
-      if (["corr", "corr_delta", "sign_hit_active", "flat_miss_rate",
+      if (["corr", "r2", "corr_delta", "sign_hit_active", "flat_miss_rate",
         "pod", "far", "csi"].includes(k)) return Number(v).toFixed(2);
       return Number(v).toFixed(1);
     };
@@ -1230,7 +1325,7 @@
       const sinCal = !m.califica || m.rating == null;
       const [bg, fg] = calColor(m.rating);
       const tipoFam = { Convencionales: "grillado", "No convencionales": "grillado",
-        ML: "calibrado", Postprocesamiento: "combinación" }[m.familia] || "crudo";
+        ML: "modelo ML", Postprocesamiento: "combinación" }[m.familia] || "crudo";
       const metTds = metHead.map(([k]) =>
         `<td class="num">${sinCal ? "—" : fmtMet(m, k)}</td>`).join("");
       const esMejor = i === mejorIdx;
@@ -1290,7 +1385,7 @@
       const mc = base._soloDet ? null : base;
       const md = dmap.get(clave(base)) || (base._soloDet ? base : null);
       const tipoFam = { Convencionales: "grillado", "No convencionales": "grillado",
-        ML: "calibrado", Postprocesamiento: "combinación" }[base.familia] || "crudo";
+        ML: "modelo ML", Postprocesamiento: "combinación" }[base.familia] || "crudo";
       return `<tr>
         <td class="ml-uni-mod"><span class="ml-uni-idx">${i + 1}</span><span class="ml-mod-punto" style="background:${esc(base.color)}"></span>${esc(base.modelo)}<span class="ml-mod-tipo"> · ${tipoFam}</span></td>
         <td class="ml-lead">D+${Number(base.lead)}</td>
@@ -1303,6 +1398,7 @@
         <td class="num">${sinC(mc) ? "—" : f1(mc.rmse)}</td>
         <td class="num">${sinC(mc) ? "—" : sgn(mc.bias)}</td>
         <td class="num">${sinC(mc) ? "—" : f2(mc.corr)}</td>
+        <td class="num">${sinC(mc) ? "—" : f2(mc.r2)}</td>
         <td class="num">${(mc && mc.n) ?? (md && md.n) ?? "—"}</td>
         <td>${pillConf((mc || md || {}).confianza)}</td>
       </tr>`;
@@ -1318,13 +1414,13 @@
         <thead>
           <tr><th class="ml-uni-mod" rowspan="2">Modelo</th><th rowspan="2">Plazo</th>
               <th colspan="4" class="ml-uni-grp">Detección · ¿llueve sí/no?</th>
-              <th colspan="4" class="ml-uni-grp">Cuantificación · ¿cuánto?</th>
-              <th colspan="3" class="ml-uni-grp">Muestra</th></tr>
+              <th colspan="6" class="ml-uni-grp">Cuantificación · ¿cuánto?</th>
+              <th colspan="2" class="ml-uni-grp">Muestra</th></tr>
           <tr><th>Calif.</th><th class="der">POD</th><th class="der">FAR</th><th class="der">CSI</th>
               <th>Calif.</th><th class="der">MAE</th><th class="der">RMSE</th><th class="der">Sesgo</th>
-              <th class="der">Corr</th><th class="der">Fechas</th><th>Conf.</th></tr>
+              <th class="der">Corr</th><th class="der">R²</th><th class="der">Fechas</th><th>Conf.</th></tr>
         </thead>
-        <tbody>${filas || `<tr><td colspan="13" class="suave" style="padding:14px">Sin modelos para esta estación y horizonte.</td></tr>`}</tbody>
+        <tbody>${filas || `<tr><td colspan="14" class="suave" style="padding:14px">Sin modelos para esta estación y horizonte.</td></tr>`}</tbody>
       </table></div>
       <div class="ml-pb-nota">Detección: POD acierto · FAR falsa alarma · CSI global. Cuantificación: MAE/RMSE error en mm · Sesgo · Corr. Desliza la tabla para ver todas las métricas; el modelo y su calificación quedan fijos.</div>`;
   }
@@ -1546,7 +1642,30 @@
       <div class="ml-serie-chips">${chips}</div>
       <div class="ml-serie-subtitulo">${esc(varMet)}<span aria-hidden="true"> · </span>${esc(aggMet)}</div>
     </header>`;
-    const modelosRespuesta = Array.isArray(d.modelos) ? d.modelos : [];
+    const modelosCandidatos = Array.isArray(d.modelos) ? d.modelos : [];
+    const shadowCandidatos = Array.isArray(d.shadow_modelos)
+      ? d.shadow_modelos : [];
+    const hoyVisual = (App.hoyEC ? App.hoyEC() : d.hoy);
+    const lookbackVisual = Number.isFinite(Number(d.lookback)) ? Number(d.lookback) : LOOKBACK_SERIE;
+    const desdeVisual = moverFechaISO(hoyVisual, -Math.max(0, lookbackVisual));
+    // La leyenda y el gráfico se reconstruyen con la variable activa. Una curva
+    // sin un solo valor finito dentro de la ventana visible no cuantifica esa
+    // variable para esta estación y no debe ocupar espacio ni sobrevivir al
+    // cambio precipitación ↔ Tmax ↔ Tmin.
+    const modelosRespuesta = modelosCandidatos.filter(modelo => {
+      const fechas = Array.isArray(modelo && modelo.fechas) ? modelo.fechas : [];
+      const valores = Array.isArray(modelo && modelo.valores) ? modelo.valores : [];
+      return fechas.some((fecha, i) => fecha
+        && (!desdeVisual || fecha >= desdeVisual) && esFinito(valores[i]));
+    });
+    const shadowRespuesta = shadowCandidatos.filter(modelo => {
+      const fechas = Array.isArray(modelo && modelo.fechas) ? modelo.fechas : [];
+      const valores = Array.isArray(modelo && modelo.valores) ? modelo.valores : [];
+      return modelo && modelo.shadow === true && modelo.operacional === false
+        && (modelo.rating === null || modelo.rating === undefined)
+        && fechas.some((fecha, i) => fecha
+          && (!desdeVisual || fecha >= desdeVisual) && esFinito(valores[i]));
+    }).slice(0, 3);
     // La observación pertenece a la estación/variable, no a la familia de
     // pronóstico seleccionada. Antes se retornaba aquí cuando la familia no
     // tenía curvas y eso ocultaba también observaciones reales (caso frecuente
@@ -1584,15 +1703,17 @@
       </div>
       ${avisoSinModelos}
       <div class="ml-obs-estado" id="ml-obs-estado" role="status"></div>
+      <div class="ml-serie-leyenda" id="ml-serie-leyenda"
+           aria-label="Leyenda dinámica de la variable activa"></div>
+      <div class="ml-serie-shadow-leyenda" id="ml-serie-shadow-leyenda"
+           aria-label="Comparadores SHADOW no operativos" hidden></div>
       <div class="ml-time-scroll" role="region" tabindex="0"
            aria-label="Serie y probabilidades alineadas por fecha">
         <div class="ml-time-track">
           <div class="ml-serie-plot" id="ml-plot-serie"></div>
           <div class="ml-serie-probs" id="ml-serie-probs"></div>
         </div>
-      </div>
-      <div class="ml-serie-leyenda" id="ml-serie-leyenda"></div>
-      <p class="ml-serie-pie">Pronóstico y, cuando existe, observación local de la base única (la franja sombreada de la derecha es el horizonte futuro). Los modelos se atenúan según su calificación.${esPrecip ? " En cada día, las barras se leen del centro hacia afuera por desempeño; detalle probabilístico por umbral en la tabla inferior." : ""}</p>`;
+      </div>`;
 
     const el = document.getElementById("ml-plot-serie");
     if (!window.Plotly || !el) return;
@@ -1614,9 +1735,6 @@
     // tarjeta podía activar el modo móvil dentro de un escritorio angosto sin que
     // existiera el carril desplazable correspondiente.
     const angosto = !!(window.matchMedia && window.matchMedia("(max-width: 560px)").matches);
-    const hoyVisual = (App.hoyEC ? App.hoyEC() : d.hoy);
-    const lookbackVisual = Number.isFinite(Number(d.lookback)) ? Number(d.lookback) : LOOKBACK_SERIE;
-    const desdeVisual = moverFechaISO(hoyVisual, -Math.max(0, lookbackVisual));
     const obsFechas = (d.observado && d.observado.fechas) || [];
     const obsValores = (d.observado && d.observado.valores) || [];
     const observacionesVentana = obsFechas.map((fecha, i) => ({
@@ -1697,13 +1815,15 @@
     // Modelos atenuados por calificación verificada. En oscuro la misma escala
     // monótona recibe +0.10 de contraste (sin piso arbitrario ni inversión de skill).
     // Todas las curvas siguen disponibles y el hover muestra fecha+valor. Para no
-    // tapar la serie, las etiquetas estáticas futuras se reservan a los productos
-    // operativos; los comparadores se consultan mediante hover/clic.
+    // tapar la serie, las etiquetas estáticas del presente/futuro se reservan a
+    // los tres modelos con mejor calificación verificable de la variable activa.
     const leyenda = [];
     const _hoyEt = hoyVisual;
     // El backend antepone los productos operativos que alimentan alertas/cartas;
     // el cupo restante muestra los comparadores con mayor skill.
     const modelosVisibles = modelosRespuesta.slice(0, 8);
+    const modelosEtiquetados = new Set(
+      ordenarModelosPorDesempeno(modelosVisibles).slice(0, 3));
     const iRecomendado = indiceRecomendadoModelos(modelosVisibles);
     const distribucionLluvia = distribuirModelosCentroAfuera(modelosVisibles);
     const modelosTrazado = esPrecip
@@ -1733,7 +1853,7 @@
       (m.fechas || []).forEach((fecha, i) => {
         registrarFecha(fecha);
         // 0 es válido: solo se excluyen nulos y fechas estrictamente pasadas.
-        if ((m.operacional || esRecomendado) && _hoyEt && fecha >= _hoyEt) {
+        if (modelosEtiquetados.has(original) && _hoyEt && fecha >= _hoyEt) {
           agregarEtiquetaPunto(fecha, (m.valores || [])[i]);
         }
       });
@@ -1756,15 +1876,44 @@
       opacidadesTrazas.push(op);
       const swStyle = m.dash ? `border-top:2px dotted ${esc(color)};height:0`
                              : `background:${esc(color)};opacity:${op}`;
-      const nombreCompleto = `${m.modelo}${otxt}${rtxt}`;
+      const aliasPublico = aliasModeloPNG(m, 24);
+      const nombreCompleto = `${aliasPublico}${otxt}${rtxt}`;
       const notaLeyenda = m.sin_entrenar ? "s/cal."
         : `${esRecomendado ? "★ · " : (m.operacional ? "op. · " : "")}${num(m.rating, 1)}`;
       leyenda.push({ orden: ordenDesempeno,
         html: `<span class="it" title="${esc(nombreCompleto)}" aria-label="${esc(nombreCompleto)}">
           <span class="sw-caja" style="${swStyle}"></span>
-          <span class="ml-leyenda-nombre">${esc(abreviarModeloLeyenda(m.modelo))}</span>
+          <span class="ml-leyenda-nombre">${esc(aliasModeloPNG(m, 19))}</span>
           <span class="ml-leyenda-nota">${esc(notaLeyenda)}</span>
         </span>` });
+    }
+
+    // SHADOW es un comparador descriptivo opt-in: se dibuja separado, sin
+    // rating, estrella, etiqueta de valores ni capacidad de influir en la
+    // selección principal. En precipitación también se usa línea punteada para
+    // que nunca parezca una barra operativa o un consenso acreditado.
+    const shadowLeyenda = [];
+    shadowRespuesta.forEach((m, indice) => {
+      const color = m.color || (oscuro ? "#94A3B8" : "#64748B");
+      (m.fechas || []).forEach(registrarFecha);
+      traces.push({
+        type: "scatter", mode: "lines", x: fx(m.fechas), y: m.valores,
+        name: String(m.alias || m.modelo || "SHADOW"),
+        line: { color, width: 1.35, dash: "dot" }, opacity: 0.48,
+        connectgaps: false, showlegend: false,
+        hovertemplate: `SHADOW · ${esc(m.alias || m.modelo || "modelo")}<br>%{x|%d/%m/%Y}: %{y:.1f} ${esc(unidad)}<extra>No operativo</extra>`,
+      });
+      opacidadesTrazas.push(0.48);
+      shadowLeyenda.push(`<span class="it-shadow" title="Comparador descriptivo; no participa en ranking, selector, consenso ni alertas">
+        <span class="sw-shadow" style="border-color:${esc(color)}"></span>
+        <span>${esc(m.alias || m.modelo || `SHADOW ${indice + 1}`)}</span>
+        <small>no operativo</small>
+      </span>`);
+    });
+    const shadowLeyendaEl = card.querySelector("#ml-serie-shadow-leyenda");
+    if (shadowLeyendaEl && shadowLeyenda.length) {
+      shadowLeyendaEl.hidden = false;
+      shadowLeyendaEl.innerHTML = `<b>Comparadores SHADOW</b>${shadowLeyenda.join("")}`;
     }
 
     // Observado: línea y marcadores con contorno para que también destaquen los
@@ -1891,11 +2040,17 @@
     });
 
     const leyEl = document.getElementById("ml-serie-leyenda");
-    if (leyEl) leyEl.innerHTML =
-      (hayObsVentana
+    if (leyEl) {
+      const observadoHTML = hayObsVentana
         ? `<span class="it" title="Observación local"><span class="sw-linea"></span><span class="ml-leyenda-nombre">Observado</span></span>`
-        : "")
-      + leyenda.sort((a, b) => a.orden - b.orden).map(item => item.html).join("");
+        : "";
+      const modelosHTML = leyenda.sort((a, b) => a.orden - b.orden)
+        .map(item => item.html).join("");
+      const totalLeyenda = leyenda.length + (hayObsVentana ? 1 : 0);
+      leyEl.style.setProperty("--ml-legend-count", String(Math.max(1, totalLeyenda)));
+      leyEl.dataset.variable = String(d.variable || "");
+      leyEl.innerHTML = observadoHTML + modelosHTML;
+    }
 
     // Tabla de probabilidades por umbral: los porcentajes por nivel de lluvia (antes
     // solo se veía la 'sombra' de la banda y no estos números).
@@ -1938,48 +2093,24 @@
           }).join("");
           const etiqueta = Math.abs(Number(fila.u) - 0.1) <= 1e-9
             ? "P(lluvia)" : `≥${fila.u} mm`;
-          const sinValor = !fila.valores.some(esFinito);
-          const estadoFila = sinValor
-            ? (fila.cobertura && fila.cobertura.estado === "no_emitido"
-              ? "sin soporte validado"
-              : (fila.cobertura && fila.cobertura.estado === "sin_emision_reciente"
-                ? "producto no vigente" : "sin dato explicado"))
-            : "";
           const detalle = fila.cobertura && fila.cobertura.motivo
             ? ` title="${esc(fila.cobertura.motivo)}"` : "";
-          return `<tr><th class="ml-pb-u"${detalle}><span>${etiqueta}</span>${estadoFila ? `<small>${estadoFila}</small>` : ""}</th>${celdas}<td class="ml-pb-spacer" aria-hidden="true"></td></tr>`;
+          return `<tr><th class="ml-pb-u"${detalle}><span>${etiqueta}</span></th>${celdas}<td class="ml-pb-spacer" aria-hidden="true"></td></tr>`;
         }).join("");
-        const diag = pu.diagnostico || {};
-        const avisos = [];
-        const fallos = Array.isArray(diag.fechas_fallo_emparejamiento)
-          ? diag.fechas_fallo_emparejamiento.length : 0;
-        const ausencias = Array.isArray(diag.fechas_ausencia_real)
-          ? diag.fechas_ausencia_real.length : 0;
-        const sinEmisionReciente = (diag.cobertura_umbral || []).filter(
-          item => item && item.estado !== "vigente");
-        if (fallos) avisos.push(
-          `<span class="fallo">${fallos} fecha(s) con cohortes incompatibles; no se mezclaron modelos ni emisiones.</span>`);
-        if (sinEmisionReciente.length) avisos.push(
-          `<span class="parcial">${sinEmisionReciente.map(item =>
-            `${Number(item.umbral) === 0.1 ? "P(lluvia)" : `≥${item.umbral} mm`} ${
-              item.fecha_hasta ? `validado hasta ${item.fecha_hasta}` : "sin soporte validado"
-            }`
-          ).join(" · ")}; el producto se retuvo sin inventar ni extrapolar valores.</span>`);
-        if (ausencias || (diag.umbrales_ausentes || []).length) avisos.push(
-          `<span class="parcial">Cobertura válida en lo emitido: ${ausencias || "una"} fecha(s) tienen uno o más umbrales deliberadamente no emitidos; no son archivos perdidos ni ceros.</span>`);
-        if (Number(diag.curvas_reparadas) > 0) avisos.push(
-          `<span>Coherencia física aplicada a ${Number(diag.curvas_reparadas)} curva(s): P(lluvia) ≥ P(1) ≥ … ≥ P(50).</span>`);
-        const diagnosticoHTML = avisos.length
-          ? `<div class="ml-pb-diagnostico" role="status">${avisos.join("")}</div>` : "";
         const columnas = `<col class="ml-pb-col-umbral">${fechasTabla.map(() =>
           '<col class="ml-pb-col-fecha">').join("")}<col class="ml-pb-col-spacer">`;
+        const diagnosticoProb = pu.diagnostico || {};
+        const estadoProb = diagnosticoProb.validation_standard
+          === "PHYSICAL_ENSEMBLE_AS_ISSUED"
+          ? "ensamble NWP físico · no calibrado ML"
+          : (diagnosticoProb.estado_promocion === "ACCREDITED"
+            ? "calibración acreditada"
+            : "provisional no calibrada");
         probsEl.innerHTML = filasUmbral.some(fila => fila.valores.some(esFinito))
-          ? `<div class="ml-pb-tit">Probabilidad de lluvia por umbral · ventana móvil</div>
-           ${diagnosticoHTML}
+          ? `<div class="ml-pb-tit">Probabilidad de lluvia por umbral · ${estadoProb}</div>
            <div class="ml-pb-wrap"><table class="ml-pb-tabla"><colgroup>${columnas}</colgroup><thead><tr><th class="ml-pb-esq">Umbral</th>${cabFechas}<th class="ml-pb-spacer" aria-hidden="true"></th></tr></thead>
-           <tbody>${filasU}</tbody></table></div>
-           <div class="ml-pb-nota">Se muestran siempre los seis umbrales. “—” identifica una probabilidad no emitida o sin soporte suficiente; nunca un cero inferido. La línea vertical marca el inicio del pronóstico.</div>`
-          : `<div class="ml-pb-estado" role="status"><b>Producto probabilístico sin valores finitos en esta ventana.</b>${diagnosticoHTML}</div>`;
+           <tbody>${filasU}</tbody></table></div>`
+          : `<div class="ml-pb-estado" role="status"><b>Producto probabilístico sin valores finitos en esta ventana.</b></div>`;
       } else {
         probsEl.innerHTML = esPrecip
           ? `<div class="ml-pb-estado" role="status"><b>Sin producto probabilístico emitido.</b><span>No hay datos para esta estación, agregación y ventana.</span></div>`
@@ -2002,7 +2133,7 @@
         boton.disabled = true;
         boton.title = rol === "probabilidades"
           ? "No hay probabilidades finitas para esta selección."
-          : "No hay modelos disponibles para esta selección.";
+          : "No hay series finitas para esta selección.";
         return;
       }
       boton.onclick = async () => {

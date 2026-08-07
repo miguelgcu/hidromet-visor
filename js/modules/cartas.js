@@ -1846,7 +1846,15 @@
     const a = E.alerta;
     const re = () => pintarCuerpo();
     // No llamamos cargarDesempeno() aquí: re()→pintarCuerpo()→conectarAlertas ya
-    cont.querySelector('[data-rol="avar"]').onchange = (e) => { a.varId = e.target.value; a.inst = null; re(); };
+    cont.querySelector('[data-rol="avar"]').onchange = (e) => {
+      a.varId = e.target.value;
+      // ZPH solo existe para precipitación. Si se cambia a temperatura, usar
+      // explícitamente la cohorte fija para que el panel oculto no conserve un
+      // modo pluvial y consulte evidencia térmica bajo una etiqueta incorrecta.
+      if (a.varId !== "alerta_lluvia") a.modo = "fija";
+      a.inst = null;
+      re();
+    };
     cont.querySelectorAll('[data-rol="umbral"] button').forEach(b =>
       b.onclick = async () => {
         a.modo = b.dataset.modo;

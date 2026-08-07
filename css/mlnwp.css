@@ -276,21 +276,39 @@ html[data-tema="oscuro"] .ml-serie-plot .annotation-text {
   fill: #071326 !important; stroke: #fff !important; stroke-width: 3px !important;
   paint-order: stroke fill; stroke-linejoin: round; font-weight: 750 !important;
 }
-.ml-serie-leyenda { display: flex; gap: 0; flex-wrap: nowrap; justify-content: flex-start;
-  max-width: 100%; margin-top: 10px; overflow-x: auto; overscroll-behavior-inline: contain;
-  scrollbar-width: thin; font-size: 11px; color: var(--muted); }
-.ml-serie-leyenda span.it { display: inline-flex; flex: 0 0 auto; align-items: center;
-  min-width: 0; gap: 5px; padding: 2px 11px; white-space: nowrap; }
+.ml-serie-leyenda { display: grid;
+  grid-template-columns: repeat(var(--ml-legend-count, 1), minmax(0, 1fr));
+  align-items: center; width: 100%; max-width: 100%; margin: 7px 0 2px;
+  overflow: hidden; font-size: 10.5px; color: var(--muted); }
+.ml-serie-leyenda:empty { display: none; }
+.ml-serie-leyenda span.it { display: inline-flex; width: 100%; min-width: 0;
+  align-items: center; overflow: hidden; gap: clamp(2px, .3vw, 5px);
+  padding: 3px clamp(4px, .65vw, 10px); white-space: nowrap; }
 .ml-serie-leyenda span.it + span.it { border-left: 1px solid var(--line-2); }
-.ml-serie-leyenda .ml-leyenda-nombre { display: inline-block; max-width: 132px;
+.ml-serie-leyenda .ml-leyenda-nombre { display: inline-block; flex: 1 1 auto;
+  min-width: 0; max-width: none;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
-.ml-serie-leyenda .ml-leyenda-nota { color: var(--faint); font: 650 9.5px var(--mono); }
+.ml-serie-leyenda .ml-leyenda-nota { flex: 0 0 auto; color: var(--faint);
+  font: 650 9.5px var(--mono); }
 .ml-serie-leyenda .sw-linea { flex: 0 0 auto; width: 14px; height: 0; border-top: 2px dashed var(--ink); }
 .ml-serie-leyenda .sw-caja { flex: 0 0 auto; width: 12px; height: 10px; border-radius: 2px; }
 .ml-serie-leyenda .sw-banda { width: 14px; height: 10px;
   background: linear-gradient(rgba(27,58,107,.10), rgba(27,58,107,.10)) padding-box,
               rgba(27,58,107,.24); border: 2px solid rgba(27,58,107,.10); box-sizing: border-box; }
-.ml-serie-pie { font-size: 11.5px; color: var(--faint); line-height: 1.5; margin: 10px 0 0; text-align: center; }
+.ml-serie-shadow-leyenda { display: flex; align-items: center; gap: 9px;
+  width: 100%; min-width: 0; margin: 2px 0 5px; padding: 4px 8px;
+  border: 1px dashed var(--line-2); border-radius: 7px;
+  color: var(--faint); font: 600 9px var(--mono); overflow-x: auto;
+  white-space: nowrap; scrollbar-width: thin; }
+.ml-serie-shadow-leyenda[hidden] { display: none; }
+.ml-serie-shadow-leyenda > b { color: var(--muted); font-size: 8.5px;
+  letter-spacing: .05em; text-transform: uppercase; }
+.ml-serie-shadow-leyenda .it-shadow { display: inline-flex; align-items: center;
+  gap: 4px; min-width: 0; }
+.ml-serie-shadow-leyenda .it-shadow small { color: var(--faint);
+  font-size: 8px; font-weight: 500; }
+.ml-serie-shadow-leyenda .sw-shadow { width: 14px; height: 0;
+  border-top: 2px dotted #64748B; opacity: .7; }
 
 /* MAPAS ----------------------------------------------------------------- */
 .ml-grid-mapas { display: grid; grid-template-columns: 2.2fr 1fr; gap: 14px; align-items: start; }
@@ -355,14 +373,6 @@ html[data-tema="oscuro"] .ml-region-tabla td { border-top-color: var(--line-3); 
 /* Borde punteado que marca el inicio del pronóstico (mismo criterio que la franja de la serie) */
 .ml-pb-hoy { border-left: 1.8px dotted #6B8CB4 !important; }
 .ml-pb-nota { font-size: 10.5px; color: var(--muted-2); margin-top: 6px; }
-.ml-pb-diagnostico { display: flex; flex-wrap: wrap; gap: 5px; margin: 0 0 7px;
-  color: var(--muted); font: 600 9.5px var(--mono); }
-.ml-pb-diagnostico span { padding: 4px 7px; border: 1px solid var(--line-2);
-  border-radius: 6px; background: var(--surface-2); }
-.ml-pb-diagnostico .parcial { color: var(--warn); border-color: var(--warn-bd);
-  background: var(--warn-bg); }
-.ml-pb-diagnostico .fallo { color: var(--danger); border-color: var(--danger-bd);
-  background: var(--danger-bg); }
 .ml-pb-estado { margin-top: 12px; padding: 10px 12px; border: 1px dashed var(--line-2);
   border-radius: 8px; color: var(--muted); font-size: 11px; line-height: 1.45; }
 .ml-pb-estado b, .ml-pb-estado span { display: block; }
@@ -426,7 +436,9 @@ html[data-tema="oscuro"] .ml-region-tabla td { border-top-color: var(--line-3); 
   #ml-serie-card { padding-top: 50px; }
   .ml-serie-acciones { top: 9px; right: 9px; }
   .ml-obs-estado { width: auto; border-radius: 8px; }
-  .ml-serie-leyenda .ml-leyenda-nombre { max-width: 112px; }
+  .ml-serie-leyenda { grid-template-columns: none; grid-auto-flow: column;
+    grid-auto-columns: minmax(112px, max-content); overflow-x: auto;
+    overscroll-behavior-inline: contain; scrollbar-width: thin; }
   .ml-pb-wrap { overflow: visible; }
   .ml-pb-tabla th.ml-pb-u, .ml-pb-tabla th.ml-pb-esq {
     position: sticky; left: 0; z-index: 2; background: var(--surface);

@@ -11,16 +11,20 @@
         probabilidad, Tmax/Tmin puntuales y la
         tendencia térmica — todo como KPIs con iconografía sobria.
      2) MAPA nacional con el veredicto de lluvia DEL DÍA ELEGIDO por
-        estación (color = decisión, tamaño = confianza; tooltip rico;
+        estación (si está acreditado: color = decisión y tamaño = distancia
+        al corte del 50 %; los provisionales quedan neutrales;
+        tooltip rico;
         pinch-zoom vía App.pinchZoomMapa).
-     3) DESEMPEÑO de esas decisiones (validación 30 fechas) como
-        contexto secundario COLAPSABLE.
+     3) EVIDENCIA strict-as-issued del MISMO producto, cuando existe,
+        como contexto secundario COLAPSABLE.
 
    Datos: reúsa los productos congelados del visor — /mlnwp/veredicto
    (?codigo=X para mañana; &dia=2..5 para el resto del horizonte) y
-   /mlnwp/validacion_estacion (bloques tmax/tmin/precip_det, ventana
-   30). Sin endpoints nuevos. Los veredictos del mapa se cargan por
-   LOTES y se cachean por (estación, día).
+   /mlnwp/validacion_estacion (solo tmax/tmin, ventana 30). No sustituye
+   la validación ausente del veredicto probabilístico con métricas de
+   precip_det, que corresponde a otra regla y otros modelos. Los
+   veredictos del mapa se cargan por LOTES y se cachean por
+   (estación, día).
 
    Expone window.DECISIONES = { render(cont), alDejar() }; cartas.js
    la monta como pestaña de Pronóstico (patrón lazy/alSalir).
@@ -31,7 +35,6 @@
   const esc = v => String(v ?? "").replace(/[&<>"']/g,
     c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const num = (v, nd = 1) => (v === null || v === undefined || Number.isNaN(v)) ? "—" : Number(v).toFixed(nd);
-  const num2 = v => (v === null || v === undefined || Number.isNaN(v)) ? "—" : Number(v).toFixed(2);
   const sgn = v => (v === null || v === undefined || Number.isNaN(v)) ? "—"
     : (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(Number(v)).toFixed(1);
   const normTxt = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -50,18 +53,21 @@
   const C_SI = "#1B6ACB", C_NO = "#93A1B4", C_SIN = "#E3E9F1";
   const C_SIN_BORDE = "#B9C3D0";
 
-  // Confianza de la decisión de lluvia = distancia de la probabilidad calibrada
-  // al 50 % (decisión firme vs dudosa). [etiqueta, tamaño de marcador px].
-  function confDecision(prob) {
-    if (prob === null || prob === undefined || Number.isNaN(prob)) return ["Sin dato", 6.5];
+  // Distancia de la probabilidad emitida al corte operativo del 50 %. Esto mide
+  // únicamente cuán lejos queda la regla de decisión de su frontera; NO es
+  // confianza, calibración ni habilidad verificada.
+  // Devuelve [categoría descriptiva, tamaño de marcador px, distancia en pp].
+  function distanciaDecision(prob) {
+    if (prob === null || prob === undefined || Number.isNaN(prob))
+      return ["Sin dato", 6.5, null];
     const d = Math.abs(Number(prob) - 50);
-    if (d >= 30) return ["Alta", 16];
-    if (d >= 15) return ["Media", 12];
-    return ["Baja", 9];
+    if (d >= 30) return ["Lejos del corte", 16, d];
+    if (d >= 15) return ["Distancia intermedia", 12, d];
+    return ["Cerca del corte", 9, d];
   }
 
   // Nombre legible de los modelos que emiten el veredicto de temperatura.
-  const MODELO_ET = { BEST_OP_CV: "BEST_OP (selector IA)", CONSENSO_OP_TOP5: "Consenso top-5" };
+  const MODELO_ET = { BEST_OP_CV: "Selector operativo", CONSENSO_OP_TOP5: "Consenso top-5" };
   const etModelo = m => MODELO_ET[m] || m || "—";
 
   // Badge de calificación 1-10 (misma escala RdYlGn que la tabla de mlnwp.js).
@@ -210,10 +216,13 @@
       const cod = String(e.codigo);
       const v = vDe(cod);                    // undefined = aún cargando
       const ll = (v && v.lluvia) || null;
-      const [conf, tam] = confDecision(ll ? ll.prob : null);
+      const operativa = !!(ll && ll.operacional === true
+        && ll.estado_promocion === "ACCREDITED");
+      const [, tam, distanciaPp] = distanciaDecision(
+        operativa ? ll.prob : null);
       let col = C_SIN, borde = C_SIN_BORDE;
-      if (ll && ll.llueve === true) { col = C_SI; borde = "#ffffff"; }
-      else if (ll && ll.llueve === false) { col = C_NO; borde = "#ffffff"; }
+      if (operativa && ll.llueve === true) { col = C_SI; borde = "#ffffff"; }
+      else if (operativa && ll.llueve === false) { col = C_NO; borde = "#ffffff"; }
       const selec = cod === String(S.sel);
       color.push(col);
       size.push(v === undefined ? 7 : tam);
@@ -226,7 +235,11 @@
       else if (!v || v.sin_datos) h += `<br>Sin veredicto publicado`;
       else {
         if (ll) {
-          h += `<br>Lluvia ${fTxt}: <b>${esc(ll.texto || "—")}</b>${ll.prob != null ? ` · ${ll.prob} %` : ""} · conf. ${conf.toLowerCase()}`;
+          h += operativa
+            ? `<br>Lluvia ${fTxt}: <b>${esc(ll.texto || "—")}</b>${ll.prob != null ? ` · ${ll.prob} %` : ""}`
+            : `<br>Probabilidad provisional no calibrada: ${ll.prob != null ? `${ll.prob} %` : "—"} · sin veredicto`;
+          if (operativa && distanciaPp != null)
+            h += ` · a ${distanciaPp.toFixed(0)} pp del corte`;
           const extra = [];
           if (ll.prob_fuerte != null) extra.push(`≥10 mm: ${ll.prob_fuerte} %`);
           if (extra.length) h += `<br>${extra.join(" · ")}`;
@@ -413,7 +426,7 @@
     if (!S.sel) {
       cont.innerHTML = `<div class="ml-card dec-hint"><div class="vacio"><div class="icono">🗺️</div>
         <strong>Elige una estación</strong>
-        <span>Toca un punto del mapa o búscala arriba: verás el veredicto del día y el desempeño de esas decisiones.</span></div></div>`;
+        <span>Toca un punto del mapa o búscala arriba: verás el veredicto del día y la evidencia disponible del mismo producto.</span></div></div>`;
       if (contV) contV.innerHTML = "";
       return;
     }
@@ -427,15 +440,17 @@
     if (mi !== genPanel || !cont.isConnected) return;
     cont.innerHTML = tarjetaVeredictoHTML(v);
 
-    // Desempeño (colapsable, contexto secundario): no depende del día → cache.
+    // Evidencia del mismo producto (colapsable): no depende del día → cache.
+    // No se consulta precip_det: sus POD/FAR/CSI pertenecen a decisiones
+    // deterministas por valor, no al promedio probabilístico de este veredicto.
     if (!contV) return;
     const abierto = !!contV.querySelector("details[open]");
     contV.innerHTML = "";
     let val = S.valCache.get(S.sel);
     if (!val) {
       const pide = b => App.api(`/mlnwp/validacion_estacion?bloque=${b}&ventana=${VENTANA}&${DEPS_QS}&codigo=${encodeURIComponent(S.sel)}`).catch(() => null);
-      const [vtx, vtn, vdet] = await Promise.all([pide("tmax"), pide("tmin"), pide("precip_det")]);
-      val = { vtx, vtn, vdet };
+      const [vtx, vtn] = await Promise.all([pide("tmax"), pide("tmin")]);
+      val = { vtx, vtn };
       S.valCache.set(S.sel, val);
     }
     if (mi !== genPanel || !contV.isConnected) return;
@@ -480,22 +495,32 @@
           <div class="v dec-sin">sin dato</div></div>
       </div>`;
     } else {
-      const cls = ll.llueve === true ? "si" : (ll.llueve === false ? "no" : "sin");
-      const [conf] = confDecision(ll.prob);
+      const operativa = ll.operacional === true
+        && ll.estado_promocion === "ACCREDITED";
+      const cls = operativa && ll.llueve === true
+        ? "si" : (operativa && ll.llueve === false ? "no" : "sin");
+      const [distanciaTxt, , distanciaPp] = distanciaDecision(
+        operativa ? ll.prob : null);
       const prob = ll.prob != null ? Math.max(0, Math.min(100, ll.prob)) : null;
       hero = `<div class="dec-hero ${cls}">
         <span class="dec-hero-ico">${ICO_GOTA}</span>
         <div class="dec-hero-main">
-          <div class="k">Lluvia (P ≥ 1 mm)</div>
+          <div class="k">${operativa ? "Lluvia (P ≥ 1 mm)" : "Probabilidad provisional (≥ 1 mm)"}</div>
           <div class="v">${esc(ll.texto || "—")}${prob != null ? `<small>${prob} %</small>` : ""}</div>
           ${prob != null ? `<div class="dec-prob-barra" role="img" aria-label="Probabilidad ${prob} %"><i style="width:${prob}%"></i><u style="left:50%"></u></div>` : ""}
         </div>
         <div class="dec-hero-lado">
           <div class="mini"><span class="k">Lluvia fuerte ≥ 10 mm</span><span class="v">${ll.prob_fuerte != null ? `${ll.prob_fuerte} %` : "—"}</span></div>
-          <div class="mini"><span class="k">Confianza</span><span class="v">${pillConf(conf === "Sin dato" ? null : conf)}</span></div>
+          ${operativa
+            ? `<div class="mini" title="${esc(distanciaTxt)}; no representa confianza ni skill"><span class="k">Distancia al corte</span><span class="v">${distanciaPp == null ? "—" : `${distanciaPp.toFixed(0)} pp`}</span></div>`
+            : '<div class="mini"><span class="k">Uso</span><span class="v">No calibrada</span></div>'}
         </div>
       </div>`;
     }
+    const pieLluvia = ll && ll.operacional === true
+      && ll.estado_promocion === "ACCREDITED"
+      ? "Lluvia: curva acreditada strict-as-issued; SÍ cuando P(≥1 mm) ≥ 50 %."
+      : "Lluvia: producto provisional no calibrado, visible solo como información y sin decisión.";
 
     // KPI de tendencia térmica (vs hoy).
     let kpiTend = `<div class="dec-kpi"><div class="lab"><span class="ico">→</span>Tendencia</div>
@@ -520,20 +545,30 @@
         ${kpiTemp("T. mínima", tn)}
         ${kpiTend}
       </div>
-      <p class="ml-pie">Tmax/Tmin = valor puntual del selector operativo. Lluvia = probabilidad calibrada (promedio de clasificadores); la decisión es SÍ cuando P(≥1 mm) ≥ 50 %. Agregación de lluvia ${esc(v.agg_precip || "07-07")}.</p>
+      <p class="ml-pie">Tmax/Tmin = valor puntual del selector operativo. ${pieLluvia} Agregación ${esc(v.agg_precip || "07-07")}.</p>
     </div>`;
   }
 
   /* ============================================================
-     TARJETA 2 — DESEMPEÑO de las decisiones (colapsable, secundaria).
+     TARJETA 2 — EVIDENCIA del mismo producto (colapsable, secundaria).
      ============================================================ */
-  function filaVal(etiqueta, d, modeloPref, metHTML) {
-    if (!d || !(d.modelos || []).length) {
-      return `<div class="dec-val-fila"><span class="var">${etiqueta}</span>
-        <span class="suave" style="font-size:12px">Sin validación publicada.</span></div>`;
-    }
-    let fila = modeloPref ? d.modelos.find(m => m.modelo === modeloPref) : null;
-    if (!fila) fila = d.modelos.find(m => m.califica && m.rating != null) || d.modelos[0];
+  function filaSinEvidencia(etiqueta, motivo) {
+    return `<div class="dec-val-fila"><span class="var">${etiqueta}</span>
+      <span class="suave" style="font-size:12px">${esc(motivo)}</span></div>`;
+  }
+
+  function filaMismoProducto(etiqueta, d, modeloPref, metHTML) {
+    if (!modeloPref)
+      return filaSinEvidencia(
+        etiqueta, "El veredicto no identifica un modelo emisor verificable.");
+    const fila = d && (d.modelos || []).find(m =>
+      m.modelo === modeloPref && m.estandar === "A_AS_ISSUED"
+      && Number(m.n) > 0);
+    if (!fila)
+      return filaSinEvidencia(
+        etiqueta,
+        `Sin métricas strict-as-issued del modelo emisor ${modeloPref}.`,
+      );
     return `<div class="dec-val-fila">
       <span class="var">${etiqueta}</span>
       <span class="mod"><span class="ml-mod-punto" style="background:${esc(fila.color || "#888")}"></span>${esc(fila.modelo)}</span>
@@ -545,23 +580,19 @@
   }
 
   function tarjetaDesempenoHTML(v, val, abierto) {
-    const { vtx, vtn, vdet } = val || {};
-    const modTx = (v && v.tmax && v.tmax.modelo) || "BEST_OP_CV";
-    const modTn = (v && v.tmin && v.tmin.modelo) || "BEST_OP_CV";
-    // La detección del veredicto promedia clasificadores: se muestra el MEJOR
-    // detector calificado de la estación (resumen.mejor).
-    const modDet = (vdet && vdet.resumen && vdet.resumen.mejor && vdet.resumen.mejor !== "—")
-      ? vdet.resumen.mejor : null;
+    const { vtx, vtn } = val || {};
+    const modTx = v && v.tmax && v.tmax.modelo;
+    const modTn = v && v.tmin && v.tmin.modelo;
     return `<details class="ml-card dec-desemp-card"${abierto ? " open" : ""}>
-      <summary><span class="dec-desemp-tit">¿Qué tan buenas son estas decisiones?</span>
-        <span class="ml-sutil">validación · últimas ${VENTANA} fechas con observación</span>
+      <summary><span class="dec-desemp-tit">Evidencia del mismo veredicto</span>
+        <span class="ml-sutil">strict-as-issued · hasta ${VENTANA} fechas</span>
         <span class="dec-desemp-chev">▾</span></summary>
       <div class="dec-val-filas">
-        ${filaVal("T. máxima", vtx, modTx, m => `MAE ${num(m.mae)} °C`)}
-        ${filaVal("T. mínima", vtn, modTn, m => `MAE ${num(m.mae)} °C`)}
-        ${filaVal("Lluvia sí/no", vdet, modDet, m => `POD ${num2(m.pod)} · FAR ${num2(m.far)} · CSI ${num2(m.csi)}`)}
+        ${filaMismoProducto("T. máxima", vtx, modTx, m => `MAE ${num(m.mae)} °C`)}
+        ${filaMismoProducto("T. mínima", vtn, modTn, m => `MAE ${num(m.mae)} °C`)}
+        ${filaSinEvidencia("Lluvia sí/no", "Sin métricas strict-as-issued del mismo veredicto probabilístico.")}
       </div>
-      <p class="ml-pie">MAE = error medio del modelo que emite la temperatura (menor es mejor). Detección de lluvia del mejor modelo calificado: POD acierto cuando SÍ llueve · FAR falsas alarmas · CSI acierto global (0–1). Badge = calificación 1–10; píldora = confianza muestral.</p>
+      <p class="ml-pie">Temperatura muestra solo el modelo que emitió el valor y su validación A as-issued. La lluvia no reutiliza POD/FAR/CSI de un detector determinista distinto: hasta validar esta misma cohorte y regla, se declara sin evidencia.</p>
     </details>`;
   }
 
@@ -603,7 +634,7 @@
               <span class="it"><span class="pt" style="background:${C_SI}"></span>Sí llueve</span>
               <span class="it"><span class="pt" style="background:${C_NO}"></span>No llueve</span>
               <span class="it"><span class="pt chico" style="background:${C_SIN};box-shadow:inset 0 0 0 1.5px ${C_SIN_BORDE}"></span>Sin dato</span>
-              <span class="it dec-ley-tam">● tamaño = confianza</span>
+              <span class="it dec-ley-tam">● tamaño = distancia al corte 50 %</span>
             </div>
           </div>
           <div class="dec-desemp" id="dec-desemp"></div>
