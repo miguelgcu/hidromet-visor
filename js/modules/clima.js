@@ -1346,6 +1346,104 @@
     updateAll();
   }
 
+  // IUV EXPERIMENTAL — CAMS UV/AOD + única estación disponible ----------------
+  function pintarIuv(host, payload, campo) {
+    if (!window.Plotly || !host) return;
+    const rows = (payload && payload.data || []).filter(r =>
+      r.latitude != null && r.longitude != null);
+    if (!rows.length) { limpiarPlot(host); host.innerHTML = vacio("☀", "Sin campo CAMS para esta fecha."); return; }
+    const lons = [...new Set(rows.map(r => Number(r.longitude)))].sort((a, b) => a - b);
+    const lats = [...new Set(rows.map(r => Number(r.latitude)))].sort((a, b) => a - b);
+    const ix = new Map(lons.map((v, i) => [v, i])), iy = new Map(lats.map((v, i) => [v, i]));
+    const z = lats.map(() => lons.map(() => null));
+    const raw = lats.map(() => lons.map(() => null));
+    const aod = lats.map(() => lons.map(() => null));
+    rows.forEach(r => {
+      const y = iy.get(Number(r.latitude)), x = ix.get(Number(r.longitude));
+      const value = r[campo];
+      z[y][x] = value == null ? null : Number(value);
+      raw[y][x] = r.cams_raw_uvi == null ? null : Number(r.cams_raw_uvi);
+      aod[y][x] = r.aod == null ? null : Number(r.aod);
+    });
+    const etiqueta = campo === "cams_raw_uvi" ? "CAMS crudo" : "IUV experimental";
+    const heat = {
+      type: "heatmap", x: lons, y: lats, z, customdata: lats.map((_, y) =>
+        lons.map((__, x) => [raw[y][x], aod[y][x]])),
+      colorscale: [[0,"#2c7bb6"],[.18,"#00a6ca"],[.35,"#00ccbc"],[.5,"#90eb9d"],
+        [.62,"#ffff8c"],[.74,"#f9d057"],[.84,"#f29e2e"],[.92,"#e76818"],[1,"#d7191c"]],
+      zmin: 0, zmax: 14, zsmooth: "best", hoverongaps: false, showscale: true,
+      colorbar: { title: { text: "IUV" }, thickness: 12, len: .72 },
+      hovertemplate: `<b>${etiqueta}: %{z:.1f}</b><br>CAMS crudo: %{customdata[0]:.1f}` +
+        `<br>AOD: %{customdata[1]:.2f}<br>lat %{y:.2f}, lon %{x:.2f}<extra></extra>`,
+    };
+    const layout = App.plotlyLayoutBase({
+      height: Math.max(410, Math.min(620, Math.round((host.clientWidth || 620) * .78))),
+      margin: { l: 8, r: 42, t: 8, b: 8 },
+      xaxis: { visible: false, scaleanchor: "y", constrain: "domain", range: [-92.5, -75.0] },
+      yaxis: { visible: false, range: [-5.5, 2.0] },
+    });
+    quitarPlaceholder(host);
+    Plotly.react(host, [heat, ...contorno()], layout, App.plotlyConfig());
+    observarTamanoMapa(host);
+    if (App.pinchZoomMapa) App.pinchZoomMapa(host);
+  }
+
+  async function tabIuv(c) {
+    inyectarCSS(); _alTema = null; await cargarGeo();
+    c.innerHTML = cargando("Leyendo la cohorte CAMS UV/AOD…");
+    let national, station;
+    try {
+      [national, station] = await Promise.all([
+        App.api("/clima/iuv_experimental?scope=national"),
+        App.api("/clima/iuv_experimental?scope=station"),
+      ]);
+    } catch (e) { c.innerHTML = vacio("⚠", esc(e.message)); return; }
+    if (!national.available) {
+      c.innerHTML = `<div class="cl-wrap"><div class="cl-glo-intro cl-iuv-intro">
+        <h3>IUV nacional experimental</h3><p>${esc(national.diagnostic ||
+          "La autoridad CAMS aún no está materializada. No se muestra un campo anterior ni se infieren ceros.")}</p>
+        </div></div>`;
+      return;
+    }
+    const local = (station.data || [])[0] || {};
+    const correction = national.national_correction_enabled === true;
+    c.innerHTML = `<div class="cl-wrap cl-iuv-wrap">
+      <div class="cl-glo-intro cl-iuv-intro"><h3>IUV nacional experimental · ${esc(national.valid_date || "")}</h3>
+        <p>Campo físico CAMS Global de índice UV y aerosoles. La única estación disponible se usa para validación local;
+        <b>no acredita una corrección nacional</b>. Los faltantes permanecen vacíos y CAMS crudo siempre se conserva.</p>
+        <div class="cl-iuv-badges"><span>Experimental</span><span>No oficial</span>
+          <span>${correction ? "Ajuste multirregional habilitado" : "CAMS nacional sin corregir"}</span></div></div>
+      <div class="cl-toolbar cl-iuv-toolbar"><div class="cl-grupo"><span>Campo visible</span>
+        <select data-rol="campo"><option value="cams_raw_uvi">CAMS crudo</option>
+          <option value="iuv_experimental">IUV experimental</option></select></div>
+        <div class="cl-grupo cl-iuv-lineage"><span>Cohorte</span><code>${esc(String(national.transaction_id || "").slice(0, 12))}</code></div></div>
+      <div class="cl-iuv-grid"><div class="cl-card"><h3 class="cl-maptit" data-rol="iuv-tit">CAMS crudo</h3>
+        <div class="cl-plot cl-iuv-map" data-rol="iuv-map"></div>
+        <p class="cl-nota">Índice UV máximo diario local. AOD es el espesor óptico de aerosoles medio diario de CAMS.</p></div>
+        <div class="cl-card cl-iuv-local"><h3 class="cl-maptit">Control observacional local</h3>
+          <div class="cl-kpis">
+            ${kpi("Observado", local.observed_uvi, "IUV", 1, "#10243f")}
+            ${kpi("CAMS crudo", local.cams_raw_uvi, "IUV", 1, "#e89a28")}
+            ${kpi("Producto", local.iuv_experimental, "IUV", 1, "#2f9e8f")}
+            ${kpi("AOD", local.aod, "", 2, "#7b61a8")}
+          </div>
+          <div class="cl-aviso"><span class="ic">ⓘ</span><p><b>${esc(local.station_id || "Estación IUV")}</b><br>
+            Estado: ${esc(local.uncertainty_status || "sin observación coincidente")}<br>
+            Distancia a celda CAMS: ${num(local.cams_grid_distance_km, 1)} km.</p></div>
+          <p class="cl-nota">Producto ${esc(national.publication_class || "EXPERIMENTAL")}; calibración oficial: no.
+            La trazabilidad completa queda sellada mediante SHA-256 en el recibo local.</p></div></div>
+    </div>`;
+    const map = c.querySelector('[data-rol="iuv-map"]'), title = c.querySelector('[data-rol="iuv-tit"]');
+    const select = c.querySelector('[data-rol="campo"]');
+    const draw = () => {
+      title.textContent = select.value === "cams_raw_uvi" ? "CAMS crudo" : "IUV experimental";
+      pintarIuv(map, national, select.value);
+    };
+    select.onchange = draw;
+    _alTema = () => { if (c.isConnected) draw(); };
+    draw();
+  }
+
   App.registrar("clima", {
     titulo: "Climatología", orden: 2.5,
     // Al salir del módulo: purgar TODOS los Plotly vivos (mapa, ranking, climogramas,
@@ -1369,6 +1467,7 @@
           { id: "mapas", etiqueta: "Explorar", render: tabMapas },
           { id: "diario", etiqueta: "Series y acumulados", render: tabDiario },
           { id: "enso", etiqueta: "El Niño histórico", render: tabEnso },
+          { id: "iuv", etiqueta: "IUV experimental", render: tabIuv },
           // "Por coordenada" consulta lat/lon libres (imposible de congelar) → oculta en el visor.
           window.HIDROMET_VISOR ? null : { id: "punto", etiqueta: "Por coordenada", render: tabPunto },
           { id: "glosario", etiqueta: "Metodología", render: tabGlosario },

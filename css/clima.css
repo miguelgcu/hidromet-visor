@@ -261,3 +261,25 @@
   .cl-serie-controles,.cl-serie-controles>*{width:100%;max-width:none!important}
   .cl-serie-controles select[data-rol=est]{min-width:0}
 }
+
+/* ── IUV experimental CAMS ─────────────────────────────────────────────── */
+.cl-iuv-intro{background:
+  radial-gradient(circle at 92% 10%,color-mix(in srgb,#f29e2e 20%,transparent),transparent 36%),
+  linear-gradient(135deg,var(--cl-acc-bg),transparent 72%)}
+.cl-iuv-badges{display:flex;flex-wrap:wrap;gap:7px;margin-top:11px}
+.cl-iuv-badges span{display:inline-flex;align-items:center;min-height:27px;padding:4px 10px;
+  border:1px solid var(--cl-acc-bd);border-radius:999px;background:var(--surface);
+  color:var(--ink-2);font:650 10.5px var(--mono)}
+.cl-iuv-toolbar select{border:1px solid var(--line);border-radius:var(--r-ctrl,8px);padding:8px 10px;
+  font:600 12px var(--fuente);background:var(--surface);color:var(--ink)}
+.cl-iuv-lineage code{font:650 11px var(--mono);color:var(--ink-2)}
+.cl-iuv-grid{display:grid;grid-template-columns:minmax(360px,1.35fr) minmax(300px,.65fr);
+  gap:14px;align-items:start}
+.cl-iuv-grid>*{min-width:0}.cl-iuv-map{min-height:440px}.cl-iuv-local .cl-kpis{grid-template-columns:repeat(2,1fr)}
+@media(max-width:920px){
+  .cl-iuv-grid{grid-template-columns:1fr}.cl-iuv-map{min-height:390px}
+}
+@media(max-width:520px){
+  .cl-iuv-local .cl-kpis{grid-template-columns:1fr 1fr}
+  .cl-iuv-toolbar .cl-grupo,.cl-iuv-toolbar select{width:100%}
+}
