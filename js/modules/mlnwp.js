@@ -2076,13 +2076,23 @@
         const coberturaPorUmbral = new Map(
           ((pu.diagnostico || {}).cobertura_umbral || []).map(item =>
             [Number(item.umbral), item]));
+        // DECISIÓN 4 (2026-08-14): cada umbral viaja con SU veredicto medido fuera
+        // de muestra. Los que la medición no acredita se publican IGUAL —esconderlos
+        // tiraría información honesta— pero marcados con ° y con el motivo en el
+        // tooltip, para que nadie los lea como cifra verificada.
+        const calibProb = pu.calibracion_probabilidad || {};
+        const veredictoPorUmbral = calibProb.veredicto_por_umbral || {};
+        const claveUmbral = u => (Number.isInteger(u) ? String(u) : String(u));
         const filasUmbral = [0.1, 1, 5, 10, 25, 50].map(u => {
           const j = (pu.umbrales || []).findIndex(valor =>
             Number.isFinite(Number(valor))
             && Math.abs(Number(valor) - u) <= 1e-9);
+          const v = veredictoPorUmbral[claveUmbral(u)] || null;
           return {
             u, j,
             cobertura: coberturaPorUmbral.get(u) || null,
+            veredicto: v,
+            acreditada: !v || v.publicable_como_verificada !== false,
             valores: fechasTabla.map(fecha =>
               j < 0 ? null : (probabilidadesPorFecha.get(fecha) || [])[j]),
           };
@@ -2091,12 +2101,18 @@
           const celdas = fila.valores.map((p, i) => {
             return `<td class="ml-pb-c${sep(i)}" data-fecha="${esc(fechasTabla[i])}" style="${celStyle(p)}">${p == null ? "—" : p + "%"}</td>`;
           }).join("");
-          const etiqueta = Math.abs(Number(fila.u) - 0.1) <= 1e-9
+          const base = Math.abs(Number(fila.u) - 0.1) <= 1e-9
             ? "P(lluvia)" : `≥${fila.u} mm`;
-          const detalle = fila.cobertura && fila.cobertura.motivo
-            ? ` title="${esc(fila.cobertura.motivo)}"` : "";
+          const etiqueta = fila.acreditada ? base : `${base}°`;
+          const motivos = [
+            fila.cobertura && fila.cobertura.motivo,
+            !fila.acreditada && fila.veredicto
+              ? (fila.veredicto.etiqueta || fila.veredicto.estado) : null,
+          ].filter(Boolean).join(" · ");
+          const detalle = motivos ? ` title="${esc(motivos)}"` : "";
           return `<tr><th class="ml-pb-u"${detalle}><span>${etiqueta}</span></th>${celdas}<td class="ml-pb-spacer" aria-hidden="true"></td></tr>`;
         }).join("");
+        const hayNoAcreditados = filasUmbral.some(fila => !fila.acreditada);
         const columnas = `<col class="ml-pb-col-umbral">${fechasTabla.map(() =>
           '<col class="ml-pb-col-fecha">').join("")}<col class="ml-pb-col-spacer">`;
         const diagnosticoProb = pu.diagnostico || {};
@@ -2109,7 +2125,9 @@
         probsEl.innerHTML = filasUmbral.some(fila => fila.valores.some(esFinito))
           ? `<div class="ml-pb-tit">Probabilidad de lluvia por umbral · ${estadoProb}</div>
            <div class="ml-pb-wrap"><table class="ml-pb-tabla"><colgroup>${columnas}</colgroup><thead><tr><th class="ml-pb-esq">Umbral</th>${cabFechas}<th class="ml-pb-spacer" aria-hidden="true"></th></tr></thead>
-           <tbody>${filasU}</tbody></table></div>`
+           <tbody>${filasU}</tbody></table></div>${hayNoAcreditados
+             ? `<div class="ml-pb-nota" role="note">° Umbral con destreza NO acreditada en la medición fuera de muestra: sirve para ordenar el riesgo, no como cifra verificada. Pase el cursor por el umbral para ver el motivo.</div>`
+             : ""}`
           : `<div class="ml-pb-estado" role="status"><b>Producto probabilístico sin valores finitos en esta ventana.</b></div>`;
       } else {
         probsEl.innerHTML = esPrecip
