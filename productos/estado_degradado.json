@@ -1,8 +1,8 @@
 {
   "esquema": "hidromet.degradado.v1",
   "etiqueta": "DEGRADADO — se publicó igual, sin acreditar; el dato va etiquetado",
-  "generado_utc": "2026-08-23T16:30:35+00:00",
-  "total": 18,
+  "generado_utc": "2026-08-23T17:12:15+00:00",
+  "total": 19,
   "degradado": [
     {
       "area": "observaciones:F1",
@@ -11,10 +11,6 @@
     {
       "area": "mlnwp:F1",
       "motivo": "Validación ML-NWP omitida por dependencias fallidas: observaciones:F1"
-    },
-    {
-      "area": "geoglows:F1",
-      "motivo": "Caudales GEOGLOWS falló: geoglows:F1: watchlist ausente o ilegible ([Errno 2] No such file or directory: '[ruta interna]') | reutilización rechazada por gate profundo: geoglows:F1: watchlist ausente o ilegible ([Errno 2] No such file or directory: '[ruta interna]')"
     },
     {
       "area": "cartas:F1",
@@ -26,11 +22,15 @@
     },
     {
       "area": "mlnwp:F2",
-      "motivo": "Validación ML-NWP · cómputo omitida; dependencias no resolubles: desconocidas"
+      "motivo": "Validación ML-NWP · cómputo omitida por dependencias fallidas: mlnwp:F1, observaciones:F1"
     },
     {
       "area": "clima:F2",
       "motivo": "clima:F2: no se pudo validar la climatología operativa (No existe un catálogo observacional canónico legible)"
+    },
+    {
+      "area": "observaciones:F2",
+      "motivo": "observaciones:F2: auditoría de frescura online ausente"
     },
     {
       "area": "cartas:F2",
@@ -43,6 +43,10 @@
     {
       "area": "cartas:F2",
       "motivo": "cartas:F2: se esperó un archivo BD_emisiones_alertas y se hallaron 0"
+    },
+    {
+      "area": "cartas:F1",
+      "motivo": "cartas:F1: PDIR 07-07 ausente (hidroestimador_PDIR_lluvia_24h.nc)"
     },
     {
       "area": "cartas:F2",
