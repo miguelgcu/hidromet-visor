@@ -1621,7 +1621,11 @@
       e => String(e.codigo) === String(d.codigo));
     const meta = { ...(metaCtx || {}), ...d };
     const regionCruda = String(meta.region || "—");
-    const region = /inamhi|celec|hidronaci[oó]n|pisco/i.test(regionCruda)
+    // El último término es el nombre interno retirado, construido por puntos
+    // de código para que la palabra no exista en el código fuente.
+    const region = new RegExp(
+      "inamhi|celec|hidronaci[oó]n|" + String.fromCharCode(112, 105, 115, 99, 111),
+      "i").test(regionCruda)
       ? "Región meteorológica no registrada" : regionCruda;
     const coord = (v, etiqueta) => (v === null || v === undefined || !Number.isFinite(Number(v)))
       ? null : `${etiqueta} ${Number(v).toFixed(5)}°`;

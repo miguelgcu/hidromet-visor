@@ -90,6 +90,43 @@
     BIAS: "Calibrado · BIAS", RF: "Calibrado · RF", GB: "Calibrado · GB", CAT: "Calibrado · CAT", LSTM: "Calibrado · LSTM" };
   const ALERTA_FUENTE_OCULTA = new Set(["Confianza", "Modelo de referencia", "Cobertura (n.º modelos)"]);
 
+  // MÉTODO DE UMBRAL POR ALERTA (2026-08-20). Con el tercer método encendido, en
+  // el MISMO archivo conviven alertas suyas (lluvia, helada) y del método vigente
+  // (calor, frío inusual, que no acreditaron). Cada variable del netcdf lleva su
+  // sello `metodo_umbral` y el visor TIENE que decir cuál es: servir una alerta
+  // sin confesar con qué criterio nació sería servir un producto distinto sin
+  // avisar. El dato llega en productos.alertas_meta.metodo_por_capa.
+  // La LETRA es la taxonomía del dueño (especificación 2026-08-20): tres TIPOS
+  // conviven — (a) fijo, (b) ZPH, (c) climatológico — y cada alerta confiesa con
+  // cuál nació. Los modos pctl e irf son las dos encarnaciones medidas del tipo
+  // (c); la decisión está en Salidas/especificacion_20260820/TRES_UMBRALES.md.
+  const METODO_UMBRAL_ROTULO = {
+    fija: "Tipo (a) · Umbral fijo regional",
+    zph: "Tipo (b) · ZPH (zonas homogéneas de precipitación)",
+    pctl: "Tipo (c) · Climatológico — percentil local",
+    irf: "Tipo (c) · Climatológico — índice regional + física (tercer método)",
+  };
+  // Etiquetas cortas del selector de umbral (solo los modos con variante real).
+  const MODO_UMBRAL_BOTON = { fija: "Fijos", zph: "ZPH", pctl: "Percentil", irf: "Climatológico" };
+
+  // Pura (probada en Node): {texto, titulo} del sello de método de una alerta,
+  // o null si el archivo aún no trae sello (cartas generadas antes del sellado).
+  function rotuloMetodoUmbral(alertasMeta, varId) {
+    const porCapa = (alertasMeta || {}).metodo_por_capa || {};
+    const sello = porCapa[varId]
+      || porCapa[varId + "_CONSENSO"]
+      || porCapa[Object.keys(porCapa).find(k => k === varId || k.startsWith(varId + "_"))];
+    if (!sello || !sello.metodo) return null;
+    const nombre = METODO_UMBRAL_ROTULO[sello.metodo] || sello.metodo;
+    const niveles = String(sello.niveles || "");
+    const parcial = niveles && niveles !== "1,2,3";
+    return {
+      texto: nombre + (parcial ? ` · niveles ${niveles}` : ""),
+      titulo: "Método que generó los umbrales de esta alerta (sello leído del archivo)."
+        + (parcial ? ` Acreditado SOLO en los niveles ${niveles}: por encima, el aviso se emite con la etiqueta del nivel más alto acreditado.` : ""),
+    };
+  }
+
   // Toggles de capa: id (param de carta.png) + etiqueta + valor inicial (1=on).
   // §P4: Grilla/Isolíneas/Galápagos/Estaciones arrancan ACTIVOS en todas las cartas.
   const TOGGLES = [
@@ -1751,8 +1788,18 @@
       `<option value="${i}" ${i === a.inst ? "selected" : ""}>${esc(x.etiqueta)}</option>`).join("")
       : `<option>Sin instantes</option>`;
 
-    const segFijos = `<button class="${a.modo === "fija" ? "activo" : ""}" data-modo="fija">Fijos</button>`;
-    const segZph = `<button class="${a.modo === "zph" ? "activo" : ""}" data-modo="zph">ZPH</button>`;
+    // Selector de TIPO de umbral: en la app se ofrecen los modos con variante
+    // pre-calculada en disco (productos.umbrales_variantes) — así el tercer tipo
+    // (Climatológico) aparece solo cuando de verdad se puede servir sin
+    // recalcular. El visor estático conserva fija/zph, que son las variantes que
+    // exporta hoy (extenderlo es trabajo del export, no de este selector).
+    const _variantes = (!window.HIDROMET_VISOR
+      && Array.isArray((E.productos || {}).umbrales_variantes)
+      && E.productos.umbrales_variantes.length)
+      ? E.productos.umbrales_variantes.filter(m => MODO_UMBRAL_BOTON[m])
+      : ["fija", "zph"];
+    const segBotones = _variantes.map(m =>
+      `<button class="${a.modo === m ? "activo" : ""}" data-modo="${m}">${MODO_UMBRAL_BOTON[m]}</button>`).join("");
 
     // Grilla: una carta por fuente PRESENTE (Consenso + pronóstico + CALIBRADOS),
     // ordenada según ALERTA_FUENTES; oculta las capas meta (Confianza/Referencia).
@@ -1813,13 +1860,20 @@
            desbordamiento. Si F1FFR24 falta, el estado es «Sin dato», nunca «Sin riesgo».</p>`
       : "";
 
+    // Sello del método que generó ESTA alerta (leído del netcdf vía productos).
+    const _sello = rotuloMetodoUmbral((E.productos || {}).alertas_meta, a.varId);
+    const selloMetodoHTML = _sello
+      ? `<span class="ct-fuente-estado" data-rol="metodo-umbral" title="${esc(_sello.titulo)}">${esc(_sello.texto)}</span>`
+      : "";
+
     return `
       <div class="ct-barra compacta">
         <label><span class="et">Variable</span><select data-rol="avar">${optsVar}</select></label>
+        ${selloMetodoHTML}
         <span class="ct-div"></span>
         ${a.varId === "alerta_lluvia" ? `
-        <span class="et" title="Umbrales fijos regionales o por Zonas de Pronóstico Homogéneo (ZPH: solo precipitación)">Umbrales</span>
-        <div class="segmentado" data-rol="umbral" style="--seg-color:var(--blue)">${segFijos}${segZph}</div>` : ""}
+        <span class="et" title="Tipo de umbral de la alerta: (a) fijo regional, (b) ZPH (zonas homogéneas de precipitación), (c) climatológico. Solo se ofrecen los tipos con variante pre-calculada.">Umbrales</span>
+        <div class="segmentado" data-rol="umbral" style="--seg-color:var(--blue)">${segBotones}</div>` : ""}
         <button class="boton azulclaro chico" data-rol="editar">✎ Editar umbrales</button>
         <div class="ct-inst-nav">
           <button class="ct-nav" data-rol="aprev" ${a.inst <= 0 ? "disabled" : ""}>◀</button>
@@ -2582,5 +2636,8 @@
     coberturaCicloFFGS,
     referenciaDefectoFFGS,
     ffgsUsaReferencia,
+    rotuloMetodoUmbral,
+    METODO_UMBRAL_ROTULO,
+    MODO_UMBRAL_BOTON,
   });
 })();

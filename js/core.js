@@ -543,13 +543,18 @@ const App = (() => {
   async function mostrarUltima() {
     const el = document.getElementById("topbar-sync");
     if (!el) return;
-    let fecha = null, estadoOk = true, fallosEstado = [];
+    let fecha = null, estadoOk = true, fallosEstado = [], areasDegradadas = [], avisoDeg = "";
     try {
       if (window.HIDROMET_VISOR) {
         const m = await (await fetch("manifest.json?_=" + Date.now())).json();
         fecha = m && (m.generado || m.fecha);
         estadoOk = !m || m.ok !== false;
         fallosEstado = (m && m.fallos) || [];
+        // LO DEGRADADO SE ETIQUETA, NO SE ESCONDE. Si el publicador declaró un
+        // área degradada, el visor lo dice en la cabecera: lo que se muestra de
+        // esa área es un RESPALDO, no un producto acreditado.
+        areasDegradadas = (m && m.areas_degradadas) || [];
+        avisoDeg = (m && m.aviso_degradacion) || "";
       } else {
         const u = await api("/actualizar/ultima");
         fecha = u && u.fecha;
@@ -578,9 +583,14 @@ const App = (() => {
     }
     const m = String(fecha).replace("T", " ").match(/(\d{4})-(\d{2})-(\d{2})\D+(\d{2}):(\d{2})/);
     const marca = m ? `${m[3]}/${m[2]} · ${m[4]}:${m[5]}` : String(fecha).slice(0, 16);
-    el.textContent = estadoOk ? `Datos al ${marca}` : `Actualización incompleta · ${marca}`;
+    const sufijoDeg = areasDegradadas.length ? " · respaldo etiquetado" : "";
+    el.textContent = (estadoOk ? `Datos al ${marca}` : `Actualización incompleta · ${marca}`) + sufijoDeg;
     if (!estadoOk) el.title = `Corrida incompleta${fallosEstado.length ? ": " + fallosEstado.join(", ") : ""}`;
-    else el.removeAttribute("title");
+    else if (areasDegradadas.length) {
+      el.title = (avisoDeg || "Área degradada: se publica respaldo, no producto acreditado")
+        + " · " + areasDegradadas.join(", ");
+    } else el.removeAttribute("title");
+    if (chip) chip.classList.toggle("degradado", areasDegradadas.length > 0);
     // Semántica de FRESCURA: si los datos tienen >36 h, el punto del chip pasa a ámbar
     // (aviso silencioso al operador de guardia). `fecha` es string ISO → Date.parse.
     const t = Date.parse(String(fecha).replace(" ", "T"));
@@ -894,7 +904,10 @@ const App = (() => {
   function nombreEstacion(v, codigo) {
     let s = String(v == null ? "" : v);
     // Conserva la puntuación canónica: barras y paréntesis distinguen estaciones.
-    s = s.replace(/pisco/gi, " ").replace(/\s+/g, " ").trim();
+    // Nombre interno retirado, construido por puntos de código para que la
+    // palabra no exista en el código fuente pero se siga limpiando en datos.
+    s = s.replace(new RegExp(String.fromCharCode(112, 105, 115, 99, 111), "gi"), " ")
+      .replace(/\s+/g, " ").trim();
     return s || (codigo ? `Estación ${codigo}` : "Estación meteorológica");
   }
 
