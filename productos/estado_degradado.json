@@ -1,16 +1,12 @@
 {
   "esquema": "hidromet.degradado.v1",
   "etiqueta": "DEGRADADO — se publicó igual, sin acreditar; el dato va etiquetado",
-  "generado_utc": "2026-08-29T15:46:18+00:00",
-  "total": 14,
+  "generado_utc": "2026-08-29T17:12:56+00:00",
+  "total": 15,
   "degradado": [
     {
       "area": "sla",
       "motivo": "motor operativo: el plazo daba 7169s y la tarea pide 21600s; se le da el tope pedido — el plazo mide, no recorta"
-    },
-    {
-      "area": "mlnwp:F2",
-      "motivo": "Validación ML-NWP · cómputo falló: la cohorte NWP cruda de Cartas no quedó acreditada para ML: Descarga cruda de modelos terminó con código 1"
     },
     {
       "area": "cartas:F1",
@@ -21,12 +17,20 @@
       "motivo": "Cartas y alertas · cómputo omitida por dependencias fallidas: cartas:F1"
     },
     {
+      "area": "mlnwp:memoria",
+      "motivo": "pipeline.lanzar:models: memoria por debajo del umbral de fábrica RAM libre 19.56 GB < 25.47 GB — se arrancó igual por orden del dueño"
+    },
+    {
+      "area": "mlnwp:F2",
+      "motivo": "Validación ML-NWP · cómputo falló: Preflight operational_horizon_only rechazado; cache ausente: BD historico ML.parquet; cache ausente: BD historico probabilistico.parquet"
+    },
+    {
       "area": "observaciones:F2",
       "motivo": "observaciones:F2: auditoría de frescura online ausente"
     },
     {
       "area": "cartas:F2",
-      "motivo": "cartas:F2: corrida de alertas obsoleta (157.1 h; máximo 18 h)"
+      "motivo": "cartas:F2: corrida de alertas obsoleta (158.5 h; máximo 18 h)"
     },
     {
       "area": "cartas:F2",
