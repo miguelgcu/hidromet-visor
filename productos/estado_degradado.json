@@ -1,16 +1,20 @@
 {
   "esquema": "hidromet.degradado.v1",
   "etiqueta": "DEGRADADO — se publicó igual, sin acreditar; el dato va etiquetado",
-  "generado_utc": "2026-08-29T17:12:56+00:00",
-  "total": 15,
+  "generado_utc": "2026-08-29T18:07:58+00:00",
+  "total": 16,
   "degradado": [
     {
       "area": "sla",
       "motivo": "motor operativo: el plazo daba 7169s y la tarea pide 21600s; se le da el tope pedido — el plazo mide, no recorta"
     },
     {
+      "area": "Cartas (descarga)",
+      "motivo": "Calibrados + consenso (código 1)"
+    },
+    {
       "area": "cartas:F1",
-      "motivo": "Cartas y alertas falló: clima térmico/bias no quedó validado (código 1)"
+      "motivo": "Cartas y alertas falló: Calibrados + consenso (código 1)"
     },
     {
       "area": "cartas:F2",
@@ -18,7 +22,7 @@
     },
     {
       "area": "mlnwp:memoria",
-      "motivo": "pipeline.lanzar:models: memoria por debajo del umbral de fábrica RAM libre 19.56 GB < 25.47 GB — se arrancó igual por orden del dueño"
+      "motivo": "pipeline.lanzar:models: memoria por debajo del umbral de fábrica RAM libre 20.00 GB < 25.47 GB — se arrancó igual por orden del dueño"
     },
     {
       "area": "mlnwp:F2",
@@ -30,7 +34,7 @@
     },
     {
       "area": "cartas:F2",
-      "motivo": "cartas:F2: corrida de alertas obsoleta (158.5 h; máximo 18 h)"
+      "motivo": "cartas:F2: corrida de alertas obsoleta (159.4 h; máximo 18 h)"
     },
     {
       "area": "cartas:F2",
