@@ -5,10 +5,11 @@
   "parcial": false,
   "productos_con_fallback": 0,
   "fallos": [
-    "actualizacion_no_apta"
+    "publicacion_no_confirmada"
   ],
   "areas_degradadas": [
     "mlnwp:F2"
   ],
-  "aviso_degradacion": "DEGRADADO POR ORDEN DEL DUEÑO — respaldo físico etiquetado, no acreditado"
+  "aviso_degradacion": "DEGRADADO POR ORDEN DEL DUEÑO — respaldo físico etiquetado, no acreditado",
+  "publicacion_confirmada": false
 }
