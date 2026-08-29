@@ -1,3 +1,9 @@
+/* Estiaje (rio bajo) frente a Crecida (rio alto): son fenomenos opuestos y
+   compartian el mismo ambar. Pardo seco, conmutado con el mecanismo de tema
+   de la casa (html[data-tema], ver base.css:64). */
+:root { --sngr-estiaje: #8A6D3B; --sngr-estiaje-bg: #F5EEDF; }
+html[data-tema="oscuro"] { --sngr-estiaje: #C7A15C; --sngr-estiaje-bg: #2A2317; }
+
 /* ============================================================
    HidroMet · Eventos de Ríos (SNGR) — clases específicas del módulo.
    Acento: cian (--cyan). Valores tomados literalmente de
@@ -44,6 +50,8 @@
    descuadrar la fila y mantener el clic disponible) */
 .sngr-pill.cero { opacity: .42; }
 .sngr-pill.cero:not(:hover) { box-shadow: none; }
+/* "Sin clasificar" no existe en los datos publicados: contador siempre a 0 → fuera */
+.sngr-pill.oculta { display: none; }
 
 /* ---------- filtros en cascada (una fila) ---------- */
 .sngr-filtros { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;
@@ -62,10 +70,11 @@
 .sngr-filtros.compacta label { display: flex; align-items: center; gap: 7px; }
 .sngr-filtros.compacta .tit { margin-bottom: 0; }
 .sngr-filtros.compacta .boton.chico { padding: 7px 12px; font-size: 12px; white-space: nowrap; }
-/* v14 (P13): UNA SOLA fila en escritorio — los selects ENCOGEN (flex + min-width:0)
-   en vez de envolver; el wrap queda solo para pantallas medianas/móvil. */
-.sngr-filtros.compacta { flex-wrap: nowrap; }
-.sngr-filtros.compacta label { flex: 1 1 0; min-width: 0; }
+/* v15: los selects NO se estrujan hasta cortar el texto — ancho mínimo por control
+   y la fila se parte en dos líneas en cuanto no cabe cómoda (antes forzaba UNA
+   sola con min-width:0 y Tipo/Provincia quedaban ilegibles incluso a 1440px). */
+.sngr-filtros.compacta { flex-wrap: wrap; }
+.sngr-filtros.compacta label { flex: 1 1 170px; min-width: 150px; }
 .sngr-filtros.compacta label > select { flex: 1 1 auto; width: 100%; min-width: 0; }
 .sngr-filtros.compacta label > input[type="date"] { flex: 1 1 auto; width: 100%; min-width: 108px; }
 .sngr-filtros.compacta .empuje { display: none; }
@@ -108,7 +117,7 @@
 
 /* zoom −/+/Reset */
 .sngr-zoom { display: flex; gap: 4px; align-items: center; margin-left: 4px; }
-.sngr-zoom .zb { width: 30px; height: 30px; border: 1px solid var(--line-2); background: var(--surface);
+.sngr-zoom .zb { width: 36px; height: 36px; border: 1px solid var(--line-2); background: var(--surface);
   border-radius: 8px; cursor: pointer; color: var(--ink-2); line-height: 1; }
 .sngr-zoom .zb.menos { font-size: 17px; }
 .sngr-zoom .zb.mas { font-size: 16px; }
@@ -129,8 +138,20 @@
 .sngr-mapa .sello.abajo { left: 14px; bottom: 12px; font-weight: 500; background: rgba(255,255,255,.82); }
 html[data-tema="oscuro"] .sngr-mapa .sello { background: rgba(20,32,58,.82); }
 
-/* leyenda de ríos (abajo-derecha del mapa) */
-.sngr-leyenda-mapa { position: absolute; right: 12px; bottom: 12px; z-index: 500;
+/* crédito OSM/CARTO (exigido por la licencia del mapa base) — discreto, abajo-derecha */
+.sngr-mapa .leaflet-control-attribution { font: 400 9.5px var(--fuente); color: var(--muted);
+  background: rgba(255,255,255,.75); padding: 1px 6px; border-radius: 6px 0 0 0; }
+html[data-tema="oscuro"] .sngr-mapa .leaflet-control-attribution { background: rgba(20,32,58,.75); color: var(--muted); }
+/* aviso de carga de capa (los ficheros pesan >1 MB) — centrado sobre el mapa */
+.sngr-carga-mapa { position: absolute; z-index: 620; left: 50%; top: 12px; transform: translateX(-50%);
+  font: 600 11px var(--fuente); color: var(--ink); background: rgba(255,255,255,.9);
+  border: 1px solid var(--line-2); border-radius: 999px; padding: 5px 13px;
+  box-shadow: 0 2px 8px rgba(8,18,38,.14); }
+html[data-tema="oscuro"] .sngr-carga-mapa { background: rgba(20,32,58,.92); }
+.sngr-carga-mapa.oculta { display: none; }
+
+/* leyenda de ríos (abajo-derecha del mapa, por ENCIMA del crédito OSM/CARTO) */
+.sngr-leyenda-mapa { position: absolute; right: 12px; bottom: 34px; z-index: 500;
   display: flex; flex-direction: column; gap: 4px; padding: 7px 10px; border-radius: 8px;
   background: rgba(255,255,255,.86); border: 1px solid var(--line-2); box-shadow: 0 2px 8px rgba(8,18,38,.12);
   font: 500 10.5px var(--fuente); color: var(--ink-2); backdrop-filter: blur(3px); }
@@ -181,13 +202,33 @@ html[data-tema="oscuro"] .sngr-leyenda-mapa i.rio-men { border-top-color: #37557
   border-radius: 12px; padding: 14px; box-shadow: var(--shadow-card); }
 .sngr-tabla-tarjeta .tit { font: 600 10px var(--mono); letter-spacing: .08em; color: var(--faint);
   text-transform: uppercase; margin-bottom: 10px; }
+/* renglón del periodo publicado (total de partes, ventana y última fecha con partes) */
+.sngr-tabla-tarjeta .sngr-periodo { font: 500 11.5px var(--fuente); color: var(--muted);
+  line-height: 1.45; margin: -5px 0 10px; }
 .sngr-tabla { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+/* títulos FIJOS al hacer scroll en la lista (igual que la tabla del glosario) */
 .sngr-tabla th { text-align: left; padding: 6px; font: 600 10px var(--mono); color: var(--faint);
-  text-transform: uppercase; border-bottom: 1px solid var(--line); }
+  text-transform: uppercase; border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; z-index: 2; background: var(--surface);
+  box-shadow: 0 1px 0 var(--line); }
 .sngr-tabla td { padding: 7px 6px; border-bottom: 1px solid var(--line-3); color: var(--ink-2); }
 .sngr-tabla tbody tr:last-child td { border-bottom: none; }
 .sngr-tabla td.fecha { font-family: var(--mono); color: var(--muted); white-space: nowrap; }
 .sngr-tabla-scroll { max-height: 460px; overflow: auto; }
+
+/* pie de la lista: cuántas filas se ven del total + botón de carga incremental */
+.sngr-pie-tabla td { border-bottom: none; padding: 10px 6px 4px; }
+.sngr-pie-tabla .fila { display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; flex-wrap: wrap; color: var(--muted); font-size: 11.5px; }
+.sngr-pie-tabla .boton.chico { padding: 4px 10px; font-size: 11.5px; white-space: nowrap; }
+.sngr-pie-tabla .boton.chico:hover { border-color: var(--cyan); color: var(--cyan); }
+
+/* fila con descripción del parte: pulsable, con renglón desplegable debajo */
+.sngr-tabla tr.sngr-fila.con-desc { cursor: pointer; }
+.sngr-tabla tr.sngr-fila.con-desc:hover td { background: var(--surface-2); }
+.sngr-tabla tr.sngr-desc-fila td { font-size: 11.5px; color: var(--muted); line-height: 1.45;
+  background: var(--surface-2); padding: 7px 9px; }
+.sngr-tabla tr.sngr-desc-fila.oculta { display: none; }
 
 /* badge de tipo por color (color/fondo dinámicos vía --c / --bg) */
 .sngr-badge { font: 600 10px var(--mono); padding: 1px 7px; border-radius: 999px;

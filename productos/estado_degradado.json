@@ -1,32 +1,32 @@
 {
   "esquema": "hidromet.degradado.v1",
   "etiqueta": "DEGRADADO — se publicó igual, sin acreditar; el dato va etiquetado",
-  "generado_utc": "2026-08-23T17:12:15+00:00",
-  "total": 19,
+  "generado_utc": "2026-08-29T11:14:01+00:00",
+  "total": 18,
   "degradado": [
     {
-      "area": "observaciones:F1",
-      "motivo": "Observaciones oficiales en línea falló: [Errno 2] No such file or directory: '[ruta interna]'"
+      "area": "sla",
+      "motivo": "motor operativo: el plazo daba 7169s y la tarea pide 21600s; se le da el tope pedido — el plazo mide, no recorta"
     },
     {
-      "area": "mlnwp:F1",
-      "motivo": "Validación ML-NWP omitida por dependencias fallidas: observaciones:F1"
+      "area": "geoglows:F1",
+      "motivo": "Caudales GEOGLOWS falló: Guayas — Guayaquil: Sin conexión a GEOGLOWS, se muestra la última copia: GEOGLOWS REST HTTP 429: <!DOCTYPE html> <html lang=\"en\"> <head> <meta charset=\"UTF-8\"/> <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/> <title>ECMWF | Too many requests</title> <li"
     },
     {
       "area": "cartas:F1",
-      "motivo": "Cartas y alertas falló: observaciones:F1 no quedó acreditada para calibrar cartas: FAIL"
+      "motivo": "Cartas y alertas falló: clima diario no quedó validado (código 1)"
     },
     {
       "area": "cartas:F2",
-      "motivo": "Cartas y alertas · cómputo omitida por dependencias fallidas: cartas:F1, observaciones:F1"
+      "motivo": "Cartas y alertas · cómputo omitida por dependencias fallidas: cartas:F1"
     },
     {
       "area": "mlnwp:F2",
-      "motivo": "Validación ML-NWP · cómputo omitida por dependencias fallidas: mlnwp:F1, observaciones:F1"
+      "motivo": "Validación ML-NWP · cómputo falló: la cohorte NWP cruda de Cartas no quedó acreditada para ML: Descarga cruda de modelos terminó con código 1"
     },
     {
       "area": "clima:F2",
-      "motivo": "clima:F2: no se pudo validar la climatología operativa (No existe un catálogo observacional canónico legible)"
+      "motivo": "clima:F2: no se pudo validar la climatología operativa (climate generation manifest missing or changed)"
     },
     {
       "area": "observaciones:F2",
@@ -58,7 +58,7 @@
     },
     {
       "area": "cartas:F2",
-      "motivo": "cartas:F2: evidencia causal de alertas ausente"
+      "motivo": "cartas:F2: evidencia causal inválida (No objects to concatenate)"
     },
     {
       "area": "cartas:F2",
@@ -70,11 +70,7 @@
     },
     {
       "area": "mlnwp:F2",
-      "motivo": "mlnwp:F2: Base pronóstico ausente para validar corridas NWP"
-    },
-    {
-      "area": "mlnwp:F2",
-      "motivo": "mlnwp:F2: artefactos de integridad/salida operativa ausentes"
+      "motivo": "mlnwp:F2: salida vigente sin pronósticos derivados"
     },
     {
       "area": "pre-export",

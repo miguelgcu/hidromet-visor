@@ -25,6 +25,34 @@
   const fmt1 = n => (n == null ? "—" : Number(n).toLocaleString("es-EC", { maximumFractionDigits: 1 }));
   const NOM_MES = ["enero", "febrero", "marzo", "abril", "mayo", "junio",
     "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+  // La librería de gráficos viene solo con inglés ("Aug 22"): registrar un español
+  // mínimo para los ejes de fecha (mismo patrón que clima.js) y pedirlo en la config.
+  let _locEs = false;
+  function configEs() {
+    if (!_locEs && window.Plotly && typeof Plotly.register === "function") {
+      try {
+        Plotly.register({ moduleType: "locale", name: "es", dictionary: {}, format: {
+          days: ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"],
+          shortDays: ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"],
+          months: NOM_MES.slice(),
+          shortMonths: ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"],
+          date: "%d/%m/%Y" } });
+      } catch (e) { /* sin registro: ejes en inglés, nada se rompe */ }
+      _locEs = true;
+    }
+    return Object.assign({}, App.plotlyConfig(), { locale: "es" });
+  }
+  // Los tiempos GEOGLOWS llegan en UTC ("...T00:00:00Z"): convertirlos a hora de
+  // Ecuador (UTC−5 fija) para que el eje no vaya cinco horas adelantado.
+  const aHoraEC = t => {
+    const d = new Date(t);
+    return isNaN(d) ? t : new Date(d.getTime() - 5 * 3600 * 1000).toISOString().slice(0, 19);
+  };
+  // "2026-08-22..." → "22 de agosto" (fecha en llano para la tarjeta del cribado)
+  const fechaLlano = iso => {
+    const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m && NOM_MES[Number(m[2]) - 1] ? `${Number(m[3])} de ${NOM_MES[Number(m[2]) - 1]}` : null;
+  };
   const primerValor = s => { if (!s) return null;
     for (const v of s) if (v != null && isFinite(v)) return v; return null; };
   const encuadrar = m => m && m.fitBounds(LIMITES_EC, { padding: [8, 8] });
@@ -140,12 +168,24 @@
     return { actual, cercano };
   }
 
+  // Fecha de la corrida del modelo: el fichero YA la trae (source_run_date /
+  // inicio_pronostico / emitido). Manda sobre la palabra "actual" para que el
+  // número no se lea como el de hoy cuando la corrida es de días atrás.
+  function fechaCorrida(r) {
+    const bruto = String((r && (r.source_run_date || r.inicio_pronostico || r.emitido)) || "");
+    const m = bruto.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    const mes = m ? NOM_MES[Number(m[2]) - 1] : null;
+    if (!m || !mes) return null;
+    return { corta: `${m[3]}/${m[2]}`, larga: `${Number(m[3])} de ${mes} de ${m[1]}` };
+  }
+
   let estado, epocaGlobal = 0, _onTema = null;
   function crear() {
     estado = { mapa: null, tiles: null, capaRios: null, lienzoRios: null,
                marcadores: null, marcadoresScreening: null, capaScreening: null,
                screening: null, overlayActivo: false, overlayFallos: 0,
-               items: [], selRid: null, detActual: null, epoca: ++epocaGlobal };
+               items: [], selRid: null, detActual: null,
+               ultimoHidro: null, retroDatos: null, epoca: ++epocaGlobal };
   }
   function vigente(E) { return estado === E && E.epoca >= 0; }
 
@@ -202,7 +242,7 @@
         <div class="gg-main">
           <section class="gg-card gg-mapwrap">
             <div class="gg-map" data-rol="mapa"></div>
-            <div class="gg-map-hint">Pulsa un río con detalle; las señales nacionales son contexto</div>
+            <div class="gg-map-hint">Pulsa uno de los puntos de colores (la red azul es solo de fondo)</div>
             <div class="gg-overlay" data-rol="screening-overlay" hidden>
               <div class="gg-overlay-head">
                 <button type="button" class="gg-overlay-toggle"
@@ -233,6 +273,9 @@
             <div class="gg-plot" data-rol="hg-plot">
               <div class="gg-empty"><span>Selecciona un río en la lista o pulsa el mapa.</span></div>
             </div>
+            <p class="gg-plot-nota" data-rol="hg-nota" hidden>La franja azul es la horquilla
+              de escenarios posibles: la clara cubre el rango completo (mín–máx) y la oscura
+              la mitad central (25–75 %), la más probable.</p>
           </section>
         </div>
         <section class="gg-card gg-detalle" data-rol="detalle">
@@ -255,7 +298,9 @@
     const nSenales = screening.senales.length;
     const nEscenarios = screening.escenarios.length;
     const nExcluidas = r.senales_excluidas;
-    const ventana = [r.inicio, r.fin].filter(Boolean).join(" → ");
+    // Fechas en llano ("del 22 de agosto al 1 de septiembre"), nunca el ISO crudo con T y Z.
+    const ini = fechaLlano(r.inicio), fin = fechaLlano(r.fin);
+    const ventana = ini && fin ? `del ${ini} al ${fin}` : (ini || fin || "");
     const generadoMs = r.generado ? Date.parse(r.generado) : NaN;
     const generado = Number.isFinite(generadoMs) ? fechaPasoScreening(generadoMs) : null;
     return `
@@ -314,6 +359,7 @@
   function sheetHTML(r, nombre) {
     const na = r.nivel_alerta || {};
     const m = metricasDe(r);
+    const corrida = fechaCorrida(r);
     return `
       <div class="gg-sheet-head">
         <span class="gg-sheet-nom">${esc(nombre || ("Tramo " + r.river_id))}</span>
@@ -321,7 +367,7 @@
         <button class="gg-sheet-x" data-rol="sheet-cerrar" aria-label="Cerrar">✕</button>
       </div>
       <div class="gg-sheet-stats">
-        <div><span class="lbl">Caudal actual</span><span class="val">${fmt1(m.actual)}</span><span class="u">m³/s</span></div>
+        <div><span class="lbl">Caudal inicial</span><span class="val">${fmt1(m.actual)}</span><span class="u">m³/s${corrida ? " · corrida " + esc(corrida.corta) : ""}</span></div>
         <div><span class="lbl">Pico probable</span><span class="val">${fmt1(r.pico)}</span><span class="u">m³/s · p75</span></div>
         <div><span class="lbl">RP cercano</span><span class="val">${m.cercano ? "RP " + m.cercano.anios : "—"}</span>
           <span class="u">${m.cercano ? "umbral " + fmt(m.cercano.caudal) + " m³/s" : "sin umbrales"}</span></div>
@@ -354,7 +400,13 @@
     const caret = document.querySelector('[data-rol="combo-toggle"]');
     const cuenta = document.querySelector('[data-rol="combo-count"]');
     if (!campo || !input || !pop) return;
-    if (!items.length) { input.placeholder = "Sin ríos con detalle — pulsa ⟳ Actualizar"; return; }
+    if (!items.length) {
+      // En el visor publicado NO existe el botón Actualizar: no pedir una acción imposible.
+      input.placeholder = window.HIDROMET_VISOR
+        ? "Todavía no hay ríos publicados; se actualizan desde la aplicación de escritorio"
+        : "Sin ríos con detalle — pulsa ⟳ Actualizar";
+      return;
+    }
     input.disabled = false;
     input.placeholder = "Busca un río por nombre…";
     const enAlerta = items.filter(it => it.nivel_alerta && it.nivel_alerta.anios).length;
@@ -442,26 +494,45 @@
     // sobre el mapa selecciona el río VIGILADO más cercano (P15: antes el tap sobre la
     // red de ríos no hacía nada en móvil).
     if (!window.HIDROMET_VISOR) map.on("click", (e) => consultarPunto(e.latlng.lat, e.latlng.lng));
-    else map.on("click", (e) => {
-      const it = itemCercano(e.latlng, TOUCH ? 36 : 22);
-      if (it && it.river_id) seleccionarItem(it);
-    });
+    else map.on("click", (e) => elegirEnPunto(e.latlng, TOUCH ? 36 : 22));
     cargarRios();
   }
 
-  // Río vigilado más cercano al punto (en PÍXELES de pantalla, no grados) — área
-  // táctil generosa e independiente del nivel de zoom.
-  function itemCercano(latlng, maxPx) {
-    if (!estado.mapa) return null;
+  // Ríos vigilados cercanos al punto (en PÍXELES de pantalla, no grados) — área
+  // táctil generosa e independiente del nivel de zoom, ordenados por distancia.
+  function itemsCercanos(latlng, maxPx) {
+    if (!estado.mapa) return [];
     const p0 = estado.mapa.latLngToContainerPoint(latlng);
-    let mejor = null, dm = Infinity;
+    const cerca = [];
     for (const it of (estado.items || [])) {
       if (typeof it.lat !== "number" || typeof it.lon !== "number") continue;
       const p = estado.mapa.latLngToContainerPoint([it.lat, it.lon]);
       const d = Math.hypot(p.x - p0.x, p.y - p0.y);
-      if (d < dm) { dm = d; mejor = it; }
+      if (d <= maxPx) cerca.push({ it, d });
     }
-    return dm <= maxPx ? mejor : null;
+    return cerca.sort((a, b) => a.d - b.d).map(c => c.it);
+  }
+  function itemCercano(latlng, maxPx) { return itemsCercanos(latlng, maxPx)[0] || null; }
+  // Clic/tap en el mapa del visor: si hay VARIOS ríos casi superpuestos (Babahoyo y
+  // Catarama caen a <1 px), preguntar cuál en vez de decidir por el usuario; si no
+  // hay ninguno cerca, decir por qué no pasa nada (la red azul no es pulsable).
+  function elegirEnPunto(latlng, maxPx) {
+    const cerca = itemsCercanos(latlng, maxPx).filter(it => it.river_id);
+    if (!cerca.length) {
+      App.aviso("Ese tramo no tiene pronóstico detallado; los ríos con detalle son los puntos de colores.", "info", 5000);
+      return;
+    }
+    if (cerca.length === 1) return seleccionarItem(cerca[0]);
+    const div = document.createElement("div");
+    div.className = "gg-elige";
+    div.innerHTML = `<b>Hay varios ríos en este punto:</b>` + cerca.slice(0, 6).map((it, i) =>
+      `<button type="button" data-i="${i}"><i style="background:${colorNivel(it.nivel_alerta)}"></i>${esc(it.nombre)}</button>`).join("");
+    const pop = L.popup({ closeButton: true, autoClose: true, className: "gg-elige-pop" })
+      .setLatLng(latlng).setContent(div).openOn(estado.mapa);
+    div.querySelectorAll("button").forEach(b => b.onclick = () => {
+      estado.mapa.closePopup(pop);
+      seleccionarItem(cerca[Number(b.dataset.i)]);
+    });
   }
 
   function seleccionarItem(it) {
@@ -474,7 +545,11 @@
     const E = estado;
     let gj;
     try { gj = await App.api("/datos/capas/hidrografia.geojson"); }
-    catch (e) { return; }
+    catch (e) {
+      // Sin la red de fondo el mapa parecería "sin ríos": avisar en vez de callar.
+      App.aviso("No se pudo cargar la red de ríos de fondo; los puntos de detalle siguen funcionando.", "info", 6000);
+      return;
+    }
     if (!vigente(E) || !estado.mapa || (gj && gj.construyendo)) return;
     // Ríos PROMINENTES para que se vea claro dónde hay red seleccionable.
     // Estilo temático (estiloRios); el listener de tema lo re-aplica al conmutar.
@@ -494,12 +569,23 @@
     for (const it of items) {
       if (typeof it.lat !== "number" || typeof it.lon !== "number") continue;
       // Aro del marcador temático: negro sobre teselas claras, claro sobre las oscuras.
+      // El río ELEGIDO se marca con un aro más grueso y un punto mayor, para no
+      // perderlo de vista al mover el mapa.
+      const sel = estado.selRid != null && String(estado.selRid) === String(it.river_id);
       const m = L.circleMarker([it.lat, it.lon], {
-        radius: TOUCH ? 11 : 8, color: (App.tema && App.tema() === "oscuro") ? "#E8EDF6" : "#000000",
-        weight: 1.5, fillColor: colorNivel(it.nivel_alerta), fillOpacity: 0.95, bubblingMouseEvents: false });
-      const na = it.nivel_alerta ? it.nivel_alerta.etiqueta : "sin pronóstico (pulsa Actualizar)";
+        radius: (TOUCH ? 11 : 8) + (sel ? 3 : 0),
+        color: sel ? "#0E94A4" : ((App.tema && App.tema() === "oscuro") ? "#E8EDF6" : "#000000"),
+        weight: sel ? 3.2 : 1.5, fillColor: colorNivel(it.nivel_alerta), fillOpacity: 0.95, bubblingMouseEvents: false });
+      const na = it.nivel_alerta ? it.nivel_alerta.etiqueta
+        : (window.HIDROMET_VISOR ? "sin pronóstico publicado" : "sin pronóstico (pulsa Actualizar)");
       if (!TOUCH) m.bindTooltip(`<b>${esc(it.nombre)}</b><br>${esc(na)}`, { direction: "top", sticky: true });
-      const _sel = (e) => { if (e) L.DomEvent.stopPropagation(e); seleccionarItem(it); };
+      const _sel = (e) => {
+        if (e) L.DomEvent.stopPropagation(e);
+        // Con ríos casi superpuestos (19 parejas a <20 px), el clic sobre el marcador
+        // también pregunta cuál si hay más de un candidato bajo el mismo punto.
+        if (window.HIDROMET_VISOR) elegirEnPunto(L.latLng(it.lat, it.lon), 12);
+        else seleccionarItem(it);
+      };
       m.on("click", _sel);           // ratón + tap normalizado por Leaflet
       grupo.addLayer(m);
       if (TOUCH) {
@@ -698,13 +784,18 @@
       return;
     }
     estado.selRid = r.river_id;
+    estado.ultimoHidro = { r, nombre };            // para repintar al cambiar de tema
     if (tit) tit.textContent = `Hidrograma — ${nombre || ("tramo " + r.river_id)}`;
-    pintarHidrograma(plot, r);
+    pintarHidrograma(plot, r, nombre);
     pintarBadge(badge, r);
     pintarDetalle(r, nombre);
+    pintarMarcadores(estado.items || []);          // resalta el punto del río elegido
     if (TOUCH) abrirSheet(sheetHTML(r, nombre));   // valores del río en el bottom-sheet
     const vr = document.querySelector('[data-rol="ver-retro"]');
     if (vr) vr.onclick = () => cargarRetro(r.river_id);
+    // Contexto histórico AUTOMÁTICO: la cifra "Vs. media del mes" no debe quedar en
+    // blanco esperando un botón escondido; el dato ya está publicado.
+    if (r.river_id) cargarRetro(r.river_id);
   }
 
   /* ---------------- detalle del río seleccionado (tarjeta bajo el mapa) ---------------- */
@@ -712,8 +803,9 @@
     const det = document.querySelector('[data-rol="detalle"]');
     if (!det) return;
     const na = r.nivel_alerta || {};
-    // "Caudal actual" = primer valor del pronóstico (alta resolución si existe; si no, mediana).
+    // "Caudal al inicio" = primer valor del pronóstico (alta resolución si existe; si no, mediana).
     const { actual, cercano } = metricasDe(r);
+    const corrida = fechaCorrida(r);
     estado.detActual = actual;   // lo usa cargarRetro para el % vs. media histórica del mes
     const rets = r.retornos || [];
     const pico = r.pico;
@@ -741,9 +833,9 @@
         <span class="gg-chip" style="--c:${colorNivel(na)}">${esc(na.etiqueta || "—")}</span>
       </div>
       <div class="gg-stats">
-        <div class="gg-stat"><span class="lbl">Caudal actual</span>
+        <div class="gg-stat"><span class="lbl">Caudal al inicio del pronóstico</span>
           <span class="val">${fmt1(actual)} <i>m³/s</i></span>
-          <span class="sub">inicio del pronóstico</span></div>
+          <span class="sub">${corrida ? `corrida del modelo del ${esc(corrida.larga)}` : "fecha de la corrida no informada"}</span></div>
         <div class="gg-stat"><span class="lbl">Pico probable</span>
           <span class="val">${fmt1(pico)} <i>m³/s</i></span>
           <span class="sub">percentil 75 · 15 días${r.pico_max != null ? ` · peor caso ${fmt(r.pico_max)} m³/s` : ""}</span></div>
@@ -752,7 +844,7 @@
           <span class="sub">${cercano ? `umbral ${fmt(cercano.caudal)} m³/s` : "sin umbrales"}</span></div>
         <div class="gg-stat"><span class="lbl">Vs. media del mes</span>
           <span class="val" data-rol="stat-hist">—</span>
-          <span class="sub" data-rol="stat-hist-sub">pulsa «contexto histórico»</span></div>
+          <span class="sub" data-rol="stat-hist-sub">calculando con el histórico…</span></div>
       </div>
       ${rets.length ? `
       <div class="gg-tablawrap"><table class="gg-tabla">
@@ -773,49 +865,118 @@
       ${r.aviso ? `<span class="gg-sub" style="color:var(--warn,#C5781B)">${esc(r.aviso)}</span>` : ""}`;
   }
 
-  function pintarHidrograma(el, r) {
+  function pintarHidrograma(el, r, nombre) {
     if (!el) return;
     el.innerHTML = "";
     const osc = (App.tema && App.tema() === "oscuro");
     const f = r.forecast || {};
-    const x = f.tiempo || [];
+    const x = (f.tiempo || []).map(aHoraEC);   // eje en hora de Ecuador, no UTC
     const linea = (y, nombre, color, dash, width) => ({
       x, y, name: nombre, type: "scatter", mode: "lines", connectgaps: true,
       line: { color, width: width || 2, dash: dash || "solid" },
       hovertemplate: `${nombre}: %{y:.1f} m³/s<extra></extra>` });
+    // Las franjas AHORA sí se leen al pasar el ratón ("hasta X / desde Y m³/s").
     const banda = (ylo, yhi, color, nombre) => ([
       { x, y: yhi, type: "scatter", mode: "lines", line: { width: 0 }, name: nombre,
-        connectgaps: true, showlegend: false, hoverinfo: "skip" },
+        connectgaps: true, showlegend: false,
+        hovertemplate: `${nombre} · hasta %{y:.1f} m³/s<extra></extra>` },
       { x, y: ylo, type: "scatter", mode: "lines", line: { width: 0 }, name: nombre,
-        connectgaps: true, fill: "tonexty", fillcolor: color, hoverinfo: "skip", showlegend: true },
+        connectgaps: true, fill: "tonexty", fillcolor: color, showlegend: true,
+        hovertemplate: `${nombre} · desde %{y:.1f} m³/s<extra></extra>` },
     ]);
     const traces = [];
-    if (f.min && f.max) traces.push(...banda(f.min, f.max, osc ? "rgba(93,169,230,0.18)" : "rgba(23,99,182,0.12)", "Rango mín–máx"));
-    if (f.p25 && f.p75) traces.push(...banda(f.p25, f.p75, osc ? "rgba(93,169,230,0.34)" : "rgba(23,99,182,0.28)", "Rango 25–75 %"));
+    if (f.min && f.max) traces.push(...banda(f.min, f.max, osc ? "rgba(93,169,230,0.18)" : "rgba(23,99,182,0.20)", "Rango mín–máx"));
+    if (f.p25 && f.p75) traces.push(...banda(f.p25, f.p75, osc ? "rgba(93,169,230,0.34)" : "rgba(23,99,182,0.30)", "Rango 25–75 %"));
     if (f.med) traces.push(linea(f.med, "Mediana", osc ? "#5AA9E6" : "#1763B6", "solid", 2.4));
     if (f.high_res) traces.push(linea(f.high_res, "Alta resolución", osc ? "#2FC2D4" : "#0E94A4", "dot", 1.6));
+    // Eje vertical MANDADO por el caudal pronosticado, no por los umbrales de crecida:
+    // antes el umbral de 100 años (p. ej. 624 m³/s) entraba como serie y estiraba la
+    // escala → la curva real quedaba aplastada abajo en los 50 ríos. Ahora el rango sale
+    // del propio pronóstico (+30 % de aire), los umbrales que caben se dibujan como
+    // líneas de referencia del fondo, y los que quedan fuera se anotan arriba SIN
+    // estirar el eje.
+    const valores = [];
+    for (const s of [f.min, f.max, f.p25, f.p75, f.med, f.high_res])
+      if (Array.isArray(s)) for (const v of s) if (v != null && isFinite(v)) valores.push(Number(v));
+    const vMax = valores.length ? Math.max(...valores) : null;
+    const vMin = valores.length ? Math.min(...valores) : null;
+    const yTope = vMax != null ? vMax * 1.3 : null;
+    // Sin forzar a cero cuando el caudal mínimo queda muy lejos de cero (curva plana).
+    const yBase = (vMin != null && vMax != null && vMin > 0.35 * vMax) ? vMin * 0.85 : 0;
+    const refUmbral = [], notaUmbral = [], fueraEscala = [];
     for (const rp of (r.retornos || [])) {
-      traces.push({ x: [x[0], x[x.length - 1]], y: [rp.caudal, rp.caudal], type: "scatter",
-        mode: "lines", name: `RP ${rp.anios} a`, line: { color: rp.color, width: 1.2, dash: "dash" },
-        hovertemplate: `RP ${rp.anios} años: ${rp.caudal.toLocaleString("es-EC")} m³/s<extra></extra>` });
+      if (!numeroFinito(rp && rp.caudal)) continue;
+      if (yTope != null && rp.caudal > yTope) { fueraEscala.push(rp); continue; }
+      refUmbral.push({ type: "line", xref: "paper", x0: 0, x1: 1, yref: "y", layer: "below",
+        y0: rp.caudal, y1: rp.caudal, line: { color: rp.color, width: 1.2, dash: "dash" } });
+      notaUmbral.push({ xref: "paper", x: 1, xanchor: "right", yref: "y", y: rp.caudal,
+        yanchor: "bottom", showarrow: false, font: { size: 9, color: rp.color },
+        text: `crecida de ${rp.anios} años · ${fmt(rp.caudal)} m³/s` });
     }
-    const layout = App.plotlyLayoutSerie("", {
+    if (fueraEscala.length) notaUmbral.push({ xref: "paper", x: 0, xanchor: "left",
+      yref: "paper", y: 1, yanchor: "bottom", showarrow: false, align: "left",
+      font: { size: 9.5, color: osc ? "#9AA7B8" : "#5B6775" },
+      text: "Umbrales muy por encima de lo previsto: " + fueraEscala.map(rp =>
+        `crecida de ${rp.anios} años (${fmt(rp.caudal)} m³/s)`).join(" · ") });
+    // Marca de HOY: media curva ya es pasado y nada lo señalaba.
+    const ahora = aHoraEC(new Date().toISOString());
+    if (x.length && ahora >= x[0] && ahora <= x[x.length - 1]) {
+      refUmbral.push({ type: "line", xref: "x", x0: ahora, x1: ahora, yref: "paper",
+        y0: 0, y1: 1, line: { color: osc ? "#9AA7B8" : "#5B6775", width: 1.3, dash: "dot" } });
+      notaUmbral.push({ xref: "x", x: ahora, xanchor: "left", yref: "paper", y: 0.985,
+        yanchor: "top", showarrow: false, font: { size: 9.5, color: osc ? "#9AA7B8" : "#5B6775" },
+        text: " hoy" });
+    }
+    // Título propio: la imagen descargada dice de qué río es (antes salía sin nada).
+    const titulo = `Caudal pronosticado — ${nombre || ("tramo " + (r.river_id || ""))}`;
+    const layout = App.plotlyLayoutSerie(esc(titulo), {
       height: 420, showlegend: true,
       legend: { orientation: "h", y: -0.16, font: { size: 10 } },
-      margin: { l: 54, r: 12, t: 8, b: 28 },
-      yaxis: { title: "Caudal (m³/s)", rangemode: "tozero" }, xaxis: { type: "date" },
+      margin: { l: 54, r: 12, t: 40, b: 28 },
+      shapes: refUmbral, annotations: notaUmbral,
+      yaxis: yTope != null ? { title: "Caudal (m³/s)", range: [yBase, yTope] }
+        : { title: "Caudal (m³/s)", rangemode: "tozero" },
+      xaxis: { type: "date" },
     });
-    Plotly.newPlot(el, traces, layout, App.plotlyConfig());
+    Plotly.newPlot(el, traces, layout, configEs());
+    // Lector de pantalla: describir qué muestra el gráfico y de cuándo es.
+    el.setAttribute("role", "img");
+    el.setAttribute("aria-label", `${titulo}: pronóstico de caudal a 15 días en metros cúbicos por segundo, con franjas de escenarios posibles.`);
+    // Nota fija que explica las franjas (antes solo vivía en la guía).
+    const nota = document.querySelector('[data-rol="hg-nota"]');
+    if (nota) nota.hidden = false;
   }
 
+  // Barras del promedio mensual histórico (separado para poder repintarlas al
+  // conmutar el tema sin volver a bajar el dato).
+  function pintarRetroBarra(el, r) {
+    if (!el) return;
+    const MES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+    const trace = { x: MES, y: r.promedio_mensual || [], type: "bar",
+      marker: { color: (App.tema && App.tema() === "oscuro") ? "#5AA9E6" : "#1763B6" }, hovertemplate: "%{x}: %{y:.0f} m³/s<extra></extra>" };
+    const layout = App.plotlyLayoutSerie("", { height: 200, showlegend: false,
+      margin: { l: 50, r: 10, t: 6, b: 24 }, yaxis: { title: "m³/s", rangemode: "tozero" } });
+    Plotly.newPlot(el, [trace], layout, configEs());
+    el.setAttribute("role", "img");
+    el.setAttribute("aria-label", "Caudal medio mensual histórico desde 1940, en metros cúbicos por segundo.");
+  }
   async function cargarRetro(riverId) {
+    const E = estado;
     const cont = document.querySelector('[data-rol="hg-retro"]');
     if (cont) cont.innerHTML = `<div class="gg-sub"><span class="spin"></span> Bajando retrospectiva (1940→), una sola vez…</div>`;
     let r;
+    const reintento = (msj) => {   // fallo: mensaje + botón para volver a intentarlo
+      if (!cont) return;
+      cont.innerHTML = `<div class="gg-sub">${esc(msj)}</div>
+        <button class="gg-btn mini" data-rol="ver-retro">📈 Reintentar contexto histórico</button>`;
+      const b = cont.querySelector('[data-rol="ver-retro"]');
+      if (b) b.onclick = () => cargarRetro(riverId);
+    };
     try { r = await App.api("/geoglows/retro?river_id=" + encodeURIComponent(riverId)); }
-    catch (e) { if (cont) cont.innerHTML = `<div class="gg-sub">${esc(e.message)}</div>`; return; }
-    if (r.error) { if (cont) cont.innerHTML = `<div class="gg-sub">${esc(r.error)}</div>`; return; }
-    const MES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+    catch (e) { reintento(e.message); return; }
+    if (!vigente(E) || String(estado.selRid) !== String(riverId)) return;   // ya se eligió otro río
+    if (r.error) { reintento(r.error); return; }
+    estado.retroDatos = r;   // para repintar las barras al conmutar el tema
     // Rellena la métrica "Vs. media del mes" de la fila de stats (caudal actual / promedio
     // histórico del mes en curso, retrospectiva 1940→).
     const prom = (r.promedio_mensual || [])[new Date().getMonth()];
@@ -827,12 +988,7 @@
     } else if (sts) { sts.textContent = "sin datos históricos para comparar"; }
     cont.innerHTML = `<div class="gg-hidro-head" style="margin-top:6px"><h3 style="font-size:.95rem">Caudal medio mensual histórico</h3></div>
       <div class="gg-plot" data-rol="retro-plot" style="min-height:200px;height:200px"></div>`;
-    const el = document.querySelector('[data-rol="retro-plot"]');
-    const trace = { x: MES, y: r.promedio_mensual || [], type: "bar",
-      marker: { color: (App.tema && App.tema() === "oscuro") ? "#5AA9E6" : "#1763B6" }, hovertemplate: "%{x}: %{y:.0f} m³/s<extra></extra>" };
-    const layout = App.plotlyLayoutSerie("", { height: 200, showlegend: false,
-      margin: { l: 50, r: 10, t: 6, b: 24 }, yaxis: { title: "m³/s", rangemode: "tozero" } });
-    Plotly.newPlot(el, [trace], layout, App.plotlyConfig());
+    pintarRetroBarra(document.querySelector('[data-rol="retro-plot"]'), r);
   }
 
   /* ---------------- acciones ---------------- */
@@ -849,7 +1005,23 @@
     catch (e) { App.aviso(e.message, "error"); return; }
     const secs = (g.secciones || []).map(s =>
       `<div class="gloss-sec"><b>${esc(s.titulo)}</b><div class="gg-sub">${esc(s.texto)}</div></div>`).join("");
-    App.aviso(`<div style="max-width:62ch"><b>${esc(g.titulo)}</b><div class="gg-sub" style="margin:6px 0">${esc(g.intro)}</div>${secs}</div>`, "info", 16000, { html: true });
+    // Ventana NORMAL (mismo marco .modal del resto de la aplicación): con botón de
+    // cerrar, con scroll y SIN temporizador — antes era un aviso de esquina que se
+    // borraba solo a los 16 segundos con el texto cortado.
+    const fondo = document.createElement("div");
+    fondo.className = "modal-fondo";
+    fondo.innerHTML = `<div class="modal gg-guia" role="dialog" aria-modal="true" aria-label="${esc(g.titulo || "Guía")}">
+      <header><span>${esc(g.titulo || "Guía de caudales")}</span>
+        <button class="gg-btn" data-rol="guia-cerrar" aria-label="Cerrar la guía">✕ Cerrar</button></header>
+      <div class="cuerpo"><div class="gg-sub" style="margin-bottom:8px">${esc(g.intro || "")}</div>${secs}</div>
+    </div>`;
+    const cerrar = () => fondo.remove();
+    fondo.addEventListener("click", (e) => { if (e.target === fondo) cerrar(); });
+    fondo.querySelector('[data-rol="guia-cerrar"]').onclick = cerrar;
+    document.addEventListener("keydown", function escGuia(e) {
+      if (e.key === "Escape") { cerrar(); document.removeEventListener("keydown", escGuia); }
+    });
+    document.body.appendChild(fondo);
   }
 
   /* ---------------- ciclo de vida ---------------- */
@@ -873,6 +1045,15 @@
       if (estado.capaRios) estado.capaRios.setStyle(estiloRios);
       pintarMarcadores(estado.items || []);
       pintarMarcadoresScreening(estado.screening);
+      // Los gráficos también siguen al tema (antes quedaban ilegibles hasta re-elegir el río).
+      if (estado.ultimoHidro) {
+        const plot = document.querySelector('[data-rol="hg-plot"]');
+        if (plot) pintarHidrograma(plot, estado.ultimoHidro.r, estado.ultimoHidro.nombre);
+      }
+      if (estado.retroDatos) {
+        const rp = document.querySelector('[data-rol="retro-plot"]');
+        if (rp) pintarRetroBarra(rp, estado.retroDatos);
+      }
     };
     document.addEventListener("temacambiado", _onTema);
 

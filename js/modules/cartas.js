@@ -169,7 +169,9 @@
          DESHABILITADOS mientras la tanda carga. */
   let _genMapas = 0;                          // generación vigente del montaje de mapas
   const _cacheDatos = new Map();              // url -> respuesta de carta_datos (LRU)
-  const _CACHE_DATOS_MAX = 60;
+  // 240 mapas ≈ 60 pasos completos de 4 modelos (~26 KB c/u comprimido): con 60 solo
+  // cabían 15 pasos y volver atrás re-descargaba todo (auditoría 2026-08).
+  const _CACHE_DATOS_MAX = 240;
   function limpiarCacheDatos() {
     _cacheDatos.clear();
     _ffrFechas = null; _ffrEstado = "desconocido"; _ffrZonas.clear();
@@ -583,7 +585,7 @@
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
         </a>${shpBtn}
         <div class="cargando mono">Cargando mapa…</div>
-        <div class="ct-mapa-plot"></div>
+        <div class="ct-mapa-plot" role="img" aria-label="${esc("Mapa de " + (alt || "la carta"))}"></div>
         <div class="ct-zoomhint mono">Pellizca o Ctrl + rueda para acercar</div>
       </div>`;
   }
@@ -615,15 +617,17 @@
   // Leyenda COMPARTIDA (una por grilla). Distingue escala DISCRETA (bandas iguales,
   // tick en su frontera real derivada del colorscale) de CONTINUA (gradiente, tick
   // por valor normalizado). Así no amontona ni desborda las etiquetas.
-  function leyendaCarta(d) {
+  function leyendaCarta(d, anchoPx) {
     const ticks = d.tickvals || [];
     const tlabels = d.tick_labels || [];
     const rango = (d.vmax - d.vmin) || 1;
     // máx. 2 decimales en las etiquetas numéricas de la leyenda (respeta etiquetas tipo "≥30").
     const fmt2 = v => { if (v == null) return ""; const s = String(v).trim(); return /^-?\d+(\.\d+)?$/.test(s) ? String(parseFloat(Number(s).toFixed(2))) : s; };
-    // Decima las etiquetas para que no se solapen en la barra (más estrecha) por carta:
-    // muestra ~6 como máximo, conservando la primera y la última.
-    const _paso = ticks.length > 7 ? Math.ceil(ticks.length / 6) : 1;
+    // Decima las etiquetas para que no se solapen: calcula cuántas caben de verdad
+    // según el ancho en píxeles de la barra (~44 px por etiqueta mono de 11 px);
+    // sin ancho conocido conserva el mínimo histórico de 6. Siempre la primera y la última.
+    const _max = Math.max(6, Math.floor((anchoPx || 0) / 44));
+    const _paso = ticks.length > _max + 1 ? Math.ceil(ticks.length / _max) : 1;
     const _mostrar = k => k % _paso === 0 || k === ticks.length - 1;
     const cab = `<div class="ct-leyenda-cab"><span class="ct-leyenda-unidad mono">${esc(d.unidad || "")}</span>${d.subtitulo ? `<span class="ct-leyenda-sub mono">${esc(d.subtitulo)}</span>` : ""}</div>`;
 
@@ -866,6 +870,15 @@
     const _fmtVal = v => etiq
       ? (etiq(v) || "")
       : `${Math.abs(v) < 10 ? (+v).toFixed(2) : (+v).toFixed(1)} ${d.unidad || ""}`.trim();
+    // Recorte al polígono de Ecuador SOLO en cartas TEMATIZADAS (heladas/alertas): sin esto
+    // el ráster 0.1° sobresale del contorno en bloques cuadrados feos sobre el fondo oscuro.
+    // Se calcula AQUÍ (no dentro del raster) para que las ISOLÍNEAS usen el MISMO campo
+    // recortado: antes se dibujaban sobre el mar y sobre Perú/Colombia.
+    let _zCampo = PR && PR.campo;
+    if (!fijo && PR && PR.campo && PR.campo.length) {
+      const _mk = mascaraEcuador(PR.lon, PR.lat);
+      if (_mk) _zCampo = PR.campo.map((row, i) => (row || []).map((v, j) => (_mk[i] && _mk[i][j]) ? v : null));
+    }
     if (!cuencasOk) {
       // Raster: cartas INTERPOLADAS (precip/temp/ALERTAS) suavizadas.
       // Continuo (precip/temp/HR/CAPE) Y alertas/heladas (campo YA refinado en backend
@@ -879,13 +892,6 @@
         ? { text: PR.campo.map(row => (row || []).map(v => etiq(v) || "")),
             hovertemplate: `%{y:.2f}°, %{x:.2f}°<br><b>%{text}</b><extra></extra>` }
         : { hovertemplate: `%{y:.2f}°, %{x:.2f}°<br><b>%{z:.2f} ${esc(d.unidad || "")}</b><extra></extra>` };
-      // Recorte al polígono de Ecuador SOLO en cartas TEMATIZADAS (heladas/alertas): sin esto
-      // el ráster 0.1° sobresale del contorno en bloques cuadrados feos sobre el fondo oscuro.
-      let _zCampo = PR.campo;
-      if (!fijo) {
-        const _mk = mascaraEcuador(PR.lon, PR.lat);
-        if (_mk) _zCampo = PR.campo.map((row, i) => (row || []).map((v, j) => (_mk[i] && _mk[i][j]) ? v : null));
-      }
       traces.push(Object.assign({
         type: "heatmap", x: PR.lon, y: PR.lat, z: _zCampo,
         colorscale: d.colorscale, zmin: d.vmin, zmax: d.vmax,
@@ -897,10 +903,21 @@
     // sin color (solo líneas) y con etiqueta de valor. §P16: en cartas CATEGÓRICAS
     // (alertas por nivel) los contornos no tienen sentido → nunca se dibujan.
     if (cap.isolineas && !d.categorico && PR && PR.campo && PR.campo.length) {
+      // Curvas en los NIVELES DE LA ESCALA cuando son uniformes (cada línea coincide
+      // con un cambio de color de la leyenda); si no, se conserva el automático.
+      const _cnt = { coloring: "none", showlabels: true,
+        labelfont: { size: 9, color: oscuro ? "#E2E8F7" : "#283550" } };
+      const _tv = (d.tickvals || []).filter(v => typeof v === "number" && isFinite(v));
+      let _auto = true;
+      if (_tv.length >= 3) {
+        const _p0 = _tv[1] - _tv[0];
+        if (_p0 > 0 && _tv.every((v, i) => i === 0 || Math.abs((v - _tv[i - 1]) - _p0) < 1e-6)) {
+          _cnt.start = _tv[0]; _cnt.end = _tv[_tv.length - 1]; _cnt.size = _p0; _auto = false;
+        }
+      }
       traces.push({
-        type: "contour", x: PR.lon, y: PR.lat, z: PR.campo,
-        contours: { coloring: "none", showlabels: true,
-          labelfont: { size: 9, color: oscuro ? "#E2E8F7" : "#283550" } },
+        type: "contour", x: PR.lon, y: PR.lat, z: _zCampo,
+        contours: _cnt, autocontour: _auto,
         line: { color: oscuro ? "rgba(226,232,247,.72)" : "rgba(40,53,80,.7)", width: 0.9, smoothing: 1 },
         ncontours: 12, showscale: false, hoverinfo: "skip",
       });
@@ -1024,10 +1041,10 @@
     const carta = div.closest(".ct-carta");
     const leyCard = carta && carta.querySelector('[data-rol="ley-card"]');
     if (leyCard) {
-      leyCard.innerHTML = leyendaCarta(d);
+      leyCard.innerHTML = leyendaCarta(d, Math.max(0, leyCard.clientWidth - 26));
     } else {
       const ley = document.querySelector('[data-rol="leyenda-carta"]');
-      if (ley && !ley.dataset.built) { ley.dataset.built = "1"; ley.innerHTML = leyendaCarta(d); }
+      if (ley && !ley.dataset.built) { ley.dataset.built = "1"; ley.innerHTML = leyendaCarta(d, ley.clientWidth); }
     }
   }
 
@@ -1188,7 +1205,8 @@
   // los contornos no aplican); el resto de toggles se conserva.
   function capasHTML(sinIsolineas) {
     const c = (E && E.capas) || {};
-    const b = (id, et) => `<button class="ct-toggle ${c[id] ? "activo" : ""}" data-capa="${id}">${et}</button>`;
+    const b = (id, et) => `<button class="ct-toggle ${c[id] ? "activo" : ""}" data-capa="${id}"
+      aria-pressed="${c[id] ? "true" : "false"}" title="Mostrar u ocultar la capa ${et}">${et}</button>`;
     return `<div class="ct-capas">${b("grilla", "Grilla")}${sinIsolineas ? "" : b("isolineas", "Isolíneas")}${b("galapagos", "Galápagos")}${b("estaciones", "Estaciones")}</div>`;
   }
 
@@ -1229,12 +1247,26 @@
       const des = !(x.instantes || []).length ? ' disabled title="Sin cartas en disco para este período"' : "";
       return `<option value="${x.horas}" ${x.horas === g.horas ? "selected" : ""}${des}>${esc(x.etiqueta)}</option>`;
     }).join("");
-    const optsInst = p.instantes.map((x, i) => {
+    // Desplegable AGRUPADO POR DÍA (optgroup): con 80-115 pasos, la lista plana era
+    // ilegible; agrupada se lee como días con sus horas. diaDe cae a la cabecera de
+    // la etiqueta ("mié 19/08 · …") si un instante no trajera marca de inicio.
+    const diaDe = i => { const x = p.instantes[i] || {};
+      return Number.isFinite(x.inicio) ? fechaLocalISO(x.inicio) : String(x.etiqueta || "").split("·")[0].trim(); };
+    const etiquetaDia = i => String((p.instantes[i] || {}).etiqueta || "").split("·")[0].trim() || diaDe(i);
+    let optsInst = "", _diaAbierto = null;
+    p.instantes.forEach((x, i) => {
       const n = conteo[i];
       const des = n === 0 ? ' disabled title="Ningún modelo mostrado tiene dato en este instante"' : "";
       const sufijo = n > 0 && n < fuentes4.length ? ` · ${n}/${fuentes4.length}` : "";
-      return `<option value="${i}" ${i === g.inst ? "selected" : ""}${des}>${esc(x.etiqueta)}${sufijo}</option>`;
-    }).join("");
+      const dia = diaDe(i);
+      if (dia !== _diaAbierto) {
+        if (_diaAbierto != null) optsInst += "</optgroup>";
+        optsInst += `<optgroup label="${esc(etiquetaDia(i))}">`;
+        _diaAbierto = dia;
+      }
+      optsInst += `<option value="${i}" ${i === g.inst ? "selected" : ""}${des}>${esc(x.etiqueta)}${sufijo}</option>`;
+    });
+    if (_diaAbierto != null) optsInst += "</optgroup>";
 
     // Grilla 2×2: hasta 4 fuentes ÚNICAS del período (cada una con su capa/archivo).
     const cartas = fuentes4.map(f => {
@@ -1247,22 +1279,29 @@
       const descriptor = descriptorCarta(p, inst, f);
       if (!descriptor) {
         return `<figure class="ct-carta"><div class="ct-carta-cab"><span class="titulo">${esc(rotuloFuente)}</span>
-          <span class="meta">${esc(metaFuente)}</span></div>
-          <div class="ct-lienzo"><div class="fallo"><div class="icono">🗺️</div>Sin dato en este instante</div></div></figure>`;
+          <span class="meta" title="${esc(metaFuente)}">${esc(metaFuente)}</span></div>
+          <div class="ct-lienzo"><div class="fallo"><div class="icono">🗺️</div>Este modelo no llega a esta fecha</div></div></figure>`;
       }
       const params = paramsDescriptor(descriptor);
       // §P3: el nombre de descarga lleva la FECHA del instante (fuente_fecha_producto).
+      // La leyenda es COMPARTIDA (misma variable en todos los modelos): va bajo la grilla.
       return `<figure class="ct-carta">
         <div class="ct-carta-cab"><span class="titulo">${esc(rotuloFuente)}</span>
-          <span class="meta">${esc(metaFuente)}</span></div>
+          <span class="meta" title="${esc(metaFuente)}">${esc(metaFuente)}</span></div>
         ${lienzoCarta(params, rotuloFuente + " · " + fechaLocalISO(inst.inicio) + " · " + figcap)}
-        <div class="ct-ley-card" data-rol="ley-card"></div>
       </figure>`;
     }).join("");
 
     // ◀ ▶ se deshabilitan si NO queda ningún instante CON dato en esa dirección.
     const hayAntes = conteo.slice(0, g.inst).some(n => n > 0);
     const hayDespues = conteo.slice(g.inst + 1).some(n => n > 0);
+    // ◀◀ ▶▶ (día anterior / día siguiente): habilitados si existe ALGÚN instante con
+    // dato fuera del día activo en esa dirección (los instantes van en orden).
+    let _iniDia = g.inst, _finDia = g.inst;
+    while (_iniDia > 0 && diaDe(_iniDia - 1) === diaDe(g.inst)) _iniDia--;
+    while (_finDia + 1 < p.instantes.length && diaDe(_finDia + 1) === diaDe(g.inst)) _finDia++;
+    const hayDiaAntes = conteo.slice(0, _iniDia).some(n => n > 0);
+    const hayDiaDespues = conteo.slice(_finDia + 1).some(n => n > 0);
     return `
       <div class="ct-barra cols compacta">
         <label class="bloque"><span class="et">Variable</span>
@@ -1270,13 +1309,17 @@
         <label class="bloque"><span class="et">Período</span>
           <select data-rol="per">${optsPer}</select></label>
         <div class="ct-inst-nav">
-          <button class="ct-nav" data-rol="prev" ${hayAntes ? "" : "disabled"}>◀</button>
-          <select class="ct-instante" data-rol="inst">${optsInst}</select>
-          <button class="ct-nav" data-rol="next" ${hayDespues ? "" : "disabled"}>▶</button>
+          <span class="et">Fecha y hora</span>
+          <button class="ct-nav" data-rol="dprev" title="Día anterior" aria-label="Día anterior" ${hayDiaAntes ? "" : "disabled"}>◀◀</button>
+          <button class="ct-nav" data-rol="prev" title="Paso anterior" aria-label="Paso anterior" ${hayAntes ? "" : "disabled"}>◀</button>
+          <select class="ct-instante" data-rol="inst" aria-label="Fecha y hora">${optsInst}</select>
+          <button class="ct-nav" data-rol="next" title="Paso siguiente" aria-label="Paso siguiente" ${hayDespues ? "" : "disabled"}>▶</button>
+          <button class="ct-nav" data-rol="dnext" title="Día siguiente" aria-label="Día siguiente" ${hayDiaDespues ? "" : "disabled"}>▶▶</button>
         </div>
         ${capasHTML()}
       </div>
-      <div class="ct-grid">${cartas}</div>
+      <div class="ct-grid${fuentes4.length === 4 ? " n4" : ""}">${cartas}</div>
+      <div class="ct-leyenda-carta" data-rol="leyenda-carta"></div>
       ${tipoId === "hidro" ? htmlValidacionHidro() : ""}`;
   }
 
@@ -1385,7 +1428,13 @@
         <td class="mono">${m ? fmtNum(m.dias) : "—"}</td><td>${esc(estado)}</td></tr>`;
     }));
     const comun = datos.muestra_comun || {};
-    host.innerHTML = `<div class="ct-hv-plot" data-hv-plot="comparacion"></div>
+    // Título propio del gráfico (identifica estación, variable y ventana también al
+    // descargarlo como imagen) + texto equivalente para lector de pantalla.
+    const _estHv = _hvEstado.codigo
+      ? ((estaciones.find(e => e.codigo === _hvEstado.codigo) || {}).nombre || _hvEstado.codigo) + ` (${_hvEstado.codigo})`
+      : "promedio de la red 7-7";
+    const _tituloHv = `Lluvia diaria (mm) · hidroestimadores frente a observación · ${_estHv} · últimos ${_hvEstado.dias} días`;
+    host.innerHTML = `<div class="ct-hv-plot" data-hv-plot="comparacion" role="img" aria-label="${esc("Gráfico: " + _tituloHv)}"></div>
       <div class="ct-hv-tabla-wrap">
       <div class="ct-hv-muestra"><b>Cobertura real por fuente</b> · ${esc(ventanaActiva.inicio || "—")} → ${esc(ventanaActiva.fin || "—")} · los huecos no se rellenan</div>
       <table class="ct-hv-met"><thead><tr>
@@ -1423,7 +1472,8 @@
         hovertemplate: "%{x} · " + rotulo + " <b>%{y:.2f} mm</b> · %{customdata[0]} valores · %{customdata[1]} pares obs.<extra></extra>" });
     });
     Plotly.newPlot(div, trazas, {
-      height: 325, margin: { l: 42, r: 10, t: 12, b: 48 },
+      height: 325, margin: { l: 42, r: 10, t: 40, b: 48 },
+      title: { text: _tituloHv, x: 0.5, xanchor: "center", font: { size: 12, color: tinta } },
       paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)", barmode: "overlay",
       showlegend: true, legend: { orientation: "h", y: -0.20, font: { size: 10, color: tinta } },
       xaxis: { type: "category", categoryorder: "array", categoryarray: datos.fechas_ventana || [],
@@ -1448,11 +1498,30 @@
       while (i >= 0 && i < p.instantes.length && conteo[i] === 0) i += dir;
       if (i >= 0 && i < p.instantes.length) { g.inst = i; re(); }
     };
+    // ◀◀ ▶▶ saltan al PRIMER instante CON dato del día vecino en esa dirección;
+    // si ese día quedó sin dato de ninguna fuente mostrada, sigue al siguiente día.
+    const diaDe = i => { const x = p.instantes[i] || {};
+      return Number.isFinite(x.inicio) ? fechaLocalISO(x.inicio) : String(x.etiqueta || "").split("·")[0].trim(); };
+    const saltaDia = (dir) => {
+      const d0 = diaDe(g.inst);
+      let i = g.inst + dir;
+      while (i >= 0 && i < p.instantes.length && diaDe(i) === d0) i += dir;   // sale del día activo
+      while (i >= 0 && i < p.instantes.length) {
+        const d1 = diaDe(i);
+        let ini = i; while (ini > 0 && diaDe(ini - 1) === d1) ini--;          // primer instante del día
+        for (let j = ini; j < p.instantes.length && diaDe(j) === d1; j++)
+          if (conteo[j] > 0) { g.inst = j; re(); return; }
+        if (dir > 0) { while (i < p.instantes.length && diaDe(i) === d1) i++; }
+        else i = ini - 1;
+      }
+    };
     cont.querySelector('[data-rol="var"]').onchange = (e) => { g.varId = e.target.value; g.horas = null; g.inst = null; re(); };
     cont.querySelector('[data-rol="per"]').onchange = (e) => { g.horas = +e.target.value; g.inst = null; re(); };
     cont.querySelector('[data-rol="inst"]').onchange = (e) => { g.inst = +e.target.value; re(); };
     cont.querySelector('[data-rol="prev"]').onclick = () => salta(-1);
     cont.querySelector('[data-rol="next"]').onclick = () => salta(1);
+    const _dprev = cont.querySelector('[data-rol="dprev"]'); if (_dprev) _dprev.onclick = () => saltaDia(-1);
+    const _dnext = cont.querySelector('[data-rol="dnext"]'); if (_dnext) _dnext.onclick = () => saltaDia(1);
     cont.querySelectorAll('.ct-toggle[data-capa]').forEach(b => b.onclick = () => { E.capas[b.dataset.capa] = !E.capas[b.dataset.capa]; re(); });
     if (tipoId === "hidro") cargarValidacionHidro(cont);   // §P9: panel de validación
   }
@@ -1609,16 +1678,19 @@
       const partes = (v.etiqueta || "").split(" — ");
       const sigla = partes[0] || v.id;
       const desc = partes[1] || "";
+      // Jerarquía invertida (pedido del dueño: nada de siglas como rótulo principal):
+      // la descripción en castellano es el TÍTULO y la sigla queda detrás, pequeña
+      // y en gris, como referencia técnica. Sin descripción, la sigla sigue de título.
+      const cabecera = `<span class="titulo">${esc(desc || sigla)}${desc ? ` <span class="ct-sigla mono">${esc(sigla)}</span>` : ""}</span>`;
       if (!it || !descriptor) {
-        return `<figure class="ct-carta"><div class="ct-carta-cab"><span class="titulo">${esc(sigla)}</span>
-          <span class="meta">${esc(p.figcap || "")}</span></div>
+        return `<figure class="ct-carta"><div class="ct-carta-cab">${cabecera}
+          <span class="meta" title="${esc(p.figcap || "")}">${esc(p.figcap || "")}</span></div>
           <div class="ct-lienzo"><div class="fallo"><div class="icono">🗺️</div>Sin dato</div></div></figure>`;
       }
       const params = paramsDescriptor(descriptor);
       return `<figure class="ct-carta">
-        <div class="ct-carta-cab"><span class="titulo">${esc(sigla)}</span>
-          <span class="meta" title="${esc(desc)}">${esc(desc)}</span></div>
-        ${lienzoCarta(params, sigla + " · " + fechaLocalISO(it.inicio) + (desc ? " · " + desc : ""))}
+        <div class="ct-carta-cab">${cabecera}</div>
+        ${lienzoCarta(params, (desc || sigla) + " · " + fechaLocalISO(it.inicio) + (desc ? " · " + sigla : ""))}
         <div class="ct-ley-card" data-rol="ley-card"></div>
       </figure>`;
     }).join("");
@@ -1627,9 +1699,9 @@
         <label class="bloque"><span class="et">Período</span>
           <select data-rol="fper">${optsPer}</select></label>
         <div class="ct-inst-nav">
-          <button class="ct-nav" data-rol="fprev" ${posicion <= 0 ? "disabled" : ""}>◀</button>
-          <select class="ct-instante" data-rol="finst">${optsInst}</select>
-          <button class="ct-nav" data-rol="fnext" ${posicion < 0 || posicion >= totalCiclos - 1 ? "disabled" : ""}>▶</button>
+          <button class="ct-nav" data-rol="fprev" title="Ciclo anterior" aria-label="Ciclo anterior" ${posicion <= 0 ? "disabled" : ""}>◀</button>
+          <select class="ct-instante" data-rol="finst" aria-label="Fecha y hora">${optsInst}</select>
+          <button class="ct-nav" data-rol="fnext" title="Ciclo siguiente" aria-label="Ciclo siguiente" ${posicion < 0 || posicion >= totalCiclos - 1 ? "disabled" : ""}>▶</button>
         </div>
         ${capasHTML()}
       </div>
@@ -1717,7 +1789,7 @@
         const descriptor = descriptorCarta(p, it, f);
         if (!it || !descriptor) {
           return `<figure class="ct-carta"><div class="ct-carta-cab"><span class="titulo">${esc(rotulo)}</span>
-            <span class="meta">${esc(p.figcap || "")}</span></div>
+            <span class="meta" title="${esc(p.figcap || "")}">${esc(p.figcap || "")}</span></div>
             <div class="ct-lienzo"><div class="fallo"><div class="icono">🗺️</div>Sin dato</div></div></figure>`;
         }
         const params = paramsDescriptor(descriptor);
@@ -1734,9 +1806,9 @@
         <label class="bloque"><span class="et">Período</span>
           <select data-rol="hper">${optsPer}</select></label>
         <div class="ct-inst-nav">
-          <button class="ct-nav" data-rol="hprev" ${g.inst <= 0 ? "disabled" : ""}>◀</button>
-          <select class="ct-instante" data-rol="hinst">${optsInst}</select>
-          <button class="ct-nav" data-rol="hnext" ${g.inst >= pr.instantes.length - 1 ? "disabled" : ""}>▶</button>
+          <button class="ct-nav" data-rol="hprev" title="Paso anterior" aria-label="Paso anterior" ${g.inst <= 0 ? "disabled" : ""}>◀</button>
+          <select class="ct-instante" data-rol="hinst" aria-label="Fecha y hora">${optsInst}</select>
+          <button class="ct-nav" data-rol="hnext" title="Paso siguiente" aria-label="Paso siguiente" ${g.inst >= pr.instantes.length - 1 ? "disabled" : ""}>▶</button>
         </div>
         ${capasHTML()}
       </div>
@@ -1813,7 +1885,18 @@
     let _lista = ALERTA_FUENTES.filter(s => _fdisp.includes(s)).concat(_fdisp.filter(s => !ALERTA_FUENTES.includes(s)));
     if (!_lista.length) _lista = ALERTA_FUENTES.slice(0, 4);
     const _estados = (((E.productos || {}).alertas_meta || {}).estados_fuente || {})[a.varId] || {};
-    const cartas = _lista.map(fuente => {
+    // ¿Alguna fuente tiene de verdad producto para este instante? Si ninguna, un solo
+    // bloque claro en vez de una tarjeta de error idéntica por cada fuente.
+    const _hayDato = !!(p && inst && _lista.some(fuente => {
+      const f = (p.fuentes || []).find(x => x.fuente === fuente)
+        || (p.fuentes || []).find(x => x.fuente.toUpperCase() === fuente);
+      return !!(f && descriptorCarta(p, inst, f));
+    }));
+    const cartas = !tieneArbol ? "" : !_hayDato
+      ? `<div class="vacio" style="grid-column:1/-1;padding:26px"><div class="icono">⚠️</div>
+          <strong>No hay advertencias publicadas para esta variable en esta fecha</strong>
+          <span><button class="boton azulclaro chico" data-rol="ir-reciente" style="margin-top:8px">Ir a la fecha más reciente con datos</button></span></div>`
+      : _lista.map(fuente => {
       const rotulo = ALERTA_FUENTE_ROTULO[fuente] || fuente;
       const estado = _estados[fuente] || {};
       const badge = estado.estado === "diagnostica_no_acreditada"
@@ -1841,10 +1924,10 @@
       // §P18a: SOLO en precipitación (nunca temperatura) el indicador FFR
       // (FFR) se dibujan SOBRE la carta si el FFR cubre la fecha de este instante.
       if (a.varId === "alerta_lluvia" && inst) params.ffr = fechaLocalISO(inst.inicio);
+      // Leyenda COMPARTIDA bajo la grilla (misma escala de niveles en todas las fuentes).
       return `<figure class="ct-carta">
         <div class="ct-carta-cab"><span class="titulo">${esc(rotulo)}${badge}</span><span class="meta">${meta}</span></div>
         ${lienzoCarta(params, "Alerta " + rotulo + " · " + fechaLocalISO(inst.inicio))}
-        <div class="ct-ley-card" data-rol="ley-card"></div>
       </figure>`;
     }).join("");
 
@@ -1876,22 +1959,25 @@
         <div class="segmentado" data-rol="umbral" style="--seg-color:var(--blue)">${segBotones}</div>` : ""}
         <button class="boton azulclaro chico" data-rol="editar">✎ Editar umbrales</button>
         <div class="ct-inst-nav">
-          <button class="ct-nav" data-rol="aprev" ${a.inst <= 0 ? "disabled" : ""}>◀</button>
-          <select class="ct-instante" data-rol="ainst">${optsInst}</select>
-          <button class="ct-nav" data-rol="anext" ${(!p || a.inst >= p.instantes.length - 1) ? "disabled" : ""}>▶</button>
+          <button class="ct-nav" data-rol="aprev" title="Paso anterior" aria-label="Paso anterior" ${a.inst <= 0 ? "disabled" : ""}>◀</button>
+          <select class="ct-instante" data-rol="ainst" aria-label="Fecha y hora">${optsInst}</select>
+          <button class="ct-nav" data-rol="anext" title="Paso siguiente" aria-label="Paso siguiente" ${(!p || a.inst >= p.instantes.length - 1) ? "disabled" : ""}>▶</button>
         </div>
         ${capasHTML(true)}
       </div>
       ${sinArbol}
-      <div class="ct-grid">${cartas}</div>
+      <div class="ct-grid${_hayDato && _lista.length === 4 ? " n4" : ""}">${cartas}</div>
+      <div class="ct-leyenda-carta" data-rol="leyenda-carta"></div>
       ${notaFFR}
       <div class="ct-panel" id="ct-desempeno">
         <div class="ct-panel-cab">
           <h3>Desempeño causal de las advertencias <span class="suave" data-rol="dsub">· cargando…</span></h3>
         </div>
         <p class="ct-nota ct-evidencia-causal" data-rol="evidencia-causal">Verificando emisiones previas contra observaciones de la misma ventana…</p>
-        <div class="ct-serie ct-desempeno-comparativo" data-rol="comparativa"></div>
-        <div class="ct-serie ct-desempeno-temporal" data-rol="serie"></div>
+        <div class="ct-serie ct-desempeno-comparativo" data-rol="comparativa" role="img"
+          aria-label="Gráfico de barras: desempeño espacial de las advertencias por fuente y nivel"></div>
+        <div class="ct-serie ct-desempeno-temporal" data-rol="serie" role="img"
+          aria-label="Gráfico de barras: error de intensidad de las advertencias frente a observaciones diarias"></div>
         <p class="ct-nota" data-rol="dnota"></p>
       </div>`;
   }
@@ -1932,6 +2018,9 @@
     cont.querySelector('[data-rol="ainst"]').onchange = (e) => { a.inst = +e.target.value; re(); };
     cont.querySelector('[data-rol="aprev"]').onclick = () => { if (a.inst > 0) { a.inst--; re(); } };
     cont.querySelector('[data-rol="anext"]').onclick = () => { if (p && a.inst < p.instantes.length - 1) { a.inst++; re(); } };
+    // Bloque "sin advertencias en esta fecha": salto directo al instante con más datos.
+    const _ir = cont.querySelector('[data-rol="ir-reciente"]');
+    if (_ir) _ir.onclick = () => { if (p) { a.inst = instanteDefecto(p.instantes); re(); } };
     cont.querySelectorAll('.ct-toggle[data-capa]').forEach(b => b.onclick = () => { E.capas[b.dataset.capa] = !E.capas[b.dataset.capa]; re(); });
 
     cargarDesempeno();

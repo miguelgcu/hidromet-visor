@@ -33,7 +33,7 @@
 .cfg-clave-uso { font-size: 11px; color: var(--muted-2); margin-top: 2px; }
 
 .cfg-badge {
-  font: 600 10px var(--mono); padding: 2px 9px; border-radius: 999px;
+  font: 600 11px var(--mono); padding: 2px 9px; border-radius: 999px;
 }
 .cfg-badge.activa { color: var(--ok); background: var(--ok-bg); border: 1px solid var(--ok-bd); }
 .cfg-badge.obsoleta { color: var(--muted-2); background: var(--surface-3); border: 1px solid var(--line-2); }
@@ -103,10 +103,10 @@
 .cfg-creador:hover .lapiz { color: var(--blue); }
 .cfg-creador-edit {
   font: inherit; color: var(--ink); text-align: right;
-  border: 1px solid var(--line-2); border-radius: 7px;
+  border: 1px solid var(--ctrl-bd); border-radius: 7px;
   padding: 5px 8px; background: var(--surface); min-width: 180px;
 }
-.cfg-creador-edit:focus { outline: none; border-color: var(--blue); }
+.cfg-creador-edit:focus { outline: none; border-color: var(--blue); box-shadow: var(--focus-ring); }
 
 /* ---------- Diagnóstico ---------- */
 .cfg-diag { display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; }
@@ -121,7 +121,7 @@
 .cfg-btn-diag {
   width: 100%; margin-top: 13px;
   background: var(--surface-3); color: var(--ink-2);
-  border: 1px solid var(--line-2); border-radius: 8px;
+  border: 1px solid var(--ctrl-bd); border-radius: 8px;
   padding: 9px; font: 600 12px var(--fuente); cursor: pointer;
 }
 .cfg-btn-diag:hover { background: color-mix(in srgb, var(--surface-3) 84%, var(--ink)); }
@@ -129,6 +129,13 @@
 
 @media (max-width: 860px) {
   .cfg-rejilla { grid-template-columns: 1fr; }
+}
+
+/* v20 (accesibilidad): objetivos táctiles ≥40px en los controles propios del módulo */
+@media (hover: none) {
+  .cfg-btn-diag { min-height: 44px; }
+  .cfg-creador { min-height: 40px; }
+  .cfg-creador-edit { min-height: 44px; font-size: 16px; }   /* 16px: sin salto de zoom en iPhone */
 }
 
 /* ---------- MÓVIL (teléfonos 360–430px) ---------- */

@@ -538,12 +538,55 @@ const App = (() => {
     el.textContent = `${fecha} · ${hora}`;
   }
 
-  // Última actualización SIEMPRE visible en la cabecera ("Datos al DD/MM · HH:MM"). En la
-  // app la lee de /actualizar/ultima; en el visor, de manifest.json (lo escribe el publicador).
+  // Nombres de pantalla de las áreas internas del programa (mlnwp:F2, cartas:F1…):
+  // al público nunca se le enseñan los códigos crudos ni las notas internas.
+  const NOMBRES_AREA = {
+    mlnwp: "Pronóstico por aprendizaje automático",
+    cartas: "Mapas de pronóstico y alertas",
+    observaciones: "Observaciones de estaciones",
+    clima: "Climatología",
+    sngr: "Eventos de ríos",
+    geoglows: "Caudales de ríos",
+    "pre-export": "Preparación de la publicación",
+  };
+  function nombreArea(cod) {
+    const base = String(cod == null ? "" : cod).split(":")[0].trim().toLowerCase();
+    return NOMBRES_AREA[base] || String(cod);
+  }
+
+  // "hace 6 días" a partir del instante del dato (ms desde época).
+  function textoAntiguedad(t) {
+    if (!isFinite(t)) return "";
+    const h = (Date.now() - t) / 3.6e6;
+    if (h < 0) return "";
+    if (h < 1) return "hace menos de 1 hora";
+    if (h < 24) { const n = Math.round(h); return `hace ${n} hora${n === 1 ? "" : "s"}`; }
+    const d = Math.floor(h / 24);
+    return `hace ${d} día${d === 1 ? "" : "s"}`;
+  }
+
+  // Banda de aviso fija bajo la barra superior (frescura/estado); sin líneas se quita.
+  function bandaEstadoDatos(lineas) {
+    let banda = document.getElementById("banda-estado-datos");
+    if (!lineas || !lineas.length) { if (banda) banda.remove(); return; }
+    if (!banda) {
+      banda = document.createElement("div");
+      banda.id = "banda-estado-datos";
+      banda.setAttribute("role", "status");
+      const topbar = document.getElementById("topbar");
+      if (topbar) topbar.insertAdjacentElement("afterend", banda);
+      else document.body.prepend(banda);
+    }
+    banda.textContent = lineas.join(" ");
+  }
+
+  // Última actualización SIEMPRE visible en la cabecera ("Datos al DD/MM/AAAA · HH:MM ·
+  // hace N días"). En la app la lee de /actualizar/ultima; en el visor, de manifest.json
+  // (lo escribe el publicador) más el parte detallado productos/estado_degradado.json.
   async function mostrarUltima() {
     const el = document.getElementById("topbar-sync");
     if (!el) return;
-    let fecha = null, estadoOk = true, fallosEstado = [], areasDegradadas = [], avisoDeg = "";
+    let fecha = null, estadoOk = true, fallosEstado = [], areasDegradadas = [];
     try {
       if (window.HIDROMET_VISOR) {
         const m = await (await fetch("manifest.json?_=" + Date.now())).json();
@@ -554,7 +597,18 @@ const App = (() => {
         // área degradada, el visor lo dice en la cabecera: lo que se muestra de
         // esa área es un RESPALDO, no un producto acreditado.
         areasDegradadas = (m && m.areas_degradadas) || [];
-        avisoDeg = (m && m.aviso_degradacion) || "";
+        // (m.aviso_degradacion es una nota interna del programa: NO se muestra al público.)
+        // El parte DETALLADO de áreas caídas manda sobre el resumen del manifest:
+        // si enumera áreas, el visor no puede decir "todo correcto". Puede no estar
+        // publicado: se tolera y se sigue solo con el manifest.
+        try {
+          const rd = await fetch("productos/estado_degradado.json", { cache: "no-cache" });
+          if (rd.ok) {
+            const deg = await rd.json();
+            for (const d of ((deg && deg.degradado) || []))
+              if (d && d.area && !areasDegradadas.includes(d.area)) areasDegradadas.push(d.area);
+          }
+        } catch (e) { /* sin parte detallado */ }
       } else {
         const u = await api("/actualizar/ultima");
         fecha = u && u.fecha;
@@ -564,9 +618,15 @@ const App = (() => {
     } catch (e) { /* aún sin marca */ }
     const chip = document.querySelector("#topbar .sync");
     if (chip) chip.classList.toggle("fallo", !estadoOk);
+    if (chip) chip.classList.toggle("desconocido", !fecha && !!window.HIDROMET_VISOR);
     if (!fecha) {
+      // Estado DESCONOCIDO en el visor: sin marca de publicación no se puede decir
+      // que todo va bien — punto gris sin latido y texto honesto, nunca el verde.
       if (chip) chip.classList.remove("viejo");
-      el.textContent = window.HIDROMET_VISOR ? "Visor en línea" : "Datos locales";
+      el.textContent = window.HIDROMET_VISOR ? "No se pudo comprobar la fecha de los datos" : "Datos locales";
+      if (window.HIDROMET_VISOR)
+        el.title = "No se pudo leer el estado de la publicación; se desconoce de cuándo son los datos.";
+      bandaEstadoDatos([]);
       return;
     }
     // v15 — WATCHDOG DE VERSIÓN (visor): manifest.json se sondea con cache-bust (línea
@@ -582,19 +642,35 @@ const App = (() => {
       }
     }
     const m = String(fecha).replace("T", " ").match(/(\d{4})-(\d{2})-(\d{2})\D+(\d{2}):(\d{2})/);
-    const marca = m ? `${m[3]}/${m[2]} · ${m[4]}:${m[5]}` : String(fecha).slice(0, 16);
-    const sufijoDeg = areasDegradadas.length ? " · respaldo etiquetado" : "";
-    el.textContent = (estadoOk ? `Datos al ${marca}` : `Actualización incompleta · ${marca}`) + sufijoDeg;
-    if (!estadoOk) el.title = `Corrida incompleta${fallosEstado.length ? ": " + fallosEstado.join(", ") : ""}`;
-    else if (areasDegradadas.length) {
-      el.title = (avisoDeg || "Área degradada: se publica respaldo, no producto acreditado")
-        + " · " + areasDegradadas.join(", ");
+    // Con AÑO: parado un año entero, "22/08" se leería como si fuera de este año.
+    const marca = m ? `${m[3]}/${m[2]}/${m[1]} · ${m[4]}:${m[5]}` : String(fecha).slice(0, 16);
+    // `fecha` es string ISO → Date.parse; con ella se calcula la ANTIGÜEDAD visible.
+    const t = Date.parse(m ? `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}` : String(fecha).replace(" ", "T"));
+    const antig = textoAntiguedad(t);
+    const nombresDeg = [...new Set(areasDegradadas.map(nombreArea))];
+    el.textContent = (estadoOk ? `Datos al ${marca}` : `Actualización incompleta · ${marca}`)
+      + (antig ? ` · ${antig}` : "") + (nombresDeg.length ? " · con avisos" : "");
+    // Explicación en LLANO: nada de códigos internos ni notas del programa
+    // (el "DEGRADADO POR ORDEN DEL DUEÑO…" del manifest no se enseña tal cual).
+    if (!estadoOk) el.title = `La última actualización quedó incompleta${fallosEstado.length ? ": " + fallosEstado.join(", ") : ""}`;
+    else if (nombresDeg.length) {
+      el.title = "Parte del contenido se muestra como respaldo provisional, sin verificación completa. "
+        + "Secciones afectadas: " + nombresDeg.join(", ");
     } else el.removeAttribute("title");
-    if (chip) chip.classList.toggle("degradado", areasDegradadas.length > 0);
+    if (chip) chip.classList.toggle("degradado", nombresDeg.length > 0);
     // Semántica de FRESCURA: si los datos tienen >36 h, el punto del chip pasa a ámbar
-    // (aviso silencioso al operador de guardia). `fecha` es string ISO → Date.parse.
-    const t = Date.parse(String(fecha).replace(" ", "T"));
+    // (aviso silencioso al operador de guardia); por encima de 48 h, además, aparece
+    // una banda fija bajo la barra superior con la frase completa.
     if (chip) chip.classList.toggle("viejo", estadoOk && isFinite(t) && (Date.now() - t) > 36 * 3.6e6);
+    const lineas = [];
+    if (isFinite(t) && (Date.now() - t) > 48 * 3.6e6) {
+      const fLarga = new Date(t).toLocaleDateString("es-EC", { day: "numeric", month: "long", year: "numeric" });
+      lineas.push(`Estos datos no se actualizan desde el ${fLarga} (${antig}).`);
+    }
+    if (!estadoOk) lineas.push("La última actualización quedó incompleta.");
+    if (nombresDeg.length)
+      lineas.push(`Secciones con datos provisionales o incompletos: ${nombresDeg.join(", ")}.`);
+    bandaEstadoDatos(lineas);
   }
 
   /* §B.8: estilos del bloqueo global + barra de cancelar (autocontenidos en
@@ -631,7 +707,15 @@ const App = (() => {
         border: 2.5px solid rgba(255,255,255,.32); border-top-color: #fff;
         animation: girar-tarea .8s linear infinite;
       }
-      @keyframes girar-tarea { to { transform: rotate(360deg); } }`;
+      @keyframes girar-tarea { to { transform: rotate(360deg); } }
+      /* Estado de los datos: banda fija bajo la barra superior + chip "desconocido" */
+      #banda-estado-datos {
+        flex: none; background: #8a4b00; color: #fff; padding: 7px 18px;
+        font-size: 13px; line-height: 1.45; font-weight: 600;
+      }
+      #topbar .sync.desconocido .punto {
+        background: #98A2B3 !important; box-shadow: none !important; animation: none !important;
+      }`;
     document.head.appendChild(st);
   }
 
@@ -802,16 +886,47 @@ const App = (() => {
     gd.addEventListener("touchend", () => { d0 = null; }, { passive: true });
   }
 
+  /* Fechas de los GRÁFICOS en español: se registra de inmediato un idioma "es"
+     mínimo (meses y días en español, formato de fecha manual) para que el primer
+     gráfico ya salga traducido; si el fichero de idioma oficial está publicado en
+     lib/plotly/, se carga encima (trae además la barra de herramientas traducida).
+     Si no existe, el fallo de carga se ignora y queda el idioma mínimo. */
+  function idiomaGraficos() {
+    if (!window.Plotly || typeof Plotly.register !== "function") return;
+    try {
+      Plotly.register({
+        moduleType: "locale", name: "es", dictionary: {},
+        format: {
+          days: ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"],
+          shortDays: ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"],
+          months: ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+                   "agosto", "septiembre", "octubre", "noviembre", "diciembre"],
+          shortMonths: ["ene", "feb", "mar", "abr", "may", "jun",
+                        "jul", "ago", "sep", "oct", "nov", "dic"],
+          date: "%d/%m/%Y",
+        },
+      });
+      Plotly.setPlotConfig({ locale: "es" });
+    } catch (e) { return; /* la librería seguirá en inglés */ }
+    const s = document.createElement("script");
+    s.src = "lib/plotly/plotly-locale-es.js";
+    s.onload = () => { try { Plotly.setPlotConfig({ locale: "es" }); } catch (e) {} };
+    s.onerror = () => { try { s.remove(); } catch (e) {} };
+    document.head.appendChild(s);
+  }
+
   async function iniciar() {
     await exigirAcceso();
     inyectarEstilosBloqueo();
+    idiomaGraficos();
     const guardado = localStorage.getItem("hidromet-tema");
     if (guardado) document.documentElement.dataset.tema = guardado;
     document.getElementById("btn-tema").onclick = () =>
       tema(tema() === "claro" ? "oscuro" : "claro");
-    // v17: CERRAR SESIÓN en el menú (solo visor con puerta de acceso): borra el
-    // acceso recordado y recarga → vuelve a la pantalla de login.
-    if (window.HIDROMET_VISOR) {
+    // v17: CERRAR SESIÓN en el menú (solo visor con puerta de acceso ACTIVA): borra el
+    // acceso recordado y recarga → vuelve a la pantalla de login. Con HM_ACCESO_LIBRE
+    // no existe sesión que cerrar y el botón no debe existir.
+    if (window.HIDROMET_VISOR && !window.HM_ACCESO_LIBRE) {
       const bt = document.getElementById("btn-tema");
       if (bt && !document.getElementById("btn-salir")) {
         const bs = document.createElement("button");

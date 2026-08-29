@@ -12,15 +12,14 @@
 .ml-raiz { max-width: 1320px; margin: 0 auto; }
 .ml-cab-mini { color: var(--muted); font-size: 12px; font-weight: 600;
   letter-spacing: .01em; margin: 2px 0 10px; }
+/* aviso "aprendizaje automático fuera de servicio" — se muestra/oculta según
+   lo que traen los ficheros publicados (detección en mlnwp.js). */
+.ml-aviso-fuera { margin: 0 0 12px; padding: 8px 12px; border: 1px solid var(--warn-bd);
+  border-left: 4px solid var(--warn); border-radius: 8px; background: var(--warn-bg);
+  color: var(--ink); font-size: 12.5px; line-height: 1.55; }
+.ml-aviso-fuera b { color: var(--warn); }
 
-/* barra de pestañas — subrayado PÚRPURA ---------------------------------- */
-.ml-tabs { display: flex; gap: 2px; border-bottom: 1.5px solid var(--line-2); margin-bottom: 12px; }
-.ml-tab { position: relative; background: transparent; border: none; cursor: pointer;
-  font: 600 13.5px var(--fuente); color: var(--muted); padding: 10px 16px; transition: color .15s; }
-.ml-tab:hover { color: var(--ink); }
-.ml-tab.activa { color: var(--ml-purple); }
-.ml-tab.activa::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: -1.5px;
-  height: 2.5px; background: var(--ml-purple); border-radius: 3px 3px 0 0; }
+/* (v12: la barra de pestañas propia del módulo se retiró — estilos eliminados) */
 
 /* control deck (tarjeta con rail púrpura izquierda) ---------------------- */
 /* overflow VISIBLE: el dropdown de estación cuelga fuera de la tarjeta (con hidden
@@ -34,14 +33,6 @@
 .ml-grupo { display: flex; flex-direction: row; align-items: center; gap: 9px; }
 .ml-grupo-lab { font: 600 10px var(--mono); letter-spacing: .1em; color: var(--faint); text-transform: uppercase; }
 .ml-deck-div { width: 1px; align-self: center; height: 26px; background: var(--line-4); margin: 0 12px; }
-
-/* chips de ventana (activo = navy, mono) */
-.ml-deck .ml-vent { font-family: var(--mono); }
-.ml-deck .ml-vent.activo { --chip-activo: var(--navy-700); }
-/* filtro de familia de modelo (fila completa bajo el deck; activo = púrpura) */
-.ml-deck-fam { flex: 1 0 100%; display: flex; align-items: center; gap: 14px;
-  border-top: 1px solid var(--line-3); padding-top: 12px; margin-top: 2px; flex-wrap: wrap; }
-.ml-deck .ml-fam.activo { --chip-activo: var(--ml-purple); }
 
 /* localizador de estación */
 .ml-loc { position: relative; display: flex; align-items: center; }
@@ -80,13 +71,6 @@
   text-transform: uppercase; color: var(--faint); }
 .ml-combo-vacia { padding: 10px 12px; font-size: 12px; color: var(--muted); }
 
-/* telemetría cobertura muestral */
-.ml-telemetria { display: flex; flex-direction: row; align-items: center; gap: 9px; padding-left: 16px; margin-left: auto; }
-.ml-cobertura { display: inline-flex; align-items: center; gap: 8px; background: var(--ml-purple-bg);
-  border: 1px solid var(--ml-purple-bd); border-radius: 9px; padding: 8px 13px; font: 600 12px var(--mono); color: var(--ml-purple); }
-.ml-cobertura .punto-ok { width: 7px; height: 7px; border-radius: 50%; background: var(--ok);
-  box-shadow: 0 0 0 3px rgba(22,145,91,.16); }
-
 /* banda explicativa (Calificación vs Confianza) ------------------------- */
 .ml-nota { background: var(--ml-purple-bg); border: 1px solid var(--ml-purple-bd); border-left: 3px solid var(--ml-purple);
   border-radius: 9px; padding: 10px 14px; margin-bottom: 14px; font-size: 12.5px; line-height: 1.6; color: var(--ink-2); }
@@ -122,49 +106,8 @@
 .ml-clasif-alcance { margin: 0 0 10px; color: var(--muted-2);
   font: 500 11.5px var(--mono); line-height: 1.45; }
 
-/* mapa ganador: grid 1fr / 200px ---------------------------------------- */
-.ml-grid-mapa { display: grid; grid-template-columns: 1fr 200px; gap: 14px; align-items: start; }
-/* Pestaña de PRONÓSTICO → papel FIJO (blanco en ambos temas, tokens --sea-fijo-*). */
-.ml-mapa { position: relative; border: 1px solid var(--line-2); border-radius: 10px; overflow: hidden;
-  background: linear-gradient(180deg, var(--sea-fijo-top), var(--sea-fijo-bottom)); }
-.ml-mapa.alto-520 { height: 470px; }
-.ml-mapa.alto-560 { height: 500px; }
-.ml-mapa-grafico { position: absolute; inset: 0; }
-/* Rótulo sobre mapa: variante clara FIJA (el mapa es papel blanco en ambos temas). */
-.ml-mapa-tag { position: absolute; left: 14px; top: 12px; font: 600 10px var(--mono); letter-spacing: .06em;
-  color: #283550; background: rgba(255,255,255,.8); padding: 3px 8px; border-radius: 6px; pointer-events: none; z-index: 2; }
-
-/* panel lateral de leyenda */
-.ml-side { background: var(--surface-2); border: 1px solid var(--line-3); border-radius: 10px; padding: 12px; overflow: auto; }
-.ml-side.alto-520 { height: 470px; }
-.ml-side-lab { font: 600 10px var(--mono); letter-spacing: .08em; color: var(--faint); text-transform: uppercase; }
-.ml-leyenda { display: flex; flex-direction: column; gap: 8px; margin-top: 9px; }
-.ml-leyenda-fila { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-2); }
-.ml-leyenda-fila .punto { width: 11px; height: 11px; border-radius: 50%; flex: none; }
-.ml-leyenda-fila .conteo { margin-left: auto; font: 600 11px var(--mono); color: var(--muted-2); }
-.ml-tamano { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; font-size: 12px; color: var(--ink-2); }
-.ml-tamano-fila { display: flex; align-items: center; gap: 10px; }
-.ml-tamano-fila .marco { width: 20px; display: flex; justify-content: center; align-items: center; }
-.ml-tamano-fila .marco .bola { border-radius: 50%; background: #8C99AD; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.22); }
-.ml-side-nota { font-size: 11px; color: var(--faint); line-height: 1.5; margin: 14px 0 0; }
-
-/* detalle de estación (grid 1fr / 1.15fr, misma altura) ----------------- */
-.ml-grid-detalle { display: grid; grid-template-columns: 1fr 1.15fr; gap: 14px; align-items: stretch; margin: 14px 0; }
-.ml-estacion { display: flex; flex-direction: column; padding: 17px; }
-.ml-ministats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
-.ml-ministat { background: var(--surface-2); border: 1px solid var(--line-3); border-radius: 9px; padding: 11px; }
-.ml-ministat .v-modelo { font: 700 17px var(--mono); color: var(--ml-purple); }
-.ml-ministat .v-calif { font: 700 22px var(--mono); color: var(--ink); }
-.ml-ministat .v-conf { font: 600 13px var(--mono); display: inline-block; padding: 2px 9px; border-radius: 999px; }
-.ml-ministat .et { font: 600 10px var(--mono); letter-spacing: .06em; color: var(--faint); text-transform: uppercase; margin-top: 3px; }
-.ml-ministat .et.mt6 { margin-top: 6px; }
-.ml-estacion .ml-cobertura-txt { font-size: 12px; color: var(--muted-2); line-height: 1.55; margin: auto 0 0; }
-
-/* barras calificación vs confianza (opacidad = confianza, sin bordes) */
-.ml-barras { display: flex; align-items: flex-end; gap: 8px; height: 170px; padding: 8px 2px 0; }
-.ml-barra { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; min-width: 0; }
-.ml-barra .v { font: 600 9.5px var(--mono); color: var(--muted); }
-.ml-barra .col { width: 100%; border-radius: 4px 4px 0 0; }
+/* (v12: mapa ganador, panel lateral, detalle de estación y barras de
+   calificación se retiraron con la vista Nacional — estilos eliminados) */
 .ml-card .ml-pie { font-size: 11px; color: var(--faint); line-height: 1.5; margin: 9px 0 0; }
 
 /* tabla de modelos: badge calificación con color tipo semáforo ---------- */
@@ -215,6 +158,10 @@ html[data-tema="oscuro"] .ml-tabla-modelos tbody tr { border-bottom-color: var(-
   color: var(--muted); font: 600 10.5px var(--mono); font-variant-numeric: tabular-nums; }
 .ml-serie-subtitulo { color: var(--ml-purple); font: 700 12px var(--mono);
   letter-spacing: .025em; }
+/* fecha de emisión del pronóstico (campo "hoy" del fichero) y su antigüedad;
+   en ámbar cuando el dato lleva más de un día congelado. */
+.ml-serie-emision { margin-top: 4px; font: 600 11px var(--mono); color: var(--muted); }
+.ml-serie-emision.vieja { color: var(--warn); }
 .ml-serie-acciones { position: absolute; z-index: 4; top: 11px; right: 11px;
   display: flex; align-items: center; gap: 6px; }
 .ml-serie-acciones .ml-descarga-png { position: relative; display: inline-grid;
@@ -232,7 +179,7 @@ html[data-tema="oscuro"] .ml-tabla-modelos tbody tr { border-bottom-color: var(-
 @keyframes ml-spin { to { transform: rotate(360deg); } }
 .ml-obs-estado { width: fit-content; max-width: min(100%, 760px); margin: 3px auto 8px;
   padding: 5px 9px; border-radius: 999px; border: 1px solid var(--ok-bd);
-  color: var(--ok); background: var(--ok-bg); font: 600 10.5px var(--mono);
+  color: var(--ok); background: var(--ok-bg); font: 600 11.5px var(--mono);
   line-height: 1.35; text-align: center; }
 .ml-obs-estado.sin-datos { border-color: var(--warn-bd); color: var(--warn);
   background: var(--warn-bg); }
@@ -276,20 +223,24 @@ html[data-tema="oscuro"] .ml-serie-plot .annotation-text {
   fill: #071326 !important; stroke: #fff !important; stroke-width: 3px !important;
   paint-order: stroke fill; stroke-linejoin: round; font-weight: 750 !important;
 }
-.ml-serie-leyenda { display: grid;
-  grid-template-columns: repeat(var(--ml-legend-count, 1), minmax(0, 1fr));
+/* v18: la leyenda ya no se aprieta en una sola fila de celdas iguales que
+   cortaba los nombres a la mitad: envuelve en las filas que hagan falta, con
+   nombres completos y cuerpo legible. */
+.ml-serie-leyenda { display: flex; flex-wrap: wrap; justify-content: center;
   align-items: center; width: 100%; max-width: 100%; margin: 7px 0 2px;
-  overflow: hidden; font-size: 10.5px; color: var(--muted); }
+  row-gap: 2px; font-size: 12px; color: var(--muted); }
 .ml-serie-leyenda:empty { display: none; }
-.ml-serie-leyenda span.it { display: inline-flex; width: 100%; min-width: 0;
-  align-items: center; overflow: hidden; gap: clamp(2px, .3vw, 5px);
-  padding: 3px clamp(4px, .65vw, 10px); white-space: nowrap; }
+.ml-serie-leyenda span.it { display: inline-flex; max-width: 100%; min-width: 0;
+  align-items: center; overflow: hidden; gap: clamp(3px, .3vw, 6px);
+  padding: 3px clamp(5px, .65vw, 10px); white-space: nowrap; }
 .ml-serie-leyenda span.it + span.it { border-left: 1px solid var(--line-2); }
-.ml-serie-leyenda .ml-leyenda-nombre { display: inline-block; flex: 1 1 auto;
+.ml-serie-leyenda .ml-leyenda-nombre { display: inline-block; flex: 0 1 auto;
   min-width: 0; max-width: none;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
 .ml-serie-leyenda .ml-leyenda-nota { flex: 0 0 auto; color: var(--faint);
-  font: 650 9.5px var(--mono); }
+  font: 650 10.5px var(--mono); }
+.ml-serie-leyenda .ml-leyenda-mas { color: var(--faint); font-size: 11px;
+  font-style: italic; white-space: normal; }
 .ml-serie-leyenda .sw-linea { flex: 0 0 auto; width: 14px; height: 0; border-top: 2px dashed var(--ink); }
 .ml-serie-leyenda .sw-caja { flex: 0 0 auto; width: 12px; height: 10px; border-radius: 2px; }
 .ml-serie-leyenda .sw-banda { width: 14px; height: 10px;
@@ -298,65 +249,25 @@ html[data-tema="oscuro"] .ml-serie-plot .annotation-text {
 .ml-serie-shadow-leyenda { display: flex; align-items: center; gap: 9px;
   width: 100%; min-width: 0; margin: 2px 0 5px; padding: 4px 8px;
   border: 1px dashed var(--line-2); border-radius: 7px;
-  color: var(--faint); font: 600 9px var(--mono); overflow-x: auto;
+  color: var(--faint); font: 600 10.5px var(--mono); overflow-x: auto;
   white-space: nowrap; scrollbar-width: thin; }
 .ml-serie-shadow-leyenda[hidden] { display: none; }
-.ml-serie-shadow-leyenda > b { color: var(--muted); font-size: 8.5px;
+.ml-serie-shadow-leyenda > b { color: var(--muted); font-size: 9.5px;
   letter-spacing: .05em; text-transform: uppercase; }
 .ml-serie-shadow-leyenda .it-shadow { display: inline-flex; align-items: center;
   gap: 4px; min-width: 0; }
 .ml-serie-shadow-leyenda .it-shadow small { color: var(--faint);
-  font-size: 8px; font-weight: 500; }
+  font-size: 9.5px; font-weight: 500; }
 .ml-serie-shadow-leyenda .sw-shadow { width: 14px; height: 0;
   border-top: 2px dotted #64748B; opacity: .7; }
 
-/* MAPAS ----------------------------------------------------------------- */
-.ml-grid-mapas { display: grid; grid-template-columns: 2.2fr 1fr; gap: 14px; align-items: start; }
-.ml-mapas-nav { text-align: center; font-weight: 600; font-size: 13px; margin-bottom: 10px; color: var(--ink); }
-.ml-side-col { display: flex; flex-direction: column; gap: 12px; }
-.ml-nav-botones { display: flex; gap: 8px; margin-bottom: 14px; }
-.ml-nav-botones .boton { flex: 1; }
-.ml-stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.ml-stat { background: var(--surface-2); border: 1px solid var(--line-3); border-radius: 9px; padding: 11px; }
-.ml-stat .v { font: 700 22px var(--mono); color: var(--ink); }
-.ml-stat .v small { font-size: 11px; color: var(--muted-2); }
-.ml-stat .v.azul { color: var(--blue); }
-.ml-stat .et { font: 600 10px var(--mono); letter-spacing: .05em; color: var(--faint); text-transform: uppercase; margin-top: 2px; }
-.ml-colorbar { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
-  display: flex; flex-direction: column; align-items: center; gap: 3px; pointer-events: none; z-index: 2; }
-.ml-colorbar .barra { width: 300px; height: 12px; border: 1px solid var(--ink-2); }
-.ml-colorbar .ticks { width: 300px; display: flex; justify-content: space-between; font: 600 8.5px var(--mono); color: var(--ink-2); }
-.ml-top10 { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
-.ml-top10 td { padding: 5px 4px; border-bottom: 1px solid #F0F3F7; color: var(--ink-2); }
-html[data-tema="oscuro"] .ml-top10 td { border-bottom-color: var(--line-3); }
-.ml-top10 tr:last-child td { border-bottom: none; }
-.ml-top10 td.v { text-align: right; font-family: var(--mono); font-weight: 600; }
-
-/* RESUMEN --------------------------------------------------------------- */
-.ml-resumen-barra { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
-  background: var(--surface); border: 1px solid var(--line); border-radius: 11px; padding: 11px 15px; margin-bottom: 13px; box-shadow: var(--shadow-card); }
-.ml-resumen-nav { display: flex; align-items: center; gap: 12px; }
-.ml-resumen-nav strong { font-size: 13.5px; font-family: var(--mono); color: var(--ink); }
-.ml-resumen-leyenda { font-size: 11.5px; color: var(--muted-2); }
-.ml-regiones { display: flex; flex-direction: column; gap: 9px; }
-.ml-region { border: 1px solid var(--line-3); border-radius: 9px; overflow: hidden; }
-.ml-region > summary { display: flex; align-items: center; justify-content: space-between; cursor: pointer;
-  padding: 9px 13px; font-weight: 650; font-size: 13px; list-style: none; }
-.ml-region > summary::-webkit-details-marker { display: none; }
-.ml-region-badges { display: flex; gap: 6px; }
-.ml-region-tabla { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
-.ml-region-tabla th { text-align: left; padding: 6px 13px; font: 600 10px var(--mono); color: var(--faint);
-  text-transform: uppercase; border-top: 1px solid var(--line-3); }
-.ml-region-tabla th.cen { text-align: center; }
-.ml-region-tabla td { padding: 6px 13px; border-top: 1px solid #F0F3F7; color: var(--ink-2); }
-html[data-tema="oscuro"] .ml-region-tabla td { border-top-color: var(--line-3); }
-.ml-region-tabla td.precip { padding: 6px 9px; text-align: center; font-family: var(--mono); }
+/* (v12: las vistas Mapas y Resumen se retiraron — estilos eliminados) */
 
 /* Tabla de probabilidades por umbral (serie ML-NWP): TRANSPUESTA y a todo el ancho de la serie
    (una columna por fecha de pronóstico, una fila por umbral). Tokens → modo oscuro correcto. */
 .ml-pb-tit { margin: 12px 0 5px; font-weight: 600; font-size: 12px; color: var(--ink); }
 .ml-pb-wrap { width: 100%; overflow: visible; }
-.ml-pb-tabla { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 10.5px; }
+.ml-pb-tabla { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; }
 .ml-pb-tabla th, .ml-pb-tabla td { padding: 4px 2px; text-align: center; border-bottom: 1px solid var(--line-3); }
 .ml-pb-col-umbral { width: var(--ml-axis-left); }
 .ml-pb-col-spacer { width: var(--ml-axis-right); }
@@ -366,13 +277,13 @@ html[data-tema="oscuro"] .ml-region-tabla td { border-top-color: var(--line-3); 
 .ml-pb-u { text-align: left !important; color: var(--ink-2); font-weight: 600; white-space: nowrap;
   font-variant-numeric: tabular-nums; }
 .ml-pb-u small { display: block; max-width: calc(var(--ml-axis-left) - 5px);
-  margin-top: 1px; color: var(--warn); font: 600 7px/1.05 var(--sans);
+  margin-top: 1px; color: var(--warn); font: 600 9px/1.2 var(--sans);
   white-space: normal; overflow-wrap: anywhere; }
 .ml-pb-c { font-variant-numeric: tabular-nums; }
 .ml-pb-spacer { padding: 0 !important; border: 0 !important; background: transparent !important; }
 /* Borde punteado que marca el inicio del pronóstico (mismo criterio que la franja de la serie) */
 .ml-pb-hoy { border-left: 1.8px dotted #6B8CB4 !important; }
-.ml-pb-nota { font-size: 10.5px; color: var(--muted-2); margin-top: 6px; }
+.ml-pb-nota { font-size: 12px; color: var(--muted-2); margin-top: 6px; line-height: 1.5; }
 .ml-pb-estado { margin-top: 12px; padding: 10px 12px; border: 1px dashed var(--line-2);
   border-radius: 8px; color: var(--muted); font-size: 11px; line-height: 1.45; }
 .ml-pb-estado b, .ml-pb-estado span { display: block; }
@@ -400,32 +311,20 @@ html[data-tema="oscuro"] .ml-region-tabla td { border-top-color: var(--line-3); 
 .ml-gloss-niveles { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--ink-2); }
 
 @media (max-width: 980px) {
-  .ml-grid-mapa, .ml-grid-detalle, .ml-grid-mapas,
   .ml-gloss-metricas { grid-template-columns: 1fr; }
-  .ml-side.alto-520, .ml-mapa.alto-520 { height: 420px; }
 }
 
 /* ---------- MÓVIL (teléfonos 360–430px) ---------- */
 @media (max-width: 560px) {
-  /* pestañas: scroll horizontal en lugar de romper el layout */
-  .ml-tabs { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
-  .ml-tab { flex: none; padding: 10px 13px; }
   /* deck de controles: estación a ancho completo, sin divisores verticales */
   .ml-deck-cuerpo { padding: 10px 12px; }
   .ml-grupo.ml-loc-grp { min-width: 0; max-width: none; flex: 1 1 100%; }
   .ml-deck-div, .ml-deck-div.ml-deck-div-ancha { display: none; }
-  .ml-telemetria { margin-left: 0; padding-left: 0; }
   /* tarjetas y rejillas */
   .ml-card { padding: 13px; }
   .ml-detalle-cab { align-items: stretch; }
   .ml-horizonte-control { width: 100%; justify-content: space-between; }
   .ml-horizonte-control select { flex: 1; max-width: 230px; }
-  .ml-stats-grid { grid-template-columns: 1fr; }
-  .ml-ministats { gap: 7px; }
-  .ml-ministat { padding: 9px; }
-  .ml-nav-botones { flex-wrap: wrap; }
-  /* barra de color del mapa no desborda en pantallas estrechas */
-  .ml-colorbar .barra, .ml-colorbar .ticks { width: min(260px, 72vw); }
   /* Un solo carril móvil para gráfico + probabilidades. En escritorio el ancho
      siempre es 100 % y no existe scroll horizontal. */
   .ml-time-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch;
@@ -436,9 +335,7 @@ html[data-tema="oscuro"] .ml-region-tabla td { border-top-color: var(--line-3); 
   #ml-serie-card { padding-top: 50px; }
   .ml-serie-acciones { top: 9px; right: 9px; }
   .ml-obs-estado { width: auto; border-radius: 8px; }
-  .ml-serie-leyenda { grid-template-columns: none; grid-auto-flow: column;
-    grid-auto-columns: minmax(112px, max-content); overflow-x: auto;
-    overscroll-behavior-inline: contain; scrollbar-width: thin; }
+  /* la leyenda envuelve también en el teléfono (mismo flex-wrap de escritorio) */
   .ml-pb-wrap { overflow: visible; }
   .ml-pb-tabla th.ml-pb-u, .ml-pb-tabla th.ml-pb-esq {
     position: sticky; left: 0; z-index: 2; background: var(--surface);
@@ -446,7 +343,7 @@ html[data-tema="oscuro"] .ml-region-tabla td { border-top-color: var(--line-3); 
   /* tablas anchas → scroll horizontal (no hay envoltorio en el HTML). La tabla
      unificada .ml-uni y la de probabilidad .ml-pb-tabla quedan FUERA: ya tienen su
      envoltorio con columna sticky. */
-  .ml-tabla-modelos:not(.ml-uni), .ml-region-tabla, .ml-top10 {
+  .ml-tabla-modelos:not(.ml-uni) {
     display: block; overflow-x: auto; white-space: nowrap; }
 }
 

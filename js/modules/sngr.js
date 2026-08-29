@@ -20,11 +20,11 @@
      Mapeo a color/etiqueta/badge según el diseño (5 tarjetas de conteo). */
   const TIPOS = [
     { clave: "Monitoreo normal",                   etq: "Monitoreo",      badge: "Monitoreo", color: "var(--blue)",   bg: "var(--blue-50)"   },
-    { clave: "Desbordamiento / posible inundacion", etq: "Desbordamiento", badge: "Desbord.",  color: "var(--danger)", bg: "var(--danger-bg)" },
+    { clave: "Desbordamiento / posible inundacion", etq: "Desbordamiento", badge: "Desbordamiento",  color: "var(--danger)", bg: "var(--danger-bg)" },
     { clave: "Crecida / aumento de caudal",         etq: "Crecida",        badge: "Crecida",   color: "var(--warn)",   bg: "var(--warn-bg)"   },
-    { clave: "Estiaje / bajo caudal",               etq: "Estiaje",        badge: "Estiaje",   color: "var(--warn)",   bg: "var(--warn-bg)"   },
+    { clave: "Estiaje / bajo caudal",               etq: "Estiaje",        badge: "Estiaje",   color: "var(--sngr-estiaje)", bg: "var(--sngr-estiaje-bg)" },
     { clave: "Alerta GEOGLOWS",                     etq: "GEOGLOWS",       badge: "GEOGLOWS",  color: "var(--ml-purple)", bg: "var(--ml-purple-bg)" },
-    { clave: "Sin clasificar",                      etq: "Sin clasificar", badge: "S/C",       color: "var(--muted)",  bg: "var(--surface-3)" },
+    { clave: "Sin clasificar",                      etq: "Sin clasificar", badge: "Sin clasificar", color: "var(--muted)",  bg: "var(--surface-3)" },
   ];
   const PORCLAVE = Object.fromEntries(TIPOS.map(t => [t.clave, t]));
   // Color absoluto (no token CSS) para Leaflet/canvas, por clave de tipo.
@@ -32,7 +32,7 @@
     "Monitoreo normal": "#2C68DE",
     "Desbordamiento / posible inundacion": "#CF362B",
     "Crecida / aumento de caudal": "#C5781B",
-    "Estiaje / bajo caudal": "#C99A2E",
+    "Estiaje / bajo caudal": "#8A6D3B",   // pardo seco: crecida y estiaje son opuestos
     "Alerta GEOGLOWS": "#6A47CE",
     "Sin clasificar": "#64748B",
   };
@@ -100,6 +100,11 @@
       cacheCapas: {},       // nivel -> geojson
       pidiendo: 0,          // token de carrera para recargas de eventos
       pidiendoCascada: 0,   // token de carrera independiente para la cascada
+      tablaEventos: [],     // eventos ordenados de la lista lateral (carga incremental)
+      tablaVisibles: 0,     // cuántas filas de la lista están pintadas ahora mismo
+      ultimaFecha: "",      // fecha del parte más reciente recibido (renglón del periodo)
+      maxEventos: 0,        // total de eventos vistos sin filtrar (respaldo si filtros.total falta)
+      geoPrevio: "||",      // último filtro geográfico aplicado (para re-encuadrar el mapa)
       epoca: ++epocaGlobal, // sello del montaje; alDejar lo invalida a -1
     };
   }
@@ -115,7 +120,8 @@
   function conteosHTML() {
     const sel = estado.sel.tipo || "";
     const pill = (clave, etq, color) =>
-      `<button class="sngr-pill${clave === sel ? " activa" : ""}" data-rol="pill" data-tipo="${esc(clave)}">
+      `<button class="sngr-pill${clave === sel ? " activa" : ""}" data-rol="pill" data-tipo="${esc(clave)}"
+        aria-pressed="${clave === sel}">
         ${color ? `<span class="punto" style="background:${color}"></span>` : `<span class="punto todos"></span>`}
         <span class="et">${esc(etq)}</span><span class="num" data-rol="num">—</span>
       </button>`;
@@ -133,8 +139,12 @@
       const num = c.querySelector('[data-rol="num"]');
       if (num) num.textContent = fmt(val);
       c.classList.toggle("activa", tipo === sel);
+      c.setAttribute("aria-pressed", String(tipo === sel));
       // Dinámico: los tipos sin eventos en el filtro vigente se apagan (Todos nunca).
       c.classList.toggle("cero", tipo !== "" && Number(val) === 0);
+      // "Sin clasificar" no existe en los datos publicados: si está a 0 se OCULTA
+      // (un contador siempre en cero es un botón que no lleva a ninguna parte).
+      if (tipo === "Sin clasificar") c.classList.toggle("oculta", Number(val) === 0 && tipo !== sel);
     });
   }
   function conectarConteos() {
@@ -148,10 +158,11 @@
   }
 
   /* ---------------- filtros en cascada ---------------- */
-  function selectHTML(rol, titulo, todos, opciones, valor, deshab) {
+  function selectHTML(rol, titulo, todos, opciones, valor, deshab, etqDe) {
+    // etqDe (opcional): texto corto a mostrar por opción, conservando el valor real.
     const ops = [`<option value="">${esc(todos)}</option>`]
       .concat((opciones || []).map(o =>
-        `<option value="${esc(o)}"${o === valor ? " selected" : ""}>${esc(o)}</option>`)).join("");
+        `<option value="${esc(o)}"${o === valor ? " selected" : ""}>${esc(etqDe ? (etqDe(o) || o) : o)}</option>`)).join("");
     return `<label><div class="tit">${esc(titulo)}</div>
       <select data-rol="${rol}"${deshab ? " disabled" : ""}>${ops}</select></label>`;
   }
@@ -166,7 +177,8 @@
     // la fila queda solo con los filtros + Actualizar → cabe en UNA fila en escritorio.
     return `
       <div class="sngr-filtros compacta">
-        ${selectHTML("tipo", "Tipo", "Todos", f.tipos, s.tipo, false)}
+        ${selectHTML("tipo", "Tipo", "Todos", f.tipos, s.tipo, false,
+          o => (PORCLAVE[o] || {}).etq)/* nombre corto en el desplegable; el largo vive en el globo del mapa */}
         ${selectHTML("provincia", "Provincia", "Todas", f.provincias, s.provincia, false)}
         ${selectHTML("canton", "Cantón", "Todos", f.cantones, s.canton, !s.provincia)}
         ${selectHTML("parroquia", "Parroquia", "Todas", f.parroquias, s.parroquia, !s.canton)}
@@ -190,15 +202,17 @@
             <div class="sngr-mapa-controles">
               <label class="sngr-capa-sel"><span class="micro">Capa base</span>
                 <select data-rol="capa">${opts}</select></label>
-              <button class="sngr-rios activo" data-rol="rios" title="Mostrar/ocultar la red de ríos">≈ Ríos</button>
+              <button class="sngr-rios activo" data-rol="rios" aria-pressed="true"
+                title="Mostrar/ocultar la red de ríos">≈ Ríos</button>
               <div class="sngr-zoom">
-                <button class="zb mas" data-rol="zoom+" title="Acercar">+</button>
-                <button class="zb menos" data-rol="zoom-" title="Alejar">−</button>
-                <button class="zb reset" data-rol="reset" title="Vista completa">⤢</button>
+                <button class="zb mas" data-rol="zoom+" title="Acercar" aria-label="Acercar">+</button>
+                <button class="zb menos" data-rol="zoom-" title="Alejar" aria-label="Alejar">−</button>
+                <button class="zb reset" data-rol="reset" title="Vista completa" aria-label="Ver todo Ecuador">⤢</button>
               </div>
             </div>
           </div>
           <div class="sngr-mapa" data-rol="mapa">
+            <div class="sngr-carga-mapa oculta" data-rol="carga-mapa" role="status"></div>
             <div class="sello arriba" data-rol="sello-capa">EVENTOS</div>
             <div class="sello abajo" data-rol="sello-abajo">Arrastra · rueda para acercar</div>
             <div class="sngr-leyenda-mapa" data-rol="leyenda-rios">
@@ -211,7 +225,7 @@
               <span class="tit">Eventos de la selección</span>
               ${window.HIDROMET_VISOR
                 ? `<button class="boton chico" data-rol="zip"
-                    title="ZIP de la ventana publicada: shapefile + GeoJSON (WGS84), XLSX, conteos CSV y resumen">⤓ Descargar ventana (ZIP)</button>`
+                    title="Baja TODOS los eventos publicados (no respeta el filtro puesto): shapefile + GeoJSON (WGS84), XLSX, conteos CSV y resumen">⤓ Descargar todo lo publicado (ZIP)</button>`
                 : `<button class="boton chico" data-rol="zip"
                     title="ZIP de la selección actual: shapefile + GeoJSON (WGS84, con estilo QGIS), XLSX, conteos por provincia/cantón/parroquia y tipo en CSV, y resumen">⤓ Descargar selección (ZIP)</button>`}
             </div>
@@ -219,12 +233,13 @@
           </div>
         </div>
         <div class="sngr-tabla-tarjeta">
-          <div class="tit">Últimos eventos</div>
+          <div class="tit">Eventos del periodo publicado</div>
+          <div class="sngr-periodo" data-rol="periodo"></div>
           <div class="sngr-tabla-scroll">
             <table class="sngr-tabla">
-              <thead><tr><th>Fecha</th><th>Tipo</th><th>Lugar</th></tr></thead>
+              <thead><tr><th>Fecha</th><th>Tipo</th><th>Lugar</th><th>Río</th></tr></thead>
               <tbody data-rol="tbody">
-                <tr><td colspan="3" style="padding:14px 6px;color:var(--muted)">Cargando…</td></tr>
+                <tr><td colspan="4" style="padding:14px 6px;color:var(--muted)">Cargando…</td></tr>
               </tbody>
             </table>
           </div>
@@ -232,33 +247,92 @@
       </div>`;
   }
 
-  // dd/mm a partir de YYYY-MM-DD
+  // dd/mm/aa a partir de YYYY-MM-DD (con año: copiarla a un informe no obliga a deducirlo)
   function fechaCorta(iso) {
     if (!iso || iso.length < 10) return "—";
-    return iso.slice(8, 10) + "/" + iso.slice(5, 7);
+    return iso.slice(8, 10) + "/" + iso.slice(5, 7) + "/" + iso.slice(2, 4);
+  }
+  // dd/mm/aaaa a partir de YYYY-MM-DD (para el renglón del periodo publicado)
+  function fechaLarga(iso) {
+    if (!iso || iso.length < 10) return "—";
+    return iso.slice(8, 10) + "/" + iso.slice(5, 7) + "/" + iso.slice(0, 4);
   }
   function lugarDe(p) {
     const partes = [p.canton, p.provincia].map(x => (x || "").trim()).filter(Boolean);
     return partes.length ? partes.join(" · ") : (p.parroquia || p.sector || "—");
   }
+  const FILAS_TRAMO = 60;   // filas que la lista lateral añade en cada tramo
+  function filaHTML(ev, i) {
+    const b = badgeDe(ev.tipo_evento);
+    const p = ev.popup || {};
+    const desc = [p.observaciones, p.novedad].filter(Boolean).join(" · ");
+    // Fila pulsable: despliega debajo la descripción del parte (307 de 402 la traen),
+    // sin obligar a ir burbuja por burbuja al mapa.
+    return `<tr class="sngr-fila${desc ? " con-desc" : ""}"${desc ? ` data-desc="${i}" title="Ver la descripción del parte"` : ""}>
+      <td class="fecha">${esc(fechaCorta(ev.fecha))}</td>
+      <td><span class="sngr-badge" style="--c:${b.color};--bg:${b.bg}">${esc(b.badge)}</span></td>
+      <td>${esc(lugarDe(p))}</td>
+      <td>${esc(p.rio || p.cuerpo || "—")}</td>
+    </tr>` + (desc ? `<tr class="sngr-desc-fila oculta" data-desc-de="${i}">
+      <td colspan="4">${p.parroquia || p.sector
+        ? `<b>${esc([p.parroquia, p.sector].filter(Boolean).join(" · "))}</b> — ` : ""}${esc(desc)}</td>
+    </tr>` : "");
+  }
   function pintarTabla(eventos) {
+    // Recientes primero (la BD no garantiza orden). Carga incremental de 60 en 60
+    // con pie que dice cuántos se ven del total (antes cortaba en 60 sin avisar).
+    estado.tablaEventos = [...eventos].sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
+    estado.tablaVisibles = Math.min(FILAS_TRAMO, estado.tablaEventos.length);
+    pintarTramoTabla();
+  }
+  function pintarTramoTabla() {
     const tbody = document.querySelector('[data-rol="tbody"]');
     if (!tbody) return;
-    if (!eventos.length) {
-      tbody.innerHTML = `<tr><td colspan="3" style="padding:18px 6px;color:var(--muted)">Sin eventos para el filtro.</td></tr>`;
+    const evs = estado.tablaEventos || [];
+    if (!evs.length) {
+      tbody.innerHTML = `<tr><td colspan="4" style="padding:18px 6px;color:var(--muted)">Sin eventos para el filtro.</td></tr>`;
       return;
     }
-    // Recientes primero (la BD no garantiza orden) — top 60 para la lista lateral.
-    const orden = [...eventos].sort((a, b) => (b.fecha || "").localeCompare(a.fecha || "")).slice(0, 60);
-    tbody.innerHTML = orden.map(ev => {
-      const b = badgeDe(ev.tipo_evento);
-      const p = ev.popup || {};
-      return `<tr>
-        <td class="fecha">${esc(fechaCorta(ev.fecha))}</td>
-        <td><span class="sngr-badge" style="--c:${b.color};--bg:${b.bg}">${esc(b.badge)}</span></td>
-        <td>${esc(lugarDe(p))}</td>
-      </tr>`;
-    }).join("");
+    const fmt = x => Number(x || 0).toLocaleString("es-EC");
+    const n = Math.min(estado.tablaVisibles || FILAS_TRAMO, evs.length);
+    const quedan = evs.length - n;
+    const pie = quedan > 0
+      ? `<tr class="sngr-pie-tabla"><td colspan="4"><div class="fila">
+          <span>Mostrando ${fmt(n)} de ${fmt(evs.length)} eventos</span>
+          <button class="boton chico" data-rol="ver-mas">Ver ${fmt(Math.min(FILAS_TRAMO, quedan))} más</button>
+        </div></td></tr>`
+      : (evs.length > FILAS_TRAMO
+        ? `<tr class="sngr-pie-tabla"><td colspan="4"><div class="fila"><span>Se muestran los ${fmt(evs.length)} eventos de la selección.</span></div></td></tr>`
+        : "");
+    tbody.innerHTML = evs.slice(0, n).map((ev, i) => filaHTML(ev, i)).join("") + pie;
+    const bMas = tbody.querySelector('[data-rol="ver-mas"]');
+    if (bMas) bMas.onclick = () => {
+      estado.tablaVisibles = Math.min(n + FILAS_TRAMO, evs.length);
+      pintarTramoTabla();
+    };
+    // Despliegue de la descripción del parte al pulsar la fila (delegado).
+    tbody.onclick = (e) => {
+      const fila = e.target.closest("tr[data-desc]");
+      if (!fila) return;
+      const det = tbody.querySelector(`tr[data-desc-de="${fila.dataset.desc}"]`);
+      if (det) det.classList.toggle("oculta");
+    };
+  }
+  // Renglón honesto bajo el título de la lista: cuántos partes trae la ventana
+  // publicada, qué periodo cubre y hasta cuándo hay partes de verdad (el más
+  // reciente puede ser de semanas atrás, y eso hay que decirlo).
+  function pintarPeriodo() {
+    const el = document.querySelector('[data-rol="periodo"]');
+    if (!el) return;
+    const f = estado.filtros || {};
+    const fmt = x => Number(x || 0).toLocaleString("es-EC");
+    const total = Number(f.total) > 0 ? Number(f.total) : estado.maxEventos;
+    const partes = [];
+    if (total > 0) partes.push(`${fmt(total)} partes publicados`);
+    if (f.fecha_min && f.fecha_max) partes.push(`ventana del ${fechaLarga(f.fecha_min)} al ${fechaLarga(f.fecha_max)}`);
+    if (estado.ultimaFecha && f.fecha_max && estado.ultimaFecha < f.fecha_max)
+      partes.push(`sin partes posteriores al ${fechaLarga(estado.ultimaFecha)}`);
+    el.textContent = partes.length ? partes.join(" · ") : "Periodo publicado sin detalle de fechas.";
   }
 
   // Mapa base OSM (CARTO) TEMÁTICO: light_all en claro, dark_all en oscuro.
@@ -273,9 +347,10 @@
     // Mapa base OSM/CARTO (teselas en línea, claras u oscuras según el tema) +
     // capas temáticas locales (límites/cuencas), red de ríos y eventos por encima.
     const map = L.map(div, {
-      zoomControl: false, attributionControl: false,
+      zoomControl: false, attributionControl: true,   // crédito OSM/CARTO: lo exige su licencia
       minZoom: 5, maxZoom: 17, maxBoundsViscosity: 0.7,
     }).setView(CENTRO_EC, ZOOM_INI);
+    if (map.attributionControl) map.attributionControl.setPrefix(false);
     estado.mapa = map;
     estado.capaTiles = L.tileLayer(urlTiles(), {
       attribution: "© OpenStreetMap · © CARTO", subdomains: "abcd", maxZoom: 19, crossOrigin: true,
@@ -327,6 +402,14 @@
     estado.cacheCapas[nivel] = gj;
     return gj;
   }
+  // Indicador de carga sobre el mapa (las capas pesan >1 MB: sin esto el mapa
+  // parece roto en conexiones lentas). txt=null lo oculta.
+  function cargaMapa(txt) {
+    const el = document.querySelector('[data-rol="carga-mapa"]');
+    if (!el) return;
+    el.textContent = txt || "";
+    el.classList.toggle("oculta", !txt);
+  }
   async function pintarCapaBase(id) {
     const E = estado;
     const cfg = CAPAS.find(c => c.id === id) || CAPAS[0];
@@ -336,8 +419,11 @@
     const selloCapa = document.querySelector('[data-rol="sello-capa"]');
     if (selloCapa) selloCapa.textContent = cfg.etq.toUpperCase();
     let gj;
+    if (selCapa) selCapa.disabled = true;            // sin doble pulsación mientras baja
+    cargaMapa("Cargando capa " + cfg.etq.toLowerCase() + "…");
     try { gj = await cargarCapa(cfg.nivel); }
     catch (e) { App.aviso("Capa " + cfg.etq + ": " + e.message, "error"); return; }
+    finally { cargaMapa(null); const s2 = document.querySelector('[data-rol="capa"]'); if (s2) s2.disabled = false; }
     if (!vigente(E) || !estado.mapa) return;
     if (estado.capaBaseCasing) { estado.mapa.removeLayer(estado.capaBaseCasing); estado.capaBaseCasing = null; }
     if (estado.capaBase) { estado.mapa.removeLayer(estado.capaBase); estado.capaBase = null; }
@@ -369,17 +455,25 @@
     const E = estado;
     estado.rios = activar;
     const btn = document.querySelector('[data-rol="rios"]');
-    if (btn) btn.classList.toggle("activo", activar);
+    if (btn) { btn.classList.toggle("activo", activar); btn.setAttribute("aria-pressed", String(activar)); }
     const ley = document.querySelector('[data-rol="leyenda-rios"]');
-    if (ley) ley.classList.toggle("oculto", !activar);
+    // La leyenda solo cuando los ríos YA están dibujados (no prometer antes de tiempo).
+    if (ley) ley.classList.toggle("oculto", !activar || !estado.capaRios);
     if (!activar) {
       if (estado.capaRios) { estado.mapa.removeLayer(estado.capaRios); estado.capaRios = null; }
       return;
     }
-    if (estado.capaRios) return;   // ya cargada
+    if (estado.capaRios) { if (ley) ley.classList.remove("oculto"); return; }   // ya cargada
     let gj;
+    if (btn) btn.disabled = true;   // el fichero pesa 1,4 MB: espera sin doble pulsación
+    cargaMapa("Cargando ríos…");
     try { gj = await cargarCapa("hidrografia"); }
-    catch (e) { App.aviso("Ríos: " + e.message, "error"); estado.rios = false; if (btn) btn.classList.remove("activo"); return; }
+    catch (e) {
+      App.aviso("Ríos: " + e.message, "error"); estado.rios = false;
+      if (btn) { btn.classList.remove("activo"); btn.setAttribute("aria-pressed", "false"); }
+      return;
+    }
+    finally { cargaMapa(null); const b2 = document.querySelector('[data-rol="rios"]'); if (b2) b2.disabled = false; }
     if (!vigente(E) || !estado.mapa || !estado.rios) return;
     const P = paletaMapa();
     // Red COMPLETA (rio_l): los principales (prioridad 1/2) gruesos y oscuros, el
@@ -393,6 +487,8 @@
                  weight: mayor ? 1.3 : 0.5, opacity: mayor ? 0.95 : 0.7 };
       },
     }).addTo(estado.mapa);
+    const ley2 = document.querySelector('[data-rol="leyenda-rios"]');
+    if (ley2) ley2.classList.remove("oculto");
   }
 
   // Crea el grupo de clúster coloreando cada burbuja por el tipo dominante.
@@ -510,9 +606,29 @@
     const token = ++estado.pidiendo;
     let r;
     try { r = await App.api("/sngr/eventos" + queryFiltros()); }
-    catch (e) { App.aviso("Eventos: " + e.message, "error"); return; }
+    catch (e) {
+      App.aviso("Eventos: " + e.message, "error");
+      if (!vigente(E) || token !== estado.pidiendo) return;
+      // El aviso flotante se borra solo: dejar el fallo ESCRITO en la lista, con
+      // reintento, y retirar del mapa los puntos del filtro anterior (ya no corresponden).
+      const tbody = document.querySelector('[data-rol="tbody"]');
+      if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="4" style="padding:18px 6px;color:var(--muted)">
+          No se pudieron cargar los eventos (${esc(e.message)}).
+          <button class="boton chico" data-rol="reintentar" style="margin-left:8px">⟳ Reintentar</button></td></tr>`;
+        const b = tbody.querySelector('[data-rol="reintentar"]');
+        if (b) b.onclick = () => recargarEventos();
+      }
+      if (estado.cluster && estado.mapa) { estado.mapa.removeLayer(estado.cluster); estado.cluster = null; }
+      actualizarSello();
+      return;
+    }
     if (!vigente(E) || token !== estado.pidiendo) return;  // recarga más nueva o montaje obsoleto
     let evs = r.eventos || [], conteos = r.conteos_por_tipo || {};
+    // Parte más reciente y total de respaldo, ANTES del filtrado en cliente,
+    // para que el renglón del periodo hable de lo publicado y no de la selección.
+    for (const ev of evs) if (ev.fecha && ev.fecha > estado.ultimaFecha) estado.ultimaFecha = ev.fecha;
+    estado.maxEventos = Math.max(estado.maxEventos, evs.length);
     if (window.HIDROMET_VISOR) {
       const sinTipo = filtrarLocal(evs, true);           // selección SIN el filtro de tipo
       conteos = {};
@@ -520,9 +636,24 @@
       evs = estado.sel.tipo ? sinTipo.filter(ev => ev.tipo_evento === estado.sel.tipo) : sinTipo;
     }
     pintarConteos(conteos);
+    pintarPeriodo();
     pintarTabla(evs);
     pintarMarcadores(evs);
     actualizarSello();
+    // Encuadre que SIGUE al filtro geográfico: con provincia/cantón/parroquia puesta,
+    // el mapa se ajusta a los eventos filtrados; al volver a "Todas", vista de Ecuador.
+    const claveGeo = [estado.sel.provincia, estado.sel.canton, estado.sel.parroquia].join("|");
+    if (claveGeo !== estado.geoPrevio) {
+      estado.geoPrevio = claveGeo;
+      try {
+        if (claveGeo !== "||" && estado.cluster && estado.cluster.getLayers().length) {
+          const b = estado.cluster.getBounds();
+          if (b.isValid()) estado.mapa.fitBounds(b.pad(0.25), { maxZoom: 11 });
+        } else if (claveGeo === "||" && estado.boundsEC && estado.boundsEC.isValid()) {
+          estado.mapa.fitBounds(estado.boundsEC.pad(0.05));
+        }
+      } catch (e) { /* sin encuadre válido */ }
+    }
   }
 
   // Recarga la cascada (cantones/parroquias dependientes) preservando el resto.
@@ -540,8 +671,16 @@
     if (!vigente(E) || token !== estado.pidiendoCascada) return;  // respuesta stale fuera de orden
     estado.filtros = f;
     const wrap = document.querySelector(".sngr-filtros");
+    // La fila se regenera entera: recordar QUÉ control tenía el foco (teclado) para
+    // devolvérselo después y no mandar al usuario a tabular desde arriba otra vez.
+    const rolFoco = document.activeElement && document.activeElement.closest(".sngr-filtros")
+      ? document.activeElement.dataset.rol : null;
     if (wrap) wrap.outerHTML = filtrosHTML(f);
     conectarFiltros();
+    if (rolFoco) {
+      const nuevo = document.querySelector(`.sngr-filtros [data-rol="${rolFoco}"]`);
+      if (nuevo && !nuevo.disabled) { try { nuevo.focus(); } catch (e) {} }
+    }
   }
 
   function conectarFiltros() {

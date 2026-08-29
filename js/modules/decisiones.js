@@ -20,7 +20,9 @@
 
    Datos: reúsa los productos congelados del visor — /mlnwp/veredicto
    (?codigo=X para mañana; &dia=2..5 para el resto del horizonte) y
-   /mlnwp/validacion_estacion (solo tmax/tmin, ventana 30). No sustituye
+   /mlnwp/validacion_estacion (solo tmax/tmin, ventana 10 = la publicada).
+   Las FECHAS navegables salen del DATO (campos fecha/hoy de los ficheros),
+   nunca del reloj del visitante; si el dato caducó se avisa. No sustituye
    la validación ausente del veredicto probabilístico con métricas de
    precip_det, que corresponde a otra regla y otros modelos. Los
    veredictos del mapa se cargan por LOTES y se cachean por
@@ -44,14 +46,19 @@
   // correcto contra el backend vivo.
   const DEPS_QS = "deps=" + encodeURIComponent(
     "INAMHI,CELEC,Hidronación,EPMAPS");
-  // Ventana de la VALIDACIÓN de las decisiones (nº de fechas; producto congelado).
-  const VENTANA = "30";
+  // Ventana de la VALIDACIÓN de las decisiones (nº de fechas). DEBE coincidir
+  // con la que se publica en productos/mlnwp/validacion_estacion (hoy 10):
+  // con "30" el fichero no existía y la evidencia salía siempre vacía.
+  const VENTANA = "10";
   const DIA_MIN = 1, DIA_MAX = 5;   // horizonte navegable: mañana .. +5 días
 
   // Colores del veredicto en el MAPA (lienzo = papel blanco fijo, regla de
   // Pronóstico → colores fijos, sin tokens de tema).
   const C_SI = "#1B6ACB", C_NO = "#93A1B4", C_SIN = "#E3E9F1";
   const C_SIN_BORDE = "#B9C3D0";
+  // Aviso de respaldo (ensamble físico sin calibrar): categoría propia,
+  // más clara que la acreditada pero nunca el gris de "sin dato".
+  const C_RESP_SI = "#7FB0E8", C_RESP_NO = "#C3CDD9";
 
   // Distancia de la probabilidad emitida al corte operativo del 50 %. Esto mide
   // únicamente cuán lejos queda la regla de decisión de su frontera; NO es
@@ -67,7 +74,8 @@
   }
 
   // Nombre legible de los modelos que emiten el veredicto de temperatura.
-  const MODELO_ET = { BEST_OP_CV: "Selector operativo", CONSENSO_OP_TOP5: "Consenso top-5" };
+  const MODELO_ET = { BEST_OP_CV: "Selector operativo", CONSENSO_OP_TOP5: "Consenso top-5",
+    ENSAMBLE_NWP_FISICO: "Promedio de 8 modelos internacionales" };
   const etModelo = m => MODELO_ET[m] || m || "—";
 
   // Badge de calificación 1-10 (misma escala RdYlGn que la tabla de mlnwp.js).
@@ -98,6 +106,8 @@
     dia: 1,              // día visible: 1 = mañana .. 5
     sel: "",             // estación seleccionada
     idxMark: -1,         // índice del trace de marcadores dentro del plot
+    fechaBase: null,     // ISO del día 1 SEGÚN EL DATO publicado (campo fecha)
+    hoyDato: null,       // ISO de emisión SEGÚN EL DATO (campo hoy)
   };
   // Contadores de generación: invalidan lotes/panel en vuelo al salir de la
   // pestaña, re-renderizar o cambiar de día (App.api no cancela).
@@ -107,16 +117,79 @@
   const vacio = msg => `<div class="vacio"><div class="icono">∅</div>${esc(msg)}</div>`;
   const ddmm = f => (f && f.length >= 10) ? `${f.slice(8, 10)}/${f.slice(5, 7)}` : "—";
 
-  /* ---------------- fechas del horizonte ---------------- */
-  const DIAS_SEM = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
+  /* ---------------- veredicto de una estacion ----------------
+     UN SOLO criterio para el color del punto, el conteo del resumen y la
+     tarjeta. Antes el color exigia veredicto acreditado y el conteo no lo
+     miraba: el mapa salia gris entero mientras debajo se leia "SI en 131",
+     dos cosas contrarias a dos centimetros una de otra. */
+  function veredictoDe(ll) {
+    if (!ll) return "sin_dato";
+    const acreditado = ll.operacional === true
+      && ll.estado_promocion === "ACCREDITED";
+    if (!acreditado) return "no_acreditado";
+    if (ll.llueve === true) return "si";
+    if (ll.llueve === false) return "no";
+    return "sin_dato";
+  }
 
-  // ISO (YYYY-MM-DD) de hoy+n en TZ Ecuador — el MISMO criterio del backend.
-  function fechaISO(n) {
-    const hoy = App.hoyEC ? App.hoyEC() : new Date().toISOString().slice(0, 10);
-    const d = new Date(`${hoy}T12:00:00`);   // mediodía: inmune a DST
+  /* ---------------- fechas del horizonte ----------------
+     La fecha que MANDA es la del DATO publicado (campos fecha/hoy de los
+     ficheros de veredicto), nunca el reloj del visitante: con el visor
+     parado, hoy+N inventaba fechas futuras para pronósticos caducados. */
+  const DIAS_SEM = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
+  const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+    "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+
+  function sumaDias(iso, n) {
+    const d = new Date(`${iso}T12:00:00`);   // mediodía: inmune a DST
     d.setDate(d.getDate() + n);
     const p = x => String(x).padStart(2, "0");
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  }
+  const hoyCliente = () => App.hoyEC ? App.hoyEC() : new Date().toISOString().slice(0, 10);
+
+  // ISO (YYYY-MM-DD) del día n del horizonte. Con dato ya visto: fecha del
+  // dato. Antes de la primera respuesta: hoy+n como mera provisionalidad.
+  function fechaISO(n) {
+    if (S.fechaBase) return sumaDias(S.fechaBase, n - 1);
+    return sumaDias(hoyCliente(), n);
+  }
+  // '23 de agosto de 2026' para los avisos.
+  function fechaLarga(iso) {
+    if (!iso || iso.length < 10) return "—";
+    return `${+iso.slice(8, 10)} de ${MESES[(+iso.slice(5, 7)) - 1] || "?"} de ${iso.slice(0, 4)}`;
+  }
+  const diasEntre = (a, b) =>
+    Math.round((new Date(`${b}T12:00:00`) - new Date(`${a}T12:00:00`)) / 864e5);
+
+  // Ancla el horizonte a lo que dice el fichero recibido (fecha, hoy, dia).
+  function fijarFechaDato(v, dia) {
+    if (!v || !v.fecha || String(v.fecha).length < 10) return;
+    const base = sumaDias(v.fecha, 1 - (dia || 1));
+    const hoyD = (v.hoy && String(v.hoy).length >= 10) ? v.hoy : sumaDias(base, -1);
+    if (base === S.fechaBase && hoyD === S.hoyDato) return;
+    S.fechaBase = base; S.hoyDato = hoyD;
+    pintarNav();
+    pintarAvisoFecha();
+  }
+
+  // Banda imposible de ignorar cuando el dato publicado quedó atrás.
+  function pintarAvisoFecha() {
+    const el = document.getElementById("dec-aviso-fecha");
+    if (!el) return;
+    if (!S.fechaBase) { el.hidden = true; return; }
+    const hoy = hoyCliente();
+    const masNueva = sumaDias(S.fechaBase, DIA_MAX - 1);   // fecha más nueva del dato
+    if (masNueva < hoy) {
+      el.hidden = false;
+      el.innerHTML = `⚠ Estos pronósticos son del ${esc(fechaLarga(S.hoyDato))}: `
+        + `<strong>NO describen los próximos días.</strong> `
+        + `El visor lleva ${diasEntre(S.hoyDato, hoy)} días sin publicar pronósticos nuevos.`;
+    } else if (S.hoyDato && S.hoyDato < hoy) {
+      el.hidden = false;
+      el.innerHTML = `⚠ Pronóstico emitido el ${esc(fechaLarga(S.hoyDato))} `
+        + `(hace ${diasEntre(S.hoyDato, hoy)} días). Las fechas mostradas son las del dato publicado.`;
+    } else el.hidden = true;
   }
   // 'vie 11/07' a partir de una fecha ISO.
   function fmtFecha(iso) {
@@ -146,6 +219,7 @@
     let v;
     try { v = await App.api(url); } catch (e) { v = false; }
     S.cache.set(kDia(cod, dia), v);
+    if (v && !v.sin_datos) fijarFechaDato(v, dia);   // la fecha manda desde el dato
     return v;
   }
 
@@ -165,6 +239,20 @@
       hechas += Math.min(LOTE, pend.length - i);
       refrescarMapa();
       pintarResumenMapa(hechas, S.ests.length);
+    }
+    // Con el día visible completo, precarga el resto del horizonte en segundo
+    // plano: cambiar de día pasa a ser instantáneo (todo queda en cache).
+    if (mi === gen && dia === S.dia) precargarOtrosDias(mi);
+  }
+
+  async function precargarOtrosDias(mi) {
+    for (let d = DIA_MIN; d <= DIA_MAX; d++) {
+      if (d === S.dia) continue;
+      const pend = S.ests.map(e => String(e.codigo)).filter(c => !S.cache.has(kDia(c, d)));
+      for (let i = 0; i < pend.length; i += 4) {
+        if (mi !== gen) return;
+        await Promise.all(pend.slice(i, i + 4).map(c => pedirVeredicto(c, d)));
+      }
     }
   }
 
@@ -216,13 +304,18 @@
       const cod = String(e.codigo);
       const v = vDe(cod);                    // undefined = aún cargando
       const ll = (v && v.lluvia) || null;
-      const operativa = !!(ll && ll.operacional === true
-        && ll.estado_promocion === "ACCREDITED");
+      const veredicto = veredictoDe(ll);
+      const operativa = veredicto === "si" || veredicto === "no";
+      // Tercer estado real del sistema: aviso de respaldo (ensamble físico
+      // sin calibrar). Se pinta con color propio, nunca como "sin dato".
+      const respaldo = veredicto === "no_acreditado" && ll
+        && typeof ll.llueve === "boolean";
       const [, tam, distanciaPp] = distanciaDecision(
-        operativa ? ll.prob : null);
+        (operativa || respaldo) ? ll.prob : null);
       let col = C_SIN, borde = C_SIN_BORDE;
-      if (operativa && ll.llueve === true) { col = C_SI; borde = "#ffffff"; }
-      else if (operativa && ll.llueve === false) { col = C_NO; borde = "#ffffff"; }
+      if (veredicto === "si") { col = C_SI; borde = "#ffffff"; }
+      else if (veredicto === "no") { col = C_NO; borde = "#ffffff"; }
+      else if (respaldo) { col = ll.llueve ? C_RESP_SI : C_RESP_NO; borde = "#ffffff"; }
       const selec = cod === String(S.sel);
       color.push(col);
       size.push(v === undefined ? 7 : tam);
@@ -237,7 +330,9 @@
         if (ll) {
           h += operativa
             ? `<br>Lluvia ${fTxt}: <b>${esc(ll.texto || "—")}</b>${ll.prob != null ? ` · ${ll.prob} %` : ""}`
-            : `<br>Probabilidad provisional no calibrada: ${ll.prob != null ? `${ll.prob} %` : "—"} · sin veredicto`;
+            : respaldo
+              ? `<br>Lluvia ${fTxt} (aviso de respaldo, sin calibrar): <b>${esc(ll.texto || "—")}</b>${ll.prob != null ? ` · ${ll.prob} %` : ""}`
+              : `<br>Probabilidad sin calibrar: ${ll.prob != null ? `${ll.prob} %` : "—"} · sin veredicto`;
           if (operativa && distanciaPp != null)
             h += ` · a ${distanciaPp.toFixed(0)} pp del corte`;
           const extra = [];
@@ -278,15 +373,25 @@
                scaleanchor: "x", scaleratio: 1, fixedrange: false },
       dragmode: "pan",
     });
-    Plotly.newPlot(el, traces, layout, App.plotlyConfig({ scrollZoom: true })).then(() => {
+    // scrollZoom apagado: la rueda vuelve a desplazar la página (el zoom queda
+    // en la pinza táctil, el arrastre y el botón "Volver a Ecuador").
+    Plotly.newPlot(el, traces, layout, App.plotlyConfig({ scrollZoom: false })).then(() => {
       if (App.pinchZoomMapa) App.pinchZoomMapa(el);   // pinza = zoom del mapa
       el.on("plotly_click", ev => {
         const p = ev.points && ev.points[0];
         if (!p || p.curveNumber !== S.idxMark) return;
         const e = S.ests[p.pointNumber];
-        if (e) elegir(e.codigo);
+        if (e) elegir(e.codigo, true);
       });
     });
+  }
+
+  // Restaura el encuadre nacional (visible también en táctil, donde la barra
+  // de herramientas de Plotly está oculta).
+  function encuadrarEcuador() {
+    const el = document.getElementById("dec-mapa");
+    if (!el || !el.data || !window.Plotly) return;
+    Plotly.relayout(el, { "xaxis.range": [ECU.W, ECU.E], "yaxis.range": [ECU.S, ECU.N] });
   }
 
   // Recolorea los marcadores SIN redibujar el mapa (restyle del trace).
@@ -306,15 +411,51 @@
     const el = document.getElementById("dec-prog");
     if (!el) return;
     if (hechas < total) { el.textContent = `cargando… ${hechas}/${total}`; return; }
-    let si = 0, no = 0, sin = 0;
+    // El respaldo (ensamble sin calibrar) se cuenta aparte y CON el mismo
+    // criterio con el que se pinta el punto: el texto nunca contradice al mapa.
+    let si = 0, no = 0, rsi = 0, rno = 0, sinAcreditar = 0, sin = 0;
     for (const e of S.ests) {
       const v = vDe(String(e.codigo));
-      const ll = v && v.lluvia;
-      if (ll && ll.llueve === true) si++;
-      else if (ll && ll.llueve === false) no++;
-      else sin++;
+      const ll = (v && v.lluvia) || null;
+      switch (veredictoDe(ll)) {
+        case "si": si++; break;
+        case "no": no++; break;
+        case "no_acreditado":
+          if (ll && ll.llueve === true) rsi++;
+          else if (ll && ll.llueve === false) rno++;
+          else sinAcreditar++;
+          break;
+        default: sin++;
+      }
     }
-    el.textContent = `SÍ en ${si} · NO en ${no}${sin ? ` · sin dato ${sin}` : ""}`;
+    const partes = [];
+    if (si || no) partes.push(`SÍ en ${si} · NO en ${no}`);
+    if (rsi || rno) partes.push(`aviso de respaldo: lluvia en ${rsi} · sin lluvia en ${rno}`);
+    if (sinAcreditar) partes.push(`sin veredicto en ${sinAcreditar}`);
+    if (sin) partes.push(`sin dato ${sin}`);
+    el.textContent = partes.join(" · ") || "sin datos";
+    el.title = (rsi || rno)
+      ? "Aviso de respaldo: coincidencia de los modelos físicos, sin corrección estadística; tiende a avisar de más."
+      : "";
+    pintarLeyenda({ si, no, rsi, rno, sinAcreditar, sin });
+  }
+
+  // Leyenda construida con lo que REALMENTE hay en el mapa: solo las
+  // categorías presentes, con la de respaldo incluida.
+  function pintarLeyenda(c) {
+    const el = document.getElementById("dec-leyenda");
+    if (!el) return;
+    const it = (color, txt, borde, chico) =>
+      `<span class="it"><span class="pt${chico ? " chico" : ""}" style="background:${color}${borde ? `;box-shadow:inset 0 0 0 1.5px ${borde}` : ""}"></span>${txt}</span>`;
+    const partes = [];
+    if (c.si) partes.push(it(C_SI, "Sí llueve"));
+    if (c.no) partes.push(it(C_NO, "No llueve"));
+    if (c.rsi) partes.push(it(C_RESP_SI, "Lluvia (aviso de respaldo, sin calibrar)"));
+    if (c.rno) partes.push(it(C_RESP_NO, "Sin lluvia (respaldo)"));
+    if (c.sin || c.sinAcreditar) partes.push(it(C_SIN, "Sin dato", C_SIN_BORDE, true));
+    if (c.si || c.no || c.rsi || c.rno)
+      partes.push(`<span class="it dec-ley-tam">● punto más grande = los modelos coinciden más</span>`);
+    el.innerHTML = partes.join("");
   }
 
   /* ============================================================
@@ -323,13 +464,19 @@
   function pintarNav() {
     const f = document.getElementById("dec-fecha");
     const sub = document.getElementById("dec-fecha-sub");
+    // Con dato caducado, "mañana"/"dentro de N días" sería mentira: se dice
+    // cuándo se emitió en su lugar.
+    const caduco = S.hoyDato && S.hoyDato < hoyCliente();
     if (f) f.textContent = fmtFecha(fechaISO(S.dia));
-    if (sub) sub.textContent = etiquetaDia(S.dia);
+    if (sub) sub.textContent = caduco
+      ? `caducado · emitido el ${ddmm(S.hoyDato)}`
+      : etiquetaDia(S.dia);
     const bA = document.getElementById("dec-nav-prev"), bS = document.getElementById("dec-nav-next");
     if (bA) bA.disabled = S.dia <= DIA_MIN;
     if (bS) bS.disabled = S.dia >= DIA_MAX;
     const tit = document.getElementById("dec-mapa-tit");
-    if (tit) tit.textContent = `¿Dónde llueve el ${fmtFecha(fechaISO(S.dia))}?`;
+    if (tit) tit.textContent = `¿Dónde llueve el ${fmtFecha(fechaISO(S.dia))}?`
+      + (caduco ? " (pronóstico caducado)" : "");
   }
 
   function cambiarDia(delta) {
@@ -408,12 +555,18 @@
     };
   }
 
-  function elegir(cod) {
+  function elegir(cod, desdeMapa) {
     S.sel = String(cod);
     const input = document.getElementById("dec-est-input");
     if (input) input.value = etiquetaEst();
     refrescarMapa();   // resalta el marcador seleccionado (aro oscuro)
     pintarPanel();
+    // En pantallas estrechas la tarjeta queda ARRIBA del mapa: al tocar un
+    // punto se lleva a la vista, si no parece que el toque no hizo nada.
+    if (desdeMapa && window.matchMedia && window.matchMedia("(max-width: 1120px)").matches) {
+      const p = document.getElementById("dec-panel");
+      if (p && p.scrollIntoView) p.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   }
 
   /* ============================================================
@@ -463,11 +616,22 @@
       return `<div class="dec-kpi"><div class="lab"><span class="ico">${ICO_TERMO}</span>${lab}</div>
         <div class="valor dec-sin">—</div><div class="rango">sin dato</div></div>`;
     }
+    // El margen entre modelos viene en el dato (q25–q75): se enseña para no
+    // vender el valor único como una precisión que no existe.
+    const rango = (t.q25 != null && t.q75 != null)
+      ? `<div class="rango">entre ${num(t.q25)} y ${num(t.q75)} °C</div>` : "";
     return `<div class="dec-kpi">
       <div class="lab"><span class="ico">${ICO_TERMO}</span>${lab}</div>
       <div class="valor">${num(t.valor)}<small>°C</small></div>
+      ${rango}
       <div class="fuente" title="Modelo que emite el valor">${esc(etModelo(t.modelo))}</div>
     </div>`;
+  }
+
+  // 'sum_07_07' → frase llana; cualquier otro código se omite sin romper.
+  function aggTxt(a) {
+    const m = String(a || "").match(/(\d{1,2})[_-](\d{1,2})$/);
+    return m ? `Lluvia acumulada de ${+m[1]} de la mañana a ${+m[2]} de la mañana del día siguiente.` : "";
   }
 
   function tarjetaVeredictoHTML(v) {
@@ -497,34 +661,51 @@
     } else {
       const operativa = ll.operacional === true
         && ll.estado_promocion === "ACCREDITED";
-      const cls = operativa && ll.llueve === true
-        ? "si" : (operativa && ll.llueve === false ? "no" : "sin");
+      // Aviso de respaldo: el ensamble físico sí trae un SÍ/NO usable — se
+      // enseña con su color y diciendo en qué se apoya, no como "sin".
+      const respaldo = !operativa && typeof ll.llueve === "boolean";
+      const cls = (operativa || respaldo)
+        ? (ll.llueve === true ? "si" : ll.llueve === false ? "no" : "sin")
+        : "sin";
       const [distanciaTxt, , distanciaPp] = distanciaDecision(
         operativa ? ll.prob : null);
       const prob = ll.prob != null ? Math.max(0, Math.min(100, ll.prob)) : null;
+      const baseTxt = (ll.n_miembros && prob != null)
+        ? `${Math.round(prob / 100 * ll.n_miembros)} de ${ll.n_miembros} modelos`
+        : "sin calibrar";
       hero = `<div class="dec-hero ${cls}">
         <span class="dec-hero-ico">${ICO_GOTA}</span>
         <div class="dec-hero-main">
-          <div class="k">${operativa ? "Lluvia (P ≥ 1 mm)" : "Probabilidad provisional (≥ 1 mm)"}</div>
+          <div class="k">${operativa ? "Lluvia (P ≥ 1 mm)" : respaldo ? "Lluvia (aviso de respaldo, sin calibrar)" : "Probabilidad sin calibrar (≥ 1 mm)"}</div>
           <div class="v">${esc(ll.texto || "—")}${prob != null ? `<small>${prob} %</small>` : ""}</div>
           ${prob != null ? `<div class="dec-prob-barra" role="img" aria-label="Probabilidad ${prob} %"><i style="width:${prob}%"></i><u style="left:50%"></u></div>` : ""}
         </div>
         <div class="dec-hero-lado">
-          <div class="mini"><span class="k">Lluvia fuerte ≥ 10 mm</span><span class="v">${ll.prob_fuerte != null ? `${ll.prob_fuerte} %` : "—"}</span></div>
+          ${(() => {
+            // La lluvia fuerte es el dato peligroso: se realza por valor
+            // (atención ≥ 30 %, alerta ≥ 60 %) en vez de salir siempre gris.
+            const pf = ll.prob_fuerte;
+            const estilo = pf == null ? "" : pf >= 60
+              ? ' style="color:var(--danger);font-weight:700"'
+              : pf >= 30 ? ' style="color:var(--warn);font-weight:700"' : "";
+            const titulo = pf != null && pf >= 30
+              ? ` title="Riesgo ${pf >= 60 ? "alto" : "a vigilar"} de lluvia fuerte (≥ 10 mm)"` : "";
+            return `<div class="mini"${titulo}><span class="k">Lluvia fuerte ≥ 10 mm</span><span class="v"${estilo}>${pf != null ? `${pf} %` : "—"}</span></div>`;
+          })()}
           ${operativa
-            ? `<div class="mini" title="${esc(distanciaTxt)}; no representa confianza ni skill"><span class="k">Distancia al corte</span><span class="v">${distanciaPp == null ? "—" : `${distanciaPp.toFixed(0)} pp`}</span></div>`
-            : '<div class="mini"><span class="k">Uso</span><span class="v">No calibrada</span></div>'}
+            ? `<div class="mini" title="${esc(distanciaTxt)}; no representa confianza ni acierto comprobado"><span class="k">Margen sobre el 50 %</span><span class="v">${distanciaPp == null ? "—" : `${distanciaPp.toFixed(0)} pp`}</span></div>`
+            : `<div class="mini" title="Cuántos modelos del promedio dan lluvia; sin corrección estadística"><span class="k">En qué se apoya</span><span class="v">${esc(baseTxt)}</span></div>`}
         </div>
       </div>`;
     }
     const pieLluvia = ll && ll.operacional === true
       && ll.estado_promocion === "ACCREDITED"
-      ? "Lluvia: curva acreditada strict-as-issued; SÍ cuando P(≥1 mm) ≥ 50 %."
-      : "Lluvia: producto provisional no calibrado, visible solo como información y sin decisión.";
+      ? "Lluvia: aviso operativo verificado con lo observado; SÍ cuando la probabilidad llega al 50 %."
+      : "Lluvia: aviso de respaldo del promedio de modelos, sin corrección estadística; tiende a avisar de más.";
 
-    // KPI de tendencia térmica (vs hoy).
-    let kpiTend = `<div class="dec-kpi"><div class="lab"><span class="ico">→</span>Tendencia</div>
-      <div class="valor dec-sin">—</div><div class="rango">sin referencia de hoy</div></div>`;
+    // KPI de tendencia térmica (vs hoy). Los días 2..5 no la traen: en ese
+    // caso NO se reserva el hueco vacío — quedan solo máxima y mínima.
+    let kpiTend = "";
     if (td) {
       const flecha = td.texto === "más cálido" ? "↑" : (td.texto === "más frío" ? "↓" : "→");
       const cls = td.texto === "más cálido" ? "calido" : (td.texto === "más frío" ? "frio" : "");
@@ -545,7 +726,7 @@
         ${kpiTemp("T. mínima", tn)}
         ${kpiTend}
       </div>
-      <p class="ml-pie">Tmax/Tmin = valor puntual del selector operativo. ${pieLluvia} Agregación ${esc(v.agg_precip || "07-07")}.</p>
+      <p class="ml-pie">Temperaturas: valor central de ${esc(etModelo((tx && tx.modelo) || (tn && tn.modelo)))}. ${pieLluvia} ${aggTxt(v.agg_precip)}</p>
     </div>`;
   }
 
@@ -557,42 +738,64 @@
       <span class="suave" style="font-size:12px">${esc(motivo)}</span></div>`;
   }
 
-  function filaMismoProducto(etiqueta, d, modeloPref, metHTML) {
+  function filaMismoProducto(etiqueta, d, t, dia) {
+    const modeloPref = t && t.modelo;
     if (!modeloPref)
       return filaSinEvidencia(
         etiqueta, "El veredicto no identifica un modelo emisor verificable.");
     const fila = d && (d.modelos || []).find(m =>
       m.modelo === modeloPref && m.estandar === "A_AS_ISSUED"
       && Number(m.n) > 0);
-    if (!fila)
+    if (fila)
+      return `<div class="dec-val-fila">
+        <span class="var">${etiqueta}</span>
+        <span class="mod"><span class="ml-mod-punto" style="background:${esc(fila.color || "#888")}"></span>${esc(etModelo(fila.modelo))}</span>
+        <span class="met">se equivoca de media en ${num(fila.mae)} °C</span>
+        ${calBadge(fila.rating)}
+        ${pillConf(fila.confianza)}
+        <span class="n">${fila.n} fechas</span>
+      </div>`;
+    // El emisor es el promedio de modelos: la lista publicada trae los modelos
+    // SUELTOS que lo componen — se resume su desempeño en vez de buscar un
+    // nombre que no existe (antes esta fila salía siempre vacía).
+    const miembros = (t && t.miembros) || [];
+    const filas = miembros.length ? ((d && d.modelos) || []).filter(m =>
+      miembros.includes(m.modelo) && m.estandar === "A_AS_ISSUED"
+      && Number(m.n) > 0 && (m.lead == null || Number(m.lead) === dia)) : [];
+    const maes = filas.map(m => Number(m.mae)).filter(x => !Number.isNaN(x));
+    if (!maes.length)
       return filaSinEvidencia(
-        etiqueta,
-        `Sin métricas strict-as-issued del modelo emisor ${modeloPref}.`,
-      );
-    return `<div class="dec-val-fila">
-      <span class="var">${etiqueta}</span>
-      <span class="mod"><span class="ml-mod-punto" style="background:${esc(fila.color || "#888")}"></span>${esc(fila.modelo)}</span>
-      <span class="met">${metHTML(fila)}</span>
-      ${calBadge(fila.rating)}
-      ${pillConf(fila.confianza)}
-      <span class="n">${fila.n} fechas</span>
-    </div>`;
+        etiqueta, "Aún no hay comparación publicada con lo observado en esta estación.");
+    const nMod = new Set(filas.map(m => m.modelo)).size;
+    const nTot = filas.reduce((s, m) => s + (Number(m.n) || 0), 0);
+    return `<div class="dec-val-fila"><span class="var">${etiqueta}</span>
+      <span class="suave" style="font-size:12px">Los ${nMod} modelos del promedio con datos se equivocan de media entre ${num(Math.min(...maes))} y ${num(Math.max(...maes))} °C frente a lo medido (${nTot} comparaciones).</span></div>`;
+  }
+
+  // Fila de lluvia: en vez de un "sin evidencia" perpetuo, lo que el fichero
+  // sí trae — en cuántos modelos se apoya el aviso y su sesgo conocido.
+  function filaLluvia(v) {
+    const ll = v && v.lluvia;
+    if (!ll || ll.prob == null || !ll.n_miembros)
+      return filaSinEvidencia("Lluvia sí/no", "Sin datos publicados para justificar este aviso.");
+    const n = Number(ll.n_miembros);
+    const x = Math.round(Math.max(0, Math.min(100, Number(ll.prob))) / 100 * n);
+    return `<div class="dec-val-fila"><span class="var">Lluvia sí/no</span>
+      <span class="suave" style="font-size:12px">${x} de ${n} modelos dan lluvia para este día. Método de respaldo sin corrección estadística: tiende a avisar de más.</span></div>`;
   }
 
   function tarjetaDesempenoHTML(v, val, abierto) {
     const { vtx, vtn } = val || {};
-    const modTx = v && v.tmax && v.tmax.modelo;
-    const modTn = v && v.tmin && v.tmin.modelo;
     return `<details class="ml-card dec-desemp-card"${abierto ? " open" : ""}>
       <summary><span class="dec-desemp-tit">Evidencia del mismo veredicto</span>
-        <span class="ml-sutil">strict-as-issued · hasta ${VENTANA} fechas</span>
+        <span class="ml-sutil">comparado con lo observado · hasta ${VENTANA} fechas</span>
         <span class="dec-desemp-chev">▾</span></summary>
       <div class="dec-val-filas">
-        ${filaMismoProducto("T. máxima", vtx, modTx, m => `MAE ${num(m.mae)} °C`)}
-        ${filaMismoProducto("T. mínima", vtn, modTn, m => `MAE ${num(m.mae)} °C`)}
-        ${filaSinEvidencia("Lluvia sí/no", "Sin métricas strict-as-issued del mismo veredicto probabilístico.")}
+        ${filaMismoProducto("T. máxima", vtx, v && v.tmax, S.dia)}
+        ${filaMismoProducto("T. mínima", vtn, v && v.tmin, S.dia)}
+        ${filaLluvia(v)}
       </div>
-      <p class="ml-pie">Temperatura muestra solo el modelo que emitió el valor y su validación A as-issued. La lluvia no reutiliza POD/FAR/CSI de un detector determinista distinto: hasta validar esta misma cohorte y regla, se declara sin evidencia.</p>
+      <p class="ml-pie">La temperatura se compara con lo que de verdad se midió en la estación. La lluvia aún no tiene una comparación propia publicada: se indica en cuántos modelos se apoya el aviso.</p>
     </details>`;
   }
 
@@ -607,10 +810,12 @@
   function raizHTML() {
     return `
       <div class="dec-raiz" data-screen-label="Decisiones operativas">
+        <div class="dec-stale" id="dec-aviso-fecha" role="alert" hidden
+          style="font-size:14px;font-weight:600;padding:10px 14px;margin-bottom:10px"></div>
         <div class="dec-top">
           <div class="dec-fecha-nav" role="group" aria-label="Día del veredicto">
             <button type="button" class="dec-nav-btn" id="dec-nav-prev" title="Día anterior" aria-label="Día anterior">${FLECHA_I}</button>
-            <div class="dec-fecha-caja">
+            <div class="dec-fecha-caja" aria-live="polite">
               <span class="dec-fecha-txt" id="dec-fecha"></span>
               <span class="dec-fecha-sub" id="dec-fecha-sub"></span>
             </div>
@@ -626,16 +831,15 @@
           </div>
         </div>
         <div class="dec-layout">
-          <div class="dec-panel" id="dec-panel"></div>
+          <div class="dec-panel" id="dec-panel" aria-live="polite"></div>
           <div class="ml-card dec-mapa-card">
-            <div class="dec-mapa-cab"><span id="dec-mapa-tit"></span><span class="dec-prog" id="dec-prog"></span></div>
-            <div class="dec-mapa" id="dec-mapa"></div>
-            <div class="dec-leyenda">
-              <span class="it"><span class="pt" style="background:${C_SI}"></span>Sí llueve</span>
-              <span class="it"><span class="pt" style="background:${C_NO}"></span>No llueve</span>
-              <span class="it"><span class="pt chico" style="background:${C_SIN};box-shadow:inset 0 0 0 1.5px ${C_SIN_BORDE}"></span>Sin dato</span>
-              <span class="it dec-ley-tam">● tamaño = distancia al corte 50 %</span>
+            <div class="dec-mapa-cab"><span id="dec-mapa-tit"></span><span class="dec-prog" id="dec-prog"></span>
+              <button type="button" id="dec-mapa-reset" title="Restaurar la vista completa del país"
+                style="font:600 11px var(--sans, sans-serif);padding:3px 9px;border:1px solid ${C_SIN_BORDE};border-radius:7px;background:transparent;color:inherit;cursor:pointer;white-space:nowrap">Volver a Ecuador</button>
             </div>
+            <div class="dec-mapa" id="dec-mapa"></div>
+            <!-- Leyenda dinámica: se rellena con las categorías presentes. -->
+            <div class="dec-leyenda" id="dec-leyenda"></div>
           </div>
           <div class="dec-desemp" id="dec-desemp"></div>
         </div>
@@ -679,7 +883,10 @@
       const bA = vista.querySelector("#dec-nav-prev"), bS = vista.querySelector("#dec-nav-next");
       if (bA) bA.onclick = () => cambiarDia(-1);
       if (bS) bS.onclick = () => cambiarDia(+1);
+      const bR = vista.querySelector("#dec-mapa-reset");
+      if (bR) bR.onclick = encuadrarEcuador;
       pintarNav();
+      pintarAvisoFecha();
       dibujarMapa();
       pintarPanel();
       await cargarVeredictosDia(mi);
@@ -696,6 +903,7 @@
     S.cache.clear();
     S.valCache.clear();
     S.geojson = null;
+    S.fechaBase = null; S.hoyDato = null;   // la publicación nueva trae sus fechas
     if (S.cont && S.cont.isConnected && S.cont.querySelector(".dec-raiz")) {
       try { window.DECISIONES.render(S.cont); } catch (e) { /* re-render best effort */ }
     }

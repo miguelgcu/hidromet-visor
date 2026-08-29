@@ -14,6 +14,11 @@
   // Estados con voz propia: icono + texto centrado (usa .cl-vacio de clima.css).
   const vacio = (ic, txt) => `<div class="cl-vacio"><span class="ic">${ic}</span><span>${txt}</span></div>`;
   const cargando = txt => vacio("⏳", txt || "Cargando…");
+  // Tarjeta de cifra. Estaba definida SOLO dentro de tarjetaPunto y tarjetaArea,
+  // asi que la pestana "IUV experimental" (que la usa en tabIuv) reventaba con
+  // "kpi is not defined" y le mostraba ese error de programador al ciudadano.
+  // Se sube al ambito del modulo; las dos copias locales la tapan sin cambiar nada.
+  const kpi = (e, v, u, d, c) => `<div class="cl-kpi" style="--kc:${c}"><div class="v">${num(v, d)} <small>${esc(u)}</small></div><div class="e">${esc(e)}</div></div>`;
   // Sobre un host que YA es un plot de Plotly, hacer host.innerHTML=... deja estado
   // interno huérfano y el siguiente Plotly.react renderiza a 0px de alto. Purga primero.
   function limpiarPlot(host) {
@@ -31,15 +36,35 @@
     });
   }
 
+  // La librería de gráficos viene solo con inglés ("Aug 13", "Jan 1998") y el proyecto
+  // no carga su fichero de idioma: se registra aquí un español mínimo (meses y días para
+  // los ejes de fecha) y todos los gráficos del módulo lo piden en su configuración.
+  let _locEs = false;
+  function configEs() {
+    if (!_locEs && window.Plotly && typeof Plotly.register === "function") {
+      try {
+        Plotly.register({ moduleType: "locale", name: "es", dictionary: {}, format: {
+          days: ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"],
+          shortDays: ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"],
+          months: ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"],
+          shortMonths: ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"],
+          date: "%d/%m/%Y" } });
+      } catch (e) { /* sin registro: los ejes quedan en inglés, nada se rompe */ }
+      _locEs = true;
+    }
+    return Object.assign({}, App.plotlyConfig(), { locale: "es" });
+  }
+
   // c = color representativo de la variable (≈ su paleta en el mapa); alimenta el
   // swatch del pill (--pc) para que el control enseñe el color del campo.
+  // t = explicación en llano (texto emergente del pill: PET/Balance/Aridez son fórmulas)
   const VARS = [
-    { id: "precip", et: "Precipitación", u: "mm", c: "#2f7fc1" },
-    { id: "tmax", et: "T. máxima", u: "°C", c: "#e0562d" },
-    { id: "tmin", et: "T. mínima", u: "°C", c: "#2e8bc0" },
-    { id: "pet", et: "PET", u: "mm", c: "#d08a2e" },
-    { id: "balance", et: "Balance P−PET", u: "mm/año", soloAnual: true, c: "#2f9e8f" },
-    { id: "aridez", et: "Aridez P/PET", u: "", soloAnual: true, c: "#b07a2e" },
+    { id: "precip", et: "Precipitación", u: "mm", c: "#2f7fc1", t: "Lluvia acumulada" },
+    { id: "tmax", et: "T. máxima", u: "°C", c: "#e0562d", t: "Temperatura máxima" },
+    { id: "tmin", et: "T. mínima", u: "°C", c: "#2e8bc0", t: "Temperatura mínima" },
+    { id: "pet", et: "PET", u: "mm", c: "#d08a2e", t: "Evaporación potencial: el agua que se evaporaría con el calor disponible" },
+    { id: "balance", et: "Balance P−PET", u: "mm/año", soloAnual: true, c: "#2f9e8f", t: "Agua sobrante: lluvia menos evaporación potencial" },
+    { id: "aridez", et: "Aridez P/PET", u: "", soloAnual: true, c: "#b07a2e", t: "Sequedad: lluvia dividida entre evaporación potencial (menos de 1 = zona seca)" },
   ];
   const MESES = ["Anual", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
   const COL = { precip: "#2f7fc1", pet: "#d08a2e", tmax: "#e0562d", tmin: "#2e8bc0", obs: "#10243f" };
@@ -109,9 +134,11 @@
       type: "scatter", mode: "markers", meta: "estaciones", showlegend: false,
       x: pts.map(e => e.lon), y: pts.map(e => e.lat),
       customdata: pts.map(e => [e.nombre || e.codigo, e.codigo, num(e.valor, dec)]),
-      marker: { size: 8.5, color: pts.map(e => e.valor), colorscale: d.colorscale,
+      // Marcador pequeño y, con muchos puntos (>200), sin aro blanco: con 8.5 px + aro
+      // los 1.061 círculos se apilaban y cubrían media superficie del país dibujada.
+      marker: { size: 4.5, color: pts.map(e => e.valor), colorscale: d.colorscale,
         cmin: d.vmin, cmax: d.vmax, showscale: false,
-        line: { color: "#ffffff", width: 1.5 } },
+        line: { color: "#ffffff", width: pts.length > 200 ? 0 : 1.5 } },
       hovertemplate: `<b>%{customdata[0]}</b> (%{customdata[1]})<br>` +
         `<b>%{customdata[2]} ${esc(ce.unidad || "")}</b> · clic → ficha de la estación<extra></extra>`,
     }];
@@ -125,13 +152,28 @@
     if (!cs.length || d.vmin == null || d.vmax == null) return "";
     const stops = cs.map(p => `${p[1]} ${(p[0] * 100).toFixed(2)}%`).join(", ");
     const rango = (d.vmax - d.vmin) || 1;
-    // Ticks "bonitos" (múltiplos de 1/2/2.5/5×10^k), posicionados por su valor real.
-    const crudo = rango / 6, pot = Math.pow(10, Math.floor(Math.log10(crudo)));
-    const paso = [1, 2, 2.5, 5, 10].map(m => m * pot).find(s => rango / s <= 7) || crudo;
     let tk = "";
-    for (let v = Math.ceil(d.vmin / paso) * paso; v <= d.vmax + 1e-9; v += paso) {
-      const pos = ((v - d.vmin) / rango) * 100;
-      tk += `<span class="t" style="left:${pos.toFixed(2)}%">${esc(String(+v.toFixed(dec)))}</span>`;
+    const niv = Array.isArray(d.niveles) ? d.niveles.filter(v => v != null && isFinite(v)) : [];
+    if (niv.length >= 2) {
+      // Fronteras REALES de las franjas (campo "niveles" del producto): cada número cae
+      // exactamente en el borde de color al que corresponde. Antes se inventaban cifras
+      // redondas que caían en mitad de una franja y la leyenda no describía el mapa.
+      // Si no caben todas, se rotula una sí y una no, siempre sobre fronteras reales.
+      const salto = Math.max(1, Math.ceil(niv.length / 9));
+      niv.forEach((v, i) => {
+        if (i % salto !== 0 && i !== niv.length - 1) return;
+        const pos = Math.max(0, Math.min(100, ((v - d.vmin) / rango) * 100));
+        tk += `<span class="t" style="left:${pos.toFixed(2)}%">${esc(String(+v.toFixed(dec)))}</span>`;
+      });
+    } else {
+      // Respaldo (mapas generados en el navegador, sin "niveles"): ticks "bonitos"
+      // (múltiplos de 1/2/2.5/5×10^k), posicionados por su valor real.
+      const crudo = rango / 6, pot = Math.pow(10, Math.floor(Math.log10(crudo)));
+      const paso = [1, 2, 2.5, 5, 10].map(m => m * pot).find(s => rango / s <= 7) || crudo;
+      for (let v = Math.ceil(d.vmin / paso) * paso; v <= d.vmax + 1e-9; v += paso) {
+        const pos = ((v - d.vmin) / rango) * 100;
+        tk += `<span class="t" style="left:${pos.toFixed(2)}%">${esc(String(+v.toFixed(dec)))}</span>`;
+      }
     }
     return `<div class="ct-leyenda-cab"><span class="ct-leyenda-unidad mono">${esc(d.unidad || "")}</span>` +
       `<span class="ct-leyenda-sub mono">${esc(d.leyenda_sub || "normal 1991–2020")}</span></div>` +
@@ -157,9 +199,24 @@
   }
 
   // Mapa de una normal --------------------------------------------------------
+  // Aridez P/PET: el producto congelado trae una rampa marrón→crema donde lo MÁS húmedo
+  // sale casi blanco (se lee como "sin dato") y el corte físico en 1 (P = PET) cae en
+  // mitad de una franja. Mientras el generador no regenere el producto, se sustituye en
+  // cliente por una escala de dos colores anclada en 1: marrones = falta agua, crema en
+  // el equilibrio y verde-azulados = sobra agua. Los valores no se tocan.
+  function escalaAridez(d) {
+    const p = Math.max(0.02, Math.min(0.98, (1 - d.vmin) / (d.vmax - d.vmin)));
+    return [
+      [0, "#5c3305"], [p * 0.5, "#b07a2e"], [p, "#f3eede"],
+      [p + (1 - p) * 0.45, "#5fa8a0"], [1, "#0b4f6c"],
+    ];
+  }
+
   function pintarMapa(host, d, ce) {
     if (!window.Plotly || !host) return;
     if (!d || d.error) { limpiarPlot(host); host.innerHTML = vacio("🗺️", esc(d && d.error || "Sin datos")); return; }
+    if (d.variable === "aridez" && d.vmin != null && d.vmax != null && d.vmax > d.vmin)
+      d = Object.assign({}, d, { colorscale: escalaAridez(d) });
     const dec = (d.variable === "tmax" || d.variable === "tmin" || d.operacion === "anomalia_mm")
       ? 1 : (d.variable === "aridez" ? 2 : 0);
     const heat = {
@@ -181,7 +238,7 @@
       yaxis: { visible: false, fixedrange: false, range: [-5.1, 1.6] },
     });
     quitarPlaceholder(host);
-    Plotly.react(host, [heat, ...contorno(), ...trazaEstaciones(ce, d)], layout, App.plotlyConfig());
+    Plotly.react(host, [heat, ...contorno(), ...trazaEstaciones(ce, d)], layout, configEs());
     observarTamanoMapa(host);
     if (App.pinchZoomMapa) App.pinchZoomMapa(host);   // v17: pinza = zoom del mapa
     const ley = host.parentElement && host.parentElement.querySelector('[data-rol="leyenda"]');
@@ -232,7 +289,9 @@
       yaxis2: { title: { text: "Temperatura (°C)", font: { size: 10.5, color: txt } }, tickfont: { size: 10, color: txt },
         overlaying: "y", side: "right", fixedrange: true, showgrid: false, zeroline: false },
     });
-    Plotly.react(host, traces, layout, App.plotlyConfig());
+    Plotly.react(host, traces, layout, configEs());
+    host.setAttribute("role", "img");
+    host.setAttribute("aria-label", `Climograma${p.nombre ? " de " + p.nombre : ""}: lluvia y evaporación mensuales en milímetros y temperaturas máxima y mínima en grados.`);
   }
 
   function tablaMensual(p) {
@@ -274,7 +333,7 @@
       <thead><tr><th>Serie observada</th><th>Años</th><th title="Días con dato sobre el periodo">Compl.</th>
       <th>Récord máx (día)</th><th>Récord mín (día)</th></tr></thead><tbody>${filas}</tbody></table>
       <p class="cl-nota" style="margin-top:6px">Serie histórica diaria de la estación: récords absolutos con su fecha
-      y percentiles mensuales P10–P90 en la tabla. El detalle día a día está en la pestaña «Récords».</p></div>`;
+      y percentiles mensuales P10–P90 en la tabla.</p></div>`;
   }
 
   function chipConfianza(c) {
@@ -332,7 +391,9 @@
   }
 
   // PESTAÑA 1 — MAPAS ---------------------------------------------------------
-  const E = { mapVar: "precip", mapEsc: "anual", mapEst: true, mapaCache: {}, estCache: {},
+  // mapEst arranca APAGADO: los 1.061 puntos de estación tapaban el campo de colores
+  // al entrar (y descargaban ~236 KB por combinación). La capa es una elección consciente.
+  const E = { mapVar: "precip", mapEsc: "anual", mapEst: false, mapaCache: {}, estCache: {},
     tabs: null, estSel: null };
   // Los colores de los gráficos se eligen AL PINTAR (App.tema()): al cambiar de tema
   // hay que redibujar el panel visible (patrón sngr.js). Cada pestaña registra su redibujo.
@@ -344,7 +405,7 @@
     c.innerHTML = `<div class="cl-wrap">
       <div class="cl-toolbar">
         <div class="cl-grupo"><span>Variable</span><div class="cl-pills" data-rol="vars">
-          ${VARS.map(v => `<button class="cl-pill ${v.id === E.mapVar ? "on" : ""}" data-v="${v.id}" style="--pc:${v.c}">${esc(v.et)}</button>`).join("")}
+          ${VARS.map(v => `<button class="cl-pill ${v.id === E.mapVar ? "on" : ""}" data-v="${v.id}" style="--pc:${v.c}" title="${esc(v.t || v.et)}">${esc(v.et)}</button>`).join("")}
         </div></div>
         <div class="cl-grupo"><span>Escala</span><div class="cl-meses" data-rol="meses">
           ${MESES.map((m, i) => `<button class="cl-mes ${(i === 0 ? "anual" : i) == E.mapEsc ? "on" : ""}" data-e="${i === 0 ? "anual" : i}">${esc(m)}</button>`).join("")}
@@ -661,7 +722,7 @@
       yaxis: { title: { text: u }, rangemode: d.es_precip ? "tozero" : "normal" },
       showlegend: false, height: 380, margin: { l: 56, r: 18, t: 12, b: 40 },
     });
-    Plotly.react(host, traces, layout, App.plotlyConfig());
+    Plotly.react(host, traces, layout, configEs());
   }
 
   function kpisRecords(d) {
@@ -848,7 +909,7 @@
       yaxis2: { title: "Acumulado (mm)", overlaying: "y", side: "right", rangemode: "tozero", showgrid: false },
     });
     quitarPlaceholder(host);
-    Plotly.react(host, traces, layout, App.plotlyConfig());
+    Plotly.react(host, traces, layout, configEs());
   }
 
   function pintarEnsoTemperatura(host, evento) {
@@ -877,7 +938,7 @@
         zerolinecolor: "rgba(90,100,120,.65)", zerolinewidth: 1 },
     });
     quitarPlaceholder(host);
-    Plotly.react(host, traces, layout, App.plotlyConfig());
+    Plotly.react(host, traces, layout, configEs());
   }
 
   function tablaEnsoMeses(evento) {
@@ -1059,9 +1120,12 @@
         line: { color: "#26a69a", width: 2.2 },
         customdata: d.procedencia || [],
         hovertemplate: `%{x}<br><b>%{y:.1f} ${u}</b><br>%{customdata}<extra>Completada</extra>` },
-      { type: "scatter", mode: "markers", x: fechas, y: d.observado, name: "Observación QC",
-        marker: { color: "#10243f", size: 5, line: { color: "#fff", width: .7 } },
-        hovertemplate: `%{x}<br><b>%{y:.1f} ${u}</b><extra>Observado</extra>` },
+      // "Dato medido" en llano (antes "Observación QC"); color por TEMA: el azul
+      // marino fijo desaparecía sobre la tarjeta oscura.
+      { type: "scatter", mode: "markers", x: fechas, y: d.observado, name: "Dato medido",
+        marker: { color: oscuroTema() ? "#9CC3EA" : "#10243f", size: 5,
+          line: { color: oscuroTema() ? "#0B1322" : "#fff", width: .7 } },
+        hovertemplate: `%{x}<br><b>%{y:.1f} ${u}</b><extra>Medido</extra>` },
     ];
     const layout = App.plotlyLayoutBase({ height: 410, margin: { l: 52, r: 18, t: 10, b: 45 },
       hovermode: "x unified", legend: { orientation: "h", y: 1.12, x: .5, xanchor: "center" },
@@ -1070,7 +1134,12 @@
         gridcolor: "rgba(120,130,150,.14)", zeroline: false },
     });
     quitarPlaceholder(host);
-    Plotly.react(host, traces, layout, App.plotlyConfig());
+    Plotly.react(host, traces, layout, configEs());
+    // Descripción para lector de pantalla: qué estación, qué variable y qué periodo.
+    host.setAttribute("role", "img");
+    host.setAttribute("aria-label", `Serie diaria de ${d.nombre || d.codigo || "la estación"}`
+      + `${d.variable ? " · " + d.variable : ""}${d.unidad ? " (" + d.unidad + ")" : ""}`
+      + `${d.desde && d.hasta ? ` del ${d.desde} al ${d.hasta}` : ""}: datos medidos, estimación grillada y serie completada.`);
   }
 
   function metricasRelleno(d) {
@@ -1078,15 +1147,18 @@
       dg = (d.metricas || {}).diagnostica || {};
     const met = (et, v, sub) => `<div class="cl-kpi"><div class="v">${v == null ? "—" : esc(v)}</div>` +
       `<div class="e">${esc(et)}</div>${sub ? `<small class="cl-sutil">${esc(sub)}</small>` : ""}</div>`;
+    // Rótulos en LLANO (pedido del dueño: nada de siglas): la jerga técnica
+    // (MAE/RMSE/r) queda en el desplegable diagnóstico de abajo.
+    const u = d.unidad || "";
     return `<div class="cl-kpis cl-kpis-diario">
-      ${met("Observados", c.observados, `${c.dias || 0} días`)}
-      ${met("Rellenados", c.rellenados, "estimación trazable")}
-      ${met("Vacíos", c.vacios, "sin estimación compatible")}
-      ${met("MAE fuera de muestra", fm.mae, fm.n ? `n=${fm.n}` : "no disponible en el rango")}
-      ${met("RMSE fuera de muestra", fm.rmse, fm.n ? `n=${fm.n}` : "validación espacial")}
-      ${met("Correlación fuera de muestra", fm.correlacion, fm.n ? `n=${fm.n}` : "validación espacial")}
+      ${met("Días medidos", c.observados, `de ${c.dias || 0} días del rango`)}
+      ${met("Días rellenados", c.rellenados, "estimación trazable")}
+      ${met("Días vacíos", c.vacios, "sin estimación compatible")}
+      ${met(`Error medio${u ? ` (${u})` : ""}`, fm.mae, fm.n ? `sobre ${fm.n} comparaciones` : "no disponible en el rango")}
+      ${met(`Error típico${u ? ` (${u})` : ""}`, fm.rmse, fm.n ? "pesa más los fallos grandes" : "comparado con estaciones no usadas")}
+      ${met("Parecido con lo medido", fm.correlacion, fm.n ? "1 = coincidencia perfecta" : "comparado con estaciones no usadas")}
     </div>
-    <details class="cl-metricas-det"><summary>Comparación diagnóstica de la grilla</summary>
+    <details class="cl-metricas-det"><summary>Detalle técnico de la comparación de la grilla</summary>
       <p>n=${num(dg.n)} · MAE=${num(dg.mae, 2)} · RMSE=${num(dg.rmse, 2)} · sesgo=${num(dg.bias, 2)} · r=${num(dg.correlacion, 2)}.</p>
       <p>${esc(dg.nota || "")}</p></details>`;
   }
@@ -1173,7 +1245,7 @@
       qc_observacion: observed.map(v => v == null ? "SIN_VALOR_QC" : "PASS"),
       cobertura: { dias: fechas.length, observados: count("observado"), rellenados: count("estimado_grillado"), vacios: count("vacio") },
       metricas: { fuera_muestra: formal, diagnostica: diagnostic },
-      metodologia: manifest.method || "Observación QC > estimación grillada compatible > vacío; nunca se sobrescribe una observación." };
+      metodologia: manifest.method || "Dato medido con control de calidad > estimación grillada compatible > vacío; nunca se sobrescribe un dato medido." };
   }
   async function mapaDesdeChunks(manifest, desde, hasta, operation) {
     const start = fechaUTC(desde), end = fechaUTC(hasta), chunks = [];
@@ -1264,7 +1336,13 @@
         const response = await fetch("productos/clima/diario/manifest.json", { cache: "no-cache" });
         if (!response.ok) throw new Error(`Producto diario no publicado (HTTP ${response.status})`);
         dailyManifest = await response.json();
-        availability = { mapa_precip: dailyManifest.grid }; stations = dailyManifest.stations || [];
+        // La disponibilidad la fija manifest.window: es el campo que gobierna la lectura
+        // del binario. manifest.grid podía quedarse un día atrás y el último día publicado
+        // era inalcanzable en el calendario (tope 21/08 con datos hasta el 22/08).
+        const win = dailyManifest.window || {};
+        availability = { mapa_precip: { desde: win.desde || (dailyManifest.grid || {}).desde,
+          hasta: win.hasta || (dailyManifest.grid || {}).hasta } };
+        stations = dailyManifest.stations || [];
       } else {
         [availability, stations] = await Promise.all([
           App.api("/clima/diario_disponible"),
@@ -1289,6 +1367,9 @@
         <div class="cl-grupo"><span>Mapa de lluvia</span><select data-rol="operacion"><option value="acumulado">Acumulado</option><option value="media">Promedio diario</option><option value="mediana">Mediana diaria</option><option value="anomalia_mm">Anomalía (mm)</option><option value="anomalia_pct">Anomalía (%)</option></select></div>
         <div class="cl-grupo"><button class="cl-btn" data-rol="actualizar">Actualizar producto</button></div>
       </div>
+      ${dailyManifest ? `<div class="cl-hint">En el visor publicado solo está disponible la ventana
+        del ${esc(mapInv.desde || "?")} al ${esc(mapInv.hasta || "?")}; el histórico completo se consulta
+        en la aplicación de escritorio.</div>` : ""}
       <div class="cl-card cl-rango-card"><h3 class="cl-maptit" data-rol="map-tit">Mapa de lluvia por rango</h3>
         <div class="cl-plot cl-plot-mapa cl-rango-mapa" data-rol="mapa"></div><div class="ct-leyenda-carta cl-leyenda" data-rol="leyenda"></div>
         <p class="cl-nota" data-rol="map-nota">Se exige cobertura completa en cada píxel para el período seleccionado.</p></div>
@@ -1329,7 +1410,12 @@
           : await App.api(`/clima/serie_relleno?codigo=${encodeURIComponent(station.value)}&variable=${variable.value}&desde=${desde.value}&hasta=${hasta.value}`);
         if (d.error) throw new Error(d.error);
         lastSeries = d; pintarSerieRelleno(seriesHost, d); metricsHost.innerHTML = metricasRelleno(d);
-        method.textContent = `${d.metodologia} Contrato: ${d.contrato_grilla}.`;
+        // Si la metodología llega como identificador interno de algoritmo (un slug con
+        // guiones, sin espacios), traducirla a una frase y dejar el código como apunte.
+        const metTxt = /^[a-z0-9_-]+$/i.test(String(d.metodologia || "")) && String(d.metodologia).includes("-")
+          ? `Relleno con la grilla corregida por las estaciones vecinas (método técnico: ${d.metodologia}).`
+          : d.metodologia;
+        method.textContent = `${metTxt} Contrato: ${d.contrato_grilla}.`;
       } catch (e) { limpiarPlot(seriesHost); seriesHost.innerHTML = vacio("⚠️", esc(e.message)); }
     }
     async function updateAll() { await Promise.all([loadMap(), loadSeries()]); }
@@ -1366,13 +1452,19 @@
       aod[y][x] = r.aod == null ? null : Number(r.aod);
     });
     const etiqueta = campo === "cams_raw_uvi" ? "CAMS crudo" : "IUV experimental";
+    // Código de colores OFICIAL de salud del índice UV (el que la gente ya conoce):
+    // 0–2 bajo (verde), 3–5 moderado (amarillo), 6–7 alto (naranja), 8–10 muy alto
+    // (rojo), 11+ extremo (violeta). Bandas discretas sobre tope de escala 12.
     const heat = {
       type: "heatmap", x: lons, y: lats, z, customdata: lats.map((_, y) =>
         lons.map((__, x) => [raw[y][x], aod[y][x]])),
-      colorscale: [[0,"#2c7bb6"],[.18,"#00a6ca"],[.35,"#00ccbc"],[.5,"#90eb9d"],
-        [.62,"#ffff8c"],[.74,"#f9d057"],[.84,"#f29e2e"],[.92,"#e76818"],[1,"#d7191c"]],
-      zmin: 0, zmax: 14, zsmooth: "best", hoverongaps: false, showscale: true,
-      colorbar: { title: { text: "IUV" }, thickness: 12, len: .72 },
+      colorscale: [[0, "#3EA72D"], [3 / 12, "#3EA72D"], [3 / 12, "#FFF300"], [6 / 12, "#FFF300"],
+        [6 / 12, "#F18B00"], [8 / 12, "#F18B00"], [8 / 12, "#E53210"], [11 / 12, "#E53210"],
+        [11 / 12, "#B54CFF"], [1, "#B54CFF"]],
+      zmin: 0, zmax: 12, zsmooth: false, hoverongaps: false, showscale: true,
+      colorbar: { title: { text: "IUV" }, thickness: 12, len: .72,
+        tickvals: [1.5, 4.5, 7, 9.5, 11.6],
+        ticktext: ["0–2 bajo", "3–5 moderado", "6–7 alto", "8–10 muy alto", "11+ extremo"] },
       hovertemplate: `<b>${etiqueta}: %{z:.1f}</b><br>CAMS crudo: %{customdata[0]:.1f}` +
         `<br>AOD: %{customdata[1]:.2f}<br>lat %{y:.2f}, lon %{x:.2f}<extra></extra>`,
     };
@@ -1383,7 +1475,7 @@
       yaxis: { visible: false, range: [-5.5, 2.0] },
     });
     quitarPlaceholder(host);
-    Plotly.react(host, [heat, ...contorno()], layout, App.plotlyConfig());
+    Plotly.react(host, [heat, ...contorno()], layout, configEs());
     observarTamanoMapa(host);
     if (App.pinchZoomMapa) App.pinchZoomMapa(host);
   }

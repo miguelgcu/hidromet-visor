@@ -34,9 +34,14 @@
 .cl-pill::before{content:"";width:8px;height:8px;border-radius:50%;flex:0 0 auto;
   background:var(--pc,var(--cl-acc));box-shadow:0 0 0 2px color-mix(in srgb,var(--pc,var(--cl-acc)) 22%,transparent)}
 .cl-pill:hover{border-color:var(--pc,var(--cl-acc));color:var(--ink)}
-.cl-pill.on{background:var(--pc,var(--cl-acc));border-color:var(--pc,var(--cl-acc));color:#fff;
-  box-shadow:0 2px 9px color-mix(in srgb,var(--pc,var(--cl-acc)) 34%,transparent)}
-.cl-pill.on::before{background:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.35)}
+/* Activo LEGIBLE: fondo suave tintado + borde marcado del color de la variable, con
+   texto en tinta (el blanco sobre el naranja de PET daba 2,85:1, bajo el mínimo 4,5:1) */
+.cl-pill.on{background:color-mix(in srgb,var(--pc,var(--cl-acc)) 16%,var(--surface));
+  border-color:var(--pc,var(--cl-acc));color:var(--ink);font-weight:700;
+  box-shadow:inset 0 0 0 1px var(--pc,var(--cl-acc)),
+    0 2px 9px color-mix(in srgb,var(--pc,var(--cl-acc)) 30%,transparent)}
+.cl-pill.on::before{background:var(--pc,var(--cl-acc));
+  box-shadow:0 0 0 2px color-mix(in srgb,var(--pc,var(--cl-acc)) 30%,transparent)}
 .cl-pill:focus-visible{outline:none;box-shadow:var(--focus-ring)}
 
 /* Selector de escala (Anual + 12 meses): celdas compactas segmentadas */
@@ -247,6 +252,10 @@
   font:600 12px var(--mono);background:var(--surface);color:var(--ink)}
 .cl-rango-card{min-width:0}
 .cl-rango-mapa{min-height:480px}
+/* La tarjeta ocupa todo el ancho pero la altura del mapa topa en 640px: el país quedaba
+   flotando entre dos bandas de mar vacías (~38% del ancho). Se ciñe el bloque mapa+leyenda
+   al ancho que corresponde al aspecto de Ecuador (≈640px/1.08) y se centra. */
+.cl-rango-card .cl-plot-mapa,.cl-rango-card .cl-leyenda{max-width:600px;margin-left:auto;margin-right:auto}
 .cl-serie-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .cl-serie-controles{display:flex;gap:7px;flex-wrap:wrap;align-items:center;max-width:100%}
 .cl-serie-controles select[data-rol=est]{min-width:280px;max-width:440px}

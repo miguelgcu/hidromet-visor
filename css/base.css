@@ -23,6 +23,10 @@
   --sb-ink-2: #AEBBD1; --sb-ink-3: #8FA3C2;
   /* bordes */
   --line: #E2E8F0; --line-2: #D7DFEA; --line-3: #EDF1F6; --line-4: #E9EEF4;
+  /* v20 (accesibilidad): borde de CONTROLES (cajas, desplegables, píldoras) con
+     contraste real ≥3:1 sobre el fondo en ambos temas. Los bordes decorativos de
+     tarjetas siguen usando --line/--line-2 (suaves a propósito). */
+  --ctrl-bd: #7C8AA0;
   /* estados */
   /* v12: --ok/--warn oscurecidos (mismo tono) para AA 4.5:1 sobre blanco y sobre
      sus fondos de badge en tema claro (antes 3.86/3.09). El oscuro no cambia. */
@@ -46,9 +50,12 @@
   /* v11 — radios / espaciado / tipos (escala consolidada) */
   --r-card: 13px; --r-panel: 11px; --r-ctrl: 8px; --r-pill: 999px;
   --gap-grid: 12px; --pad-card: 15px; --pad-barra: 8px 14px;
-  --fs-micro: 10px; --fs-xs: 11px; --fs-sm: 12.5px; --fs-md: 13.5px; --fs-lg: 15px; --fs-xl: 17px; --fs-h1: 22px;
+  --fs-micro: 11px; --fs-xs: 11px; --fs-sm: 12.5px; --fs-md: 13.5px; --fs-lg: 15px; --fs-xl: 17px; --fs-h1: 22px;
   /* v11 — componentes */
-  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--blue) 20%, transparent);
+  /* v20 (accesibilidad): anillo de foco SÓLIDO — antes era azul al 20 % de opacidad
+     (contraste 1,3:1, invisible). Doble anillo: separación del fondo + azul de marca
+     macizo; se ve igual sobre tarjeta blanca, sobre el navy del menú y en tema oscuro. */
+  --focus-ring: 0 0 0 2px var(--surface), 0 0 0 4px var(--blue);
   --btn-suave-bg: #F0F3F8; --btn-suave-bd: #E0E6EF;
   --consola-bg: #0B1729; --consola-ink: #CFE3F7;
   --overlay-bg: rgba(255,255,255,.82);
@@ -62,6 +69,7 @@ html[data-tema="oscuro"] {
   --cyan: #2AAFBE; --cyan-50: #102B30; --cyan-bd: #1C4A50;
   --ink: #E8EDF6; --ink-2: #9DAABF; --muted: #9DAABF; --muted-2: #8A99B2; --faint: #8496AF;
   --line: #28354F; --line-2: #2C3A55; --line-3: #1E2B45; --line-4: #1E2B45;
+  --ctrl-bd: #6E809B;
   /* v11 — componentes (variantes oscuras) */
   --btn-suave-bg: var(--surface-3); --btn-suave-bd: var(--line);
   --overlay-bg: rgba(20,32,58,.84); --rio-mayor: #5AA9E6; --rio-menor: #37557A;
@@ -178,7 +186,12 @@ html[data-tema="oscuro"] #topbar .reloj { background: var(--surface-3); border-c
 }
 @media (max-width: 480px) {
   #topbar .ruta .actual, #topbar .ruta .sep { display: none; }   /* deja solo el módulo actual */
-  #topbar .sync span:not(.punto) { display: none; }              /* deja solo el punto de estado */
+  /* NO ocultar el aviso de frescura: en un sistema de aviso temprano, saber
+     que el dato lleva dias parado es mas importante que ahorrar dos centimetros.
+     Se compacta (letra menor, sin envolver) en vez de esconderse. */
+  #topbar .sync { font-size: 11px; max-width: 46vw; }
+  #topbar .sync span:not(.punto) { white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; }
   #vista { padding: 10px 10px 28px; }
 }
 
@@ -189,11 +202,11 @@ html[data-tema="oscuro"] #topbar .reloj { background: var(--surface-3); border-c
   letter-spacing: .5px; box-shadow: 0 4px 14px rgba(44,104,222,.35), inset 0 1px 0 rgba(255,255,255,.25); }
 .marca-texto { display: flex; flex-direction: column; line-height: 1.15; }
 .marca-nombre { font-size: 16px; font-weight: 700; color: #F3F6FB; letter-spacing: .2px; }
-.marca-sub { font: 600 10px var(--mono); letter-spacing: .22em; color: var(--sb-ink-3); text-transform: uppercase; }
+.marca-sub { font: 600 11px var(--mono); letter-spacing: .22em; color: var(--sb-ink-3); text-transform: uppercase; }
 
 /* ---------- navegación ---------- */
 #nav-principal { display: flex; flex-direction: column; gap: 2px; flex: 1; overflow: auto; }
-.nav-grupo { font: 600 10px var(--mono); letter-spacing: .18em; color: var(--sb-ink-3); padding: 11px 10px 6px; }
+.nav-grupo { font: 600 11px var(--mono); letter-spacing: .18em; color: var(--sb-ink-3); padding: 11px 10px 6px; }
 .nav-grupo:first-child { padding-top: 6px; }
 .nav-item { position: relative; display: flex; align-items: center; gap: 11px; padding: 9px 11px;
   border-radius: 9px; color: #D4DCE8; text-decoration: none; font: 600 13.5px var(--fuente);
@@ -215,7 +228,7 @@ html[data-tema="oscuro"] #topbar .reloj { background: var(--surface-3); border-c
   box-shadow: 0 0 0 3px rgba(35,180,124,.18); animation: hm-pulse 2.4s infinite; }
 .sidebar-estado .et { line-height: 1.25; }
 .sidebar-estado .et b { font: 600 11px var(--fuente); color: #D4DCE8; display: block; }
-.sidebar-estado .et span { font: 500 10px var(--mono); color: #6E7E96; letter-spacing: .04em; }
+.sidebar-estado .et span { font: 500 11px var(--mono); color: #6E7E96; letter-spacing: .04em; }
 @keyframes hm-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
 .boton-fantasma { background: transparent; border: 1px solid rgba(255,255,255,.14); color: rgba(244,247,251,.82);
   border-radius: 9px; padding: 7px 12px; cursor: pointer; font: 600 12.5px var(--fuente); width: 100%; transition: background .15s; }
@@ -230,7 +243,7 @@ html[data-tema="oscuro"] #topbar .reloj { background: var(--surface-3); border-c
 .crece { flex: 1; }
 .escondido { display: none !important; }
 .kicker { font: 600 11px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--blue); margin-bottom: 6px; }
-.micro { font: 600 10px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+.micro { font: 600 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
 code { font-family: var(--mono); }
 a { color: var(--blue); }
 
@@ -250,11 +263,11 @@ html[data-tema="oscuro"] .tarjeta:hover { box-shadow: 0 8px 22px rgba(0,0,0,.42)
    Regla: acción principal por vista = .primario (una sola). Acción de proceso
    (Actualizar / Ejecutar) = .oscuro. Foco con ring azul de marca. */
 .boton { display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  font: 600 13px var(--fuente); border: 1px solid var(--line-2); border-radius: 9px; padding: 9px 16px;
+  font: 600 13px var(--fuente); border: 1px solid var(--ctrl-bd); border-radius: 9px; padding: 9px 16px;
   cursor: pointer; background: var(--surface-3); color: var(--ink-2); transition: background .15s, filter .15s, box-shadow .15s, transform .1s; }
 .boton:hover { background: color-mix(in srgb, var(--surface-3) 84%, var(--ink)); }
 .boton:active:not(:disabled) { transform: translateY(1px); }   /* P23: feedback de pulsación */
-.boton:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(44,104,222,.18); }
+.boton:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .boton.primario { background: linear-gradient(180deg, var(--blue), var(--blue-press)); color: #fff; border: none;
   padding: 12px 20px; font-size: 14px; border-radius: 10px; box-shadow: 0 6px 18px rgba(44,104,222,.30); }
 .boton.primario:hover { filter: brightness(1.06); background: linear-gradient(180deg, var(--blue), var(--blue-press)); }
@@ -270,30 +283,30 @@ html[data-tema="oscuro"] .tarjeta:hover { box-shadow: 0 8px 22px rgba(0,0,0,.42)
 /* ---------- chip / píldora seleccionable (CRÍTICO: activo = fondo color + texto blanco) ---------- */
 .chip { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;
   font: 600 12.5px var(--fuente); padding: 8px 15px; border-radius: 999px;
-  background: var(--surface); color: var(--ink-2); border: 1px solid var(--line-2); transition: all .14s; }
-.chip:hover { border-color: var(--blue-100); }
+  background: var(--surface); color: var(--ink-2); border: 1px solid var(--ctrl-bd); transition: all .14s; }
+.chip:hover { border-color: var(--blue); }
 .chip.activo { background: var(--chip-activo, var(--blue)); color: #fff; border-color: var(--chip-activo, var(--blue)); }
 
 /* ---------- control segmentado (filas tipo píldora; activo = relleno de color) ---------- */
 .segmentado { display: inline-flex; gap: 6px; flex-wrap: wrap; }
-.segmentado button { border: 1px solid var(--line-2); background: var(--surface); cursor: pointer;
+.segmentado button { border: 1px solid var(--ctrl-bd); background: var(--surface); cursor: pointer;
   border-radius: 999px; padding: 7px 15px; font: 600 12.5px var(--fuente); color: var(--ink-2); transition: all .14s; }
-.segmentado button:hover { border-color: var(--blue-100); }
+.segmentado button:hover { border-color: var(--blue); }
 .segmentado button.activo { background: var(--seg-color, var(--navy-700)); color: #fff; border-color: var(--seg-color, var(--navy-700)); }
 
 /* ---------- formularios ---------- */
 select, input[type="text"], input[type="date"], input[type="number"], input[type="password"], textarea {
-  background: var(--surface); color: var(--ink); border: 1px solid var(--line-2); border-radius: 8px;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--ctrl-bd); border-radius: 8px;
   padding: 8px 10px; font: 500 13px var(--fuente); outline: none; transition: border-color .15s, box-shadow .15s; }
-select:focus, input:focus, textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(44,104,222,.16); }
+select:focus, input:focus, textarea:focus { border-color: var(--blue); box-shadow: var(--focus-ring); }
 label.campo { display: flex; flex-direction: column; gap: 5px; }
 label.campo, .campo > span:first-child, .campo > div:first-child {
-  font: 600 10px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+  font: 600 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
 label.campo select, label.campo input { font: 500 13px var(--fuente); color: var(--ink); text-transform: none; letter-spacing: normal; }
 
 /* ---------- etiquetas / badges (texto · fondo · borde comparten familia de tono) ---------- */
 .etiqueta { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 3px 10px;
-  font: 600 10px var(--mono); letter-spacing: .03em; line-height: 1.4; border: 1px solid transparent; }
+  font: 600 11px var(--mono); letter-spacing: .03em; line-height: 1.4; border: 1px solid transparent; }
 .etiqueta.ok { color: var(--ok); background: var(--ok-bg); border-color: var(--ok-bd); }
 .etiqueta.aviso { color: var(--warn); background: var(--warn-bg); border-color: var(--warn-bd); }
 .etiqueta.peligro { color: var(--danger); background: var(--danger-bg); border-color: var(--danger-bd); }
@@ -303,7 +316,7 @@ label.campo select, label.campo input { font: 500 13px var(--fuente); color: var
 /* ---------- métricas (cifra = mono tabular) ---------- */
 .metrica { display: flex; flex-direction: column; gap: 2px; }
 .metrica .valor { font: 600 22px var(--mono); color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
-.metrica .etiqueta-metrica { font: 600 10px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+.metrica .etiqueta-metrica { font: 600 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
 .metrica.peligro .valor { color: var(--danger); }
 
 /* ---------- barra de filtros (tarjeta) ---------- */
@@ -315,7 +328,7 @@ label.campo select, label.campo input { font: 500 13px var(--fuente); color: var
 .tabla-caja { border: 1px solid var(--line-3); border-radius: 9px; overflow: hidden; }
 table.tabla { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
 table.tabla thead tr { background: var(--surface-2); }
-table.tabla th { text-align: left; padding: 8px 10px; font: 600 10px var(--mono); text-transform: uppercase;
+table.tabla th { text-align: left; padding: 8px 10px; font: 600 11px var(--mono); text-transform: uppercase;
   letter-spacing: .04em; color: var(--faint); border-bottom: 1px solid var(--line); }
 table.tabla td { padding: 8px 10px; border-bottom: 1px solid var(--line-3); color: var(--ink-2); }
 table.tabla tbody tr:last-child td { border-bottom: none; }
@@ -360,7 +373,7 @@ table.tabla td.num, table.tabla th.num { text-align: right; font-family: var(--m
 @keyframes desliza { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
 .tarea-chip.clicable { cursor: pointer; transition: background .15s, border-color .15s; }
 .tarea-chip.clicable:hover { background: var(--line-3); border-color: var(--blue); }
-.tarea-chip-abrir { font-size: 10.5px; font-weight: 700; color: var(--blue); margin-left: 4px; }
+.tarea-chip-abrir { font-size: 11px; font-weight: 700; color: var(--blue); margin-left: 4px; }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--muted) 30%, transparent); border-radius: 6px;
@@ -485,10 +498,23 @@ details.hm-mas[open] > .hm-mas-panel { position: absolute; right: 0; top: calc(1
 @media (hover: none) {
   .ct-nav { width: 40px; height: 40px; }
   .sngr-zoom .zb, .gg-zoom button { width: 40px; height: 40px; }
-  .ct-dl { width: 38px; height: 38px; }
-  .ct-dl-shp { line-height: 38px; }
+  .ct-dl { width: 40px; height: 40px; }
+  .ct-dl-shp { line-height: 40px; }
   /* chips densos (meses/píldoras/días de veredicto): target táctil decente */
   .cl-mes, .cl-pill, .dec-dia { min-height: 40px; }
+  /* v20 (accesibilidad): la regla anterior solo cubría los controles de mapa.
+     Se amplía a TODOS los controles compartidos: menú lateral, botones del pie,
+     botones normales y chicos, chips, segmentados, pestañas, cajas y desplegables. */
+  .nav-item, .boton-fantasma { min-height: 44px; }
+  .boton, .boton.chico { min-height: 44px; }
+  .chip, .segmentado button { min-height: 40px; }
+  .pestana, .hm-pestana { min-height: 44px; }
+  select, input[type="text"], input[type="date"], input[type="number"],
+  input[type="password"], textarea {
+    min-height: 44px;
+    /* 16px: por debajo de ese tamaño, iPhone/iPad amplían la página al tocar
+       un campo y no la devuelven; con 16px el salto de zoom desaparece. */
+    font-size: 16px; }
 }
 
 /* ===== v18: el dedo sobre CUALQUIER gráfico Plotly debe poder desplazar la página.
@@ -585,10 +611,10 @@ details.hm-mas[open] > .hm-mas-panel { position: absolute; right: 0; top: calc(1
   align-items: center; justify-content: center; font: 800 16px var(--mono);
   letter-spacing: .5px; box-shadow: 0 6px 18px rgba(44,104,222,.4), inset 0 1px 0 rgba(255,255,255,.25); }
 .hm-login-nombre { font: 700 19px var(--fuente); color: #F3F6FB; letter-spacing: .2px; }
-.hm-login-sub { font: 600 9.5px var(--mono); letter-spacing: .24em; color: #8FA3C2; }
+.hm-login-sub { font: 600 11px var(--mono); letter-spacing: .24em; color: #8FA3C2; }
 #hm-login h1 { margin: 0 0 4px; font: 650 16px var(--fuente); color: #E8EDF6; }
 .hm-login-hint { margin: 0 0 18px; font-size: 12.5px; color: #9DAABF; }
-.hm-login-campo { display: block; font: 600 9.5px var(--mono); letter-spacing: .09em;
+.hm-login-campo { display: block; font: 600 11px var(--mono); letter-spacing: .09em;
   text-transform: uppercase; color: #8FA3C2; margin-bottom: 13px; transition: color .15s; }
 .hm-login-campo:focus-within { color: #A9C3EE; }   /* la etiqueta acompaña al foco */
 .hm-login-campo input { display: block; width: 100%; margin-top: 6px; padding: 11px 13px;
@@ -600,19 +626,19 @@ details.hm-mas[open] > .hm-mas-panel { position: absolute; right: 0; top: calc(1
 .hm-login-rec { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #9DAABF;
   margin: 2px 0 16px; cursor: pointer; }
 .hm-login-rec input { accent-color: #3D7BE8; width: 15px; height: 15px; }
-.hm-login-rec input:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(61,123,232,.35); border-radius: 4px; }
+.hm-login-rec input:focus-visible { outline: none; box-shadow: 0 0 0 2px #0A1526, 0 0 0 4px #5C97F5; border-radius: 4px; }
 .hm-login-btn { width: 100%; padding: 12px; border: none; border-radius: 10px; cursor: pointer;
   background: linear-gradient(145deg, #2C68DE, #1E57C8); color: #fff; font: 650 14px var(--fuente);
   letter-spacing: .2px; box-shadow: 0 8px 22px rgba(44,104,222,.35);
   transition: transform .12s, box-shadow .12s, filter .12s; }
 .hm-login-btn:hover { filter: brightness(1.07); box-shadow: 0 10px 26px rgba(44,104,222,.42); }
 .hm-login-btn:active { transform: translateY(1px); box-shadow: 0 4px 12px rgba(44,104,222,.3); }
-.hm-login-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(61,123,232,.4); }
+.hm-login-btn:focus-visible { outline: none; box-shadow: 0 0 0 2px #0A1526, 0 0 0 4px #5C97F5; }
 .hm-login-err { margin-top: 12px; padding: 9px 12px; border-radius: 9px; font-size: 12.5px;
   color: #FCA9A0; background: rgba(207,54,43,.14); border: 1px solid rgba(207,54,43,.35);
   animation: hm-fade .2s ease-out; }
 .hm-login-pie { margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(120,155,210,.14);
-  font: 500 10px var(--mono); letter-spacing: .06em; color: #64748B; text-align: center; }
+  font: 500 11px var(--mono); letter-spacing: .06em; color: #64748B; text-align: center; }
 @media (max-width: 480px) { .hm-login-caja { padding: 24px 20px 18px; } }
 /* ---- P21: variante TEMA CLARO del login (data-tema ya está fijado en <head>) ---- */
 html[data-tema="claro"] #hm-login { background:

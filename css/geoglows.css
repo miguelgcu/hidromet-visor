@@ -35,8 +35,9 @@ html[data-tema="oscuro"] .gg { --gg-acc: #5AA9E6; --gg-acc2: #2FC2D4; }
   letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .gg-screening-metrica strong { display: block; margin-top: 5px;
   font: 700 1.25rem/1 "IBM Plex Mono", monospace; color: var(--ink); }
+/* la ventana en llano puede ocupar dos líneas: NO cortarla con puntos suspensivos */
 .gg-screening-metrica small { display: block; margin-top: 4px; color: var(--muted);
-  font-size: .69rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  font-size: .69rem; line-height: 1.35; }
 .gg-screening-estados { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 9px;
   margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--line); }
 .gg-screening-badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px;
@@ -165,6 +166,26 @@ html[data-tema="oscuro"] .gg-rio .dot, html[data-tema="oscuro"] .gg-leyenda i { 
   border: 1px solid color-mix(in srgb, var(--c, #6B7785) 42%, transparent); }
 .gg-plot { width: 100%; flex: 1; min-height: 420px; }
 @media (max-width: 1100px) { .gg-plot { min-height: 340px; } }
+/* nota fija bajo el hidrograma: qué significan las franjas (sin ir a la guía) */
+.gg-plot-nota { margin: 6px 2px 0; font-size: .72rem; line-height: 1.45; color: var(--muted); }
+
+/* popup "¿qué río?" cuando varios puntos caen casi superpuestos */
+.gg-elige-pop .leaflet-popup-content-wrapper { background: var(--surface); color: var(--ink);
+  border-radius: 10px; }
+.gg-elige-pop .leaflet-popup-tip { background: var(--surface); }
+.gg-elige { display: flex; flex-direction: column; gap: 4px; font-size: .78rem; }
+.gg-elige b { margin-bottom: 2px; color: var(--ink); }
+.gg-elige button { display: flex; align-items: center; gap: 7px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); border-radius: 8px; padding: 5px 9px;
+  font: 600 .76rem var(--fuente, sans-serif); cursor: pointer; text-align: left; }
+.gg-elige button:hover { border-color: var(--gg-acc, #0E94A4); }
+.gg-elige button i { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+
+/* guía en ventana normal (marco .modal de base.css) */
+.modal.gg-guia { width: min(640px, 94vw); }
+.modal.gg-guia .cuerpo { font-size: .84rem; line-height: 1.5; }
+.modal.gg-guia .gloss-sec { margin-bottom: 10px; }
+.modal.gg-guia .gloss-sec b { display: block; margin-bottom: 2px; color: var(--ink); }
 
 /* detalle del río seleccionado (tarjeta a lo ancho, bajo mapa+hidrograma) */
 .gg-detalle { padding: 14px 16px; }

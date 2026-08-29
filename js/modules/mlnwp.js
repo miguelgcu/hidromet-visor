@@ -24,17 +24,26 @@
   const ETIQUETA_SOMBRA = "0 0 1px #fff, 0 0 3px #fff, 0 0 5px #fff";
   function abreviarModeloLeyenda(nombre, maximo = 19) {
     const original = String(nombre || "").trim();
-    const abreviado = original
+    // El sufijo interno de origen de datos (…_OM) no significa nada para el
+    // usuario y además impedía que estas traducciones coincidieran (los nombres
+    // publicados hoy llegan todos con sufijo): se ignora ANTES de traducir.
+    const sinSufijo = original.replace(/_OM$/i, "");
+    const abreviado = sinSufijo
       .replace(/^CONSENSO_OP_TOP10$/i, "Consenso Top10")
       .replace(/^BEST_OP_CV$/i, "Selector operativo")
       .replace(/^BC_CLASSIC_/i, "BC · ")
       .replace(/^ML_LGBM_STATION$/i, "ML LGBM est.")
       .replace(/^ML_XGB_STATION$/i, "ML XGB est.")
       .replace(/^METEOBLUE$/i, "Meteoblue")
-      .replace(/^IFSHRES$/i, "IFS HRES")
-      .replace(/^AIFS025$/i, "AIFS 0.25°")
-      .replace(/^IFS025$/i, "IFS 0.25°")
-      .replace(/^GFS05$/i, "GFS 0.5°")
+      .replace(/^IFSHRES$/i, "IFS alta res.")
+      .replace(/^AIFS025$/i, "AIFS por IA")
+      .replace(/^IFS025$/i, "IFS europeo")
+      .replace(/^GFS025$/i, "GFS americano")
+      .replace(/^GFS05$/i, "GFS 0,5° amer.")
+      .replace(/^ICON$/i, "ICON alemán")
+      .replace(/^JMA_GSM$/i, "GSM japonés")
+      .replace(/^MFGLOBAL$/i, "Arpège francés")
+      .replace(/^GEM15$/i, "GEM canadiense")
       .replace(/_/g, " ")
       .replace(/\s*·\s*/g, " · ")
       .replace(/\s+/g, " ")
@@ -42,6 +51,15 @@
     return abreviado.length <= maximo
       ? abreviado : `${abreviado.slice(0, Math.max(1, maximo - 1)).trimEnd()}…`;
   }
+  // Paleta CERRADA de la serie en pantalla (Okabe-Ito ampliada): ocho colores
+  // máximamente separados y seguros para daltonismo, asignados AL DIBUJAR según
+  // el puesto en la clasificación. Los colores fijos que llegan del backend
+  // traían pares casi idénticos (dos verdes, dos naranjas) imposibles de
+  // emparejar con la leyenda en barras de ~8 px.
+  const PALETA_SERIE = Object.freeze([
+    "#0072B2", "#D55E00", "#009E73", "#CC79A7",
+    "#E69F00", "#56B4E9", "#785EF0", "#444444",
+  ]);
   const OPACIDAD_SKILL_MIN = 0.28;
   const OPACIDAD_SKILL_MAX = 0.92;
   function opacidadPorSkill(rating, score = null, oscuro = false) {
@@ -62,8 +80,19 @@
     return valor !== null && valor !== undefined && valor !== ""
       && Number.isFinite(Number(valor));
   }
-  const indiceRecomendadoModelos = modelos =>
-    (modelos || []).findIndex(modelo => modelo && modelo.operacional);
+  // La estrella "recomendado" sale de la MEJOR calificación verificada entre los
+  // modelos operativos, nunca del orden accidental de la lista. Sin calificación
+  // verificable, o con empate en la mejor nota, nadie recibe estrella.
+  const indiceRecomendadoModelos = modelos => {
+    let mejor = -1, mejorRating = -Infinity, empate = false;
+    (modelos || []).forEach((modelo, i) => {
+      if (!modelo || !modelo.operacional || !esNumeroDeclarado(modelo.rating)) return;
+      const rating = Number(modelo.rating);
+      if (rating > mejorRating) { mejorRating = rating; mejor = i; empate = false; }
+      else if (rating === mejorRating) empate = true;
+    });
+    return empate ? -1 : mejor;
+  };
 
   // Orden objetivo de barras de lluvia. La calificación validada (1–10) es la
   // fuente primaria; score/skill solo cubre artefactos antiguos que aún no
@@ -250,7 +279,9 @@
     ];
   }
 
-  function seleccionarModelosPNG(modelos, inicio, fin, maximo = 7) {
+  // Mismo cupo que la pantalla (8): la imagen descargada no debe enseñar menos
+  // modelos que el gráfico que el usuario estaba viendo.
+  function seleccionarModelosPNG(modelos, inicio, fin, maximo = 8) {
     const candidatos = (modelos || []).map((modelo, indice) => ({
       modelo, indice, clave: claveModeloPNG(modelo), score: scoreModeloPNG(modelo),
     })).filter(item => {
@@ -369,7 +400,7 @@
     if (!hoy || !fechasEje.length) return null;
     const inicio = fechasEje[0], fin = fechasEje[fechasEje.length - 1];
     const esPrecip = !!d.es_precip;
-    const modelos = seleccionarModelosPNG(d.modelos, inicio, fin, 7);
+    const modelos = seleccionarModelosPNG(d.modelos, inicio, fin, 8);
     const obsFechas = (d.observado && d.observado.fechas) || [];
     const obsValores = (d.observado && d.observado.valores) || [];
     const hayObs = obsFechas.some((fecha, i) => fecha >= inicio && fecha <= fin
@@ -587,6 +618,29 @@
     };
   }
 
+  // Estado REAL del producto probabilístico, leído del propio fichero: manda la
+  // calibración aplicada y su veredicto. Los textos fijos anteriores solo
+  // reconocían dos estados antiguos y desacreditaban ("provisional no
+  // calibrada") un producto que el dato declara calibrado y verificado.
+  function estadoProbabilidad(pu, procedencia) {
+    const diag = (pu && pu.diagnostico) || {};
+    const cal = (pu && pu.calibracion_probabilidad)
+      || diag.calibracion_probabilidad || {};
+    const calibrada = cal.aplicada === true || diag.calibrated === true;
+    let estado;
+    if (diag.estado_promocion === "ACCREDITED")
+      estado = { texto: "calibración acreditada y verificada", ok: true };
+    else if (calibrada)
+      estado = { texto: "calibrada con la historia de la estación · verificada fuera de muestra", ok: true };
+    else if (String(diag.validation_standard || "").startsWith("PHYSICAL_ENSEMBLE"))
+      estado = { texto: "coincidencia de modelos físicos · sin corrección estadística", ok: false };
+    else
+      estado = { texto: "provisional no calibrada · solo informativa", ok: false };
+    if (procedencia && procedencia.ml_probability_authorized === false)
+      estado = { ...estado, texto: `${estado.texto} · sin aprendizaje automático` };
+    return estado;
+  }
+
   function figuraProbabilidadesPNG(d, contexto) {
     const pu = d.probs_umbral;
     const meta = contexto.meta || d;
@@ -633,22 +687,14 @@
       font: { family: PNG_SERIE.font, size: pxDesdePt(9.2),
         color: hayObs ? "#4B5D72" : "#8A4F19" },
     });
-    const acreditado = (
-      (pu.diagnostico || {}).estado_promocion === "ACCREDITED");
-    const ensambleFisico = (
-      (pu.diagnostico || {}).validation_standard
-        === "PHYSICAL_ENSEMBLE_AS_ISSUED");
+    const estadoPU = estadoProbabilidad(pu, d.procedencia_probabilistica);
     anotaciones.push({
       name: "png-probability-evidence", xref: "paper", yref: "paper",
       x: 0.5, y: 0.112, showarrow: false,
       xanchor: "center", yanchor: "middle",
-      text: ensambleFisico
-        ? "<i>Ensamble NWP físico · no calibrado ML</i>"
-        : (acreditado
-          ? "<i>Calibración acreditada strict-as-issued</i>"
-          : "<i>Producto provisional no calibrado · solo informativo</i>"),
+      text: `<i>${esc(estadoPU.texto)}</i>`,
       font: { family: PNG_SERIE.font, size: pxDesdePt(8.8),
-        color: acreditado ? "#1E6A43" : "#8A4F19" },
+        color: estadoPU.ok ? "#1E6A43" : "#8A4F19" },
     });
     filas.forEach(fila => fila.valores.forEach((valor, i) => {
       if (!esFinito(valor)) return;
@@ -836,8 +882,42 @@
   // (productos.FAMILIAS); etiqueta = texto del chip. "Todos" = sin filtro.
   const FAMILIAS_UI = [
     ["Todos", "Todo"], ["Convencionales", "Convencionales"], ["No convencionales", "No conv."],
-    ["ML", "ML"], ["Postprocesamiento", "Post. estadístico"],
+    ["ML", "Aprendizaje automático"], ["Postprocesamiento", "Ajuste estadístico"],
   ];
+  // Familias que dependen del sistema de aprendizaje automático. Su estado se
+  // DETECTA en los propios ficheros publicados: si ninguna serie trae modelos de
+  // esas familias ni la procedencia los autoriza, están fuera de servicio y las
+  // opciones se desactivan con la nota correspondiente. Cuando el sistema vuelva
+  // a emitir, la detección los reactiva sola sin tocar código.
+  const FAMILIAS_ML = ["ML", "Postprocesamiento"];
+  function detectarMLFuera(ser) {
+    if (!ser) return null;
+    const todos = [
+      ...(Array.isArray(ser.modelos) ? ser.modelos : []),
+      ...(Array.isArray(ser.shadow_modelos) ? ser.shadow_modelos : []),
+    ];
+    const hayML = todos.some(m => m && FAMILIAS_ML.includes(m.familia));
+    const proc = ser.procedencia_deterministica || null;
+    const autorizado = !!(proc
+      && (proc.ml_consenso_autorizado || proc.ml_selector_autorizado));
+    return !(hayML || autorizado);
+  }
+  function aplicarEstadoML(fuera) {
+    if (fuera === null) return;   // sin datos aún: no se afirma nada
+    S.mlFuera = fuera;
+    const sel = document.getElementById("ml-sel-fam");
+    if (sel) [...sel.options].forEach(op => {
+      if (!FAMILIAS_ML.includes(op.value)) return;
+      op.disabled = fuera;
+      const base = op.dataset.etiqueta || (op.dataset.etiqueta = op.textContent);
+      op.textContent = fuera ? `${base} · fuera de servicio` : base;
+    });
+    const aviso = document.getElementById("ml-aviso-ml");
+    if (aviso) {
+      aviso.hidden = !fuera;
+      if (fuera) aviso.innerHTML = "<b>El pronóstico por aprendizaje automático está fuera de servicio:</b> no hay productos de ese tipo publicados. Las curvas y calificaciones de esta pantalla corresponden a los modelos meteorológicos habituales.";
+    }
+  }
   const filtrarModelosFamilia = (modelos, familia) => {
     const lista = Array.isArray(modelos) ? modelos : [];
     if (!familia || familia === "Todos" || familia === "Mejor desempeño") return lista;
@@ -873,12 +953,6 @@
     const seleccionado = normalizarHorizonteValidacion(horizonte);
     return seleccionado === "todos" ? "Todos los plazos" : `D+${seleccionado}`;
   };
-  // Tamaño del punto del MAPA por confianza (px de marcador Plotly). Borde blanco
-  // UNIFORME (nunca color por confianza). Alta grande / Media medio / Baja pequeño.
-  const TAM_CONF = { Alta: 15, Media: 11, Baja: 8, "Sin calificar": 6 };
-  // Opacidad de la BARRA por confianza (Alta sólido / Media .72 / Baja .5).
-  const OPACIDAD_CONF = { Alta: 1, Media: .72, Baja: .5, "Sin calificar": .35 };
-
   // Badge de calificación con color tipo semáforo (escala RdYlGn por nota 1-10).
   const RDYLGN = ["#D73027", "#F46D43", "#FDAE61", "#FEE08B", "#D9EF8B",
                   "#A6D96A", "#66BD63", "#1A9850"];
@@ -896,10 +970,6 @@
     return `<span class="ml-pill ${confClase(c)}">${esc(c || "Sin calificar")}</span>`;
   }
 
-  // Riesgo → color (texto). Valores oficiales del diseño/escalas.
-  const RIESGO_COLOR = { "Muy Alto": "#D62A23", "Alto": "#F08A24", "Medio": "#E0A91E", "No aplica": "#3DA4DD" };
-  const riesgoColor = r => RIESGO_COLOR[r] || "var(--ink-2)";
-
   /* ---------------- estado del módulo ---------------- */
   // Cohorte científica completa. La dependencia no es un filtro visual, pero
   // todas las redes del catálogo operativo deben poder abrir su serie.
@@ -912,7 +982,7 @@
     horizonteValidacion: "1",    // D+1 por defecto; "todos" = modelo × plazo
     estacion: "",                // código de estación (v12: siempre por estación)
     valData: null,               // última respuesta de /validacion (alimenta el selector)
-    geojson: null,
+    mlFuera: null,               // aprendizaje automático fuera de servicio (detectado del dato)
   };
 
   const depsQS = () => "deps=" + encodeURIComponent(DEPS.join(","));
@@ -928,9 +998,12 @@
      solo un sub-encabezado compacto.
      ============================================================ */
   function pintarRaiz(vista) {
+    // Título honesto: sin prometer aprendizaje automático (mientras no emita,
+    // el aviso de abajo lo dice; si vuelve a emitir, el aviso desaparece solo).
     vista.innerHTML = `
       <div class="ml-raiz" data-screen-label="ML-NWP">
-        <div class="ml-cab-mini">Validación NWP-ML por estación y horizonte D+1…D+5 · calificación 1–10 con confianza muestral</div>
+        <div class="ml-cab-mini">Series y validación de modelos por estación · plazos de mañana a 5 días · calificación 1–10 con confianza</div>
+        <div class="ml-aviso-fuera" id="ml-aviso-ml" role="status" hidden></div>
         <div id="ml-cuerpo"></div>
       </div>`;
   }
@@ -1275,6 +1348,9 @@
     // /mlnwp/veredicto sigue vivo — lo consume el submenú nuevo.)
     cont.innerHTML = `<div class="ml-card" id="ml-serie-card"></div>
       <div id="ml-detalle" style="margin-top:14px"></div>`;
+    // El estado del aprendizaje automático se lee de la respuesta COMPLETA
+    // (antes de filtrar por familia): desactiva/reactiva las opciones y el aviso.
+    aplicarEstadoML(detectarMLFuera(ser));
     // En escritorio el backend ya filtra. El visor estático reutiliza el JSON
     // completo de "Todos" para evitar miles de artefactos y aplica aquí la misma
     // regla. Nunca se conserva una curva de la selección anterior.
@@ -1323,7 +1399,12 @@
 
     const filas = modelos.map((m, i) => {
       const sinCal = !m.califica || m.rating == null;
-      const [bg, fg] = calColor(m.rating);
+      // Una nota alta NO se pinta de verde si la propia fila la contradice
+      // (correlación o R² negativos = acierta menos que quedarse en el
+      // promedio): pastilla neutra con aviso, para no vender calidad falsa.
+      const contradice = !sinCal && ((esFinito(m.corr) && Number(m.corr) < 0)
+        || (esFinito(m.r2) && Number(m.r2) < 0));
+      const [bg, fg] = contradice ? calColor(null) : calColor(m.rating);
       const tipoFam = { Convencionales: "grillado", "No convencionales": "grillado",
         ML: "modelo ML", Postprocesamiento: "combinación" }[m.familia] || "crudo";
       const metTds = metHead.map(([k]) =>
@@ -1331,10 +1412,10 @@
       const esMejor = i === mejorIdx;
       return `<tr class="${sinCal ? "sin-calif" : ""}${esMejor ? " ml-best" : ""}">
         <td class="idx">${sinCal ? "—" : i + 1}</td>
-        <td><span class="ml-mod-punto" style="background:${esc(m.color)}"></span>${esc(m.modelo)}${esMejor ? " ★" : ""}<span class="ml-mod-tipo"> · ${tipoFam}</span></td>
+        <td title="${esc(m.modelo)}"><span class="ml-mod-punto" style="background:${esc(m.color)}"></span>${esc(aliasModeloPNG(m, 30))}${esMejor ? " ★" : ""}<span class="ml-mod-tipo"> · ${tipoFam}</span></td>
         <td class="ml-lead">D+${Number(m.lead)}</td>
         <td>${sinCal ? `<span style="color:var(--muted-2)">sin calif.</span>`
-          : `<span class="ml-calif-badge" style="background:${bg};color:${fg}">${num(m.rating, 1)}</span>`}</td>
+          : `<span class="ml-calif-badge" style="background:${bg};color:${fg}"${contradice ? ` title="Nota con correlación o ajuste negativos en esta muestra: acompaña lo real peor que usar el promedio. Tómala con cautela."` : ""}>${num(m.rating, 1)}${contradice ? " ⚠" : ""}</span>`}</td>
         <td class="num">${m.n}</td>
         <td>${pillConf(m.confianza)}</td>
         ${metTds}
@@ -1343,10 +1424,20 @@
 
     // Banner del ganador con su n (evita coronar a un modelo con muestra diminuta).
     const mg = mejorIdx >= 0 ? modelos[mejorIdx] : null;
+    const cautelaMg = mg && String(mg.confianza || "") === "Baja"
+      ? ` · <b>medido sobre pocas fechas: tómalo como indicio, no como veredicto</b>` : "";
     const banner = mg
       ? `<div class="ml-mejor-banner"><span class="ml-mejor-estrella">★</span> Mejor en ${esDet ? "detección de eventos" : "cuantificación"}:
-         <b>${esc(mg.modelo)} · D+${Number(mg.lead)}</b> — calif. ${num(mg.rating, 1)}/10 · confianza ${esc(String(mg.confianza || "—")).toLowerCase()} · <b>${mg.n}</b> fechas</div>`
+         <b>${esc(aliasModeloPNG(mg, 30))} · D+${Number(mg.lead)}</b> — calif. ${num(mg.rating, 1)}/10 · confianza ${esc(String(mg.confianza || "—")).toLowerCase()} · <b>${mg.n}</b> fechas${cautelaMg}</div>`
       : "";
+
+    // Nota al pie en TODAS las variables (antes solo la tabla de lluvia la
+    // tenía): qué mide cada columna, en palabras y con su unidad.
+    const notaMetricas = esDet
+      ? `<div class="ml-pb-nota">POD acierto de los días con lluvia · FAR falsas alarmas · CSI acierto global (0–1; mejor cerca de 1).</div>`
+      : esTemp
+        ? `<div class="ml-pb-nota">MAE/RMSE error medio en °C (menor es mejor) · Sesgo: + pronostica de más, − de menos · Corr/R² qué tanto acompaña las subidas y bajadas de lo medido · ΔT = cambio de un día al siguiente: MAE ΔT su error, Acierto ΔT la fracción de días con la dirección correcta y Fallo plano los días en que el modelo dijo «sin cambio» y sí lo hubo.</div>`
+        : `<div class="ml-pb-nota">MAE/RMSE error medio en mm (menor es mejor) · Sesgo: + pronostica de más, − de menos · Corr/R² qué tanto acompaña las subidas y bajadas de lo medido.</div>`;
 
     return `${banner}
       <table class="ml-tabla-modelos">
@@ -1355,7 +1446,7 @@
           ${metHeadHTML}
         </tr></thead>
         <tbody>${filas || `<tr><td colspan="${nCols}" class="suave" style="padding:14px">Sin modelos para esta estación.</td></tr>`}</tbody>
-      </table>`;
+      </table>${notaMetricas}`;
   }
 
   // UNA SOLA tabla para precip (pedido del dueño 2026-07-09): detección Y cuantificación
@@ -1378,16 +1469,19 @@
     const sinC = m => !m || !m.califica || m.rating == null;
     const f2 = v => (v == null || Number.isNaN(v)) ? "—" : Number(v).toFixed(2);
     const f1 = v => (v == null || Number.isNaN(v)) ? "—" : Number(v).toFixed(1);
+    // Igual que en tablaClasifHTML: correlación o R² negativos anulan el verde.
+    const contradiceUni = m => !sinC(m) && ((esFinito(m.corr) && Number(m.corr) < 0)
+      || (esFinito(m.r2) && Number(m.r2) < 0));
     const badge = (m, best) => sinC(m)
       ? `<span style="color:var(--muted-2)">—</span>`
-      : (([bg, fg]) => `<span class="ml-calif-badge" style="background:${bg};color:${fg}">${num(m.rating, 1)}</span>${clave(m) === best ? " ★" : ""}`)(calColor(m.rating));
+      : (([bg, fg]) => `<span class="ml-calif-badge" style="background:${bg};color:${fg}"${contradiceUni(m) ? ` title="Nota con correlación o ajuste negativos en esta muestra: acompaña lo real peor que usar el promedio. Tómala con cautela."` : ""}>${num(m.rating, 1)}${contradiceUni(m) ? " ⚠" : ""}</span>${clave(m) === best ? " ★" : ""}`)(contradiceUni(m) ? calColor(null) : calColor(m.rating));
     const filas = orden.map((base, i) => {
       const mc = base._soloDet ? null : base;
       const md = dmap.get(clave(base)) || (base._soloDet ? base : null);
       const tipoFam = { Convencionales: "grillado", "No convencionales": "grillado",
         ML: "modelo ML", Postprocesamiento: "combinación" }[base.familia] || "crudo";
       return `<tr>
-        <td class="ml-uni-mod"><span class="ml-uni-idx">${i + 1}</span><span class="ml-mod-punto" style="background:${esc(base.color)}"></span>${esc(base.modelo)}<span class="ml-mod-tipo"> · ${tipoFam}</span></td>
+        <td class="ml-uni-mod" title="${esc(base.modelo)}"><span class="ml-uni-idx">${i + 1}</span><span class="ml-mod-punto" style="background:${esc(base.color)}"></span>${esc(aliasModeloPNG(base, 30))}<span class="ml-mod-tipo"> · ${tipoFam}</span></td>
         <td class="ml-lead">D+${Number(base.lead)}</td>
         <td>${badge(md, bestDet)}</td>
         <td class="num">${sinC(md) ? "—" : f2(md.pod)}</td>
@@ -1405,8 +1499,10 @@
     }).join("");
     const ban = (ms, best, etq) => {
       const mg = ms.find(m => clave(m) === best);
+      const cautela = mg && String(mg.confianza || "") === "Baja"
+        ? ` · <b>medido sobre pocas fechas: tómalo como indicio, no como veredicto</b>` : "";
       return mg ? `<div class="ml-mejor-banner"><span class="ml-mejor-estrella">★</span> Mejor en ${etq}:
-        <b>${esc(mg.modelo)} · D+${Number(mg.lead)}</b> — calif. ${num(mg.rating, 1)}/10 · <b>${mg.n}</b> fechas</div>` : "";
+        <b>${esc(aliasModeloPNG(mg, 30))} · D+${Number(mg.lead)}</b> — calif. ${num(mg.rating, 1)}/10 · <b>${mg.n}</b> fechas${cautela}</div>` : "";
     };
     return `${ban(det, bestDet, "detección de eventos")}${ban(cua, bestCua, "cuantificación")}
       <div class="ml-uni-wrap">
@@ -1468,141 +1564,11 @@
     };
   }
 
-  /* ============================================================
-     MAPA Plotly (puntos sobre fondo "continental"): usado por
-     Validación (ganador) y Mapas (campo). Sin tiles: lon/lat como
-     x/y dentro de los límites de Ecuador, con relieve provincial
-     dibujado en líneas tenues si /geojson/provincias está disponible.
-     ============================================================ */
-  const ECU = { W: -81.3, E: -75.0, S: -5.1, N: 1.6 };
-
-  // Contorno de Ecuador con ENCASILLADO (blanca ancha debajo + negra más fina encima).
-  // wNegro parametrizado (spec de anchos): mini-mapas/grillas 1.5 (defecto) ·
-  // MAPA GRANDE (ganador) 2.0 — el llamador del mapa grande pasa opts.outlineW = 2.
-  function outlineTrace(wNegro = 1.5) {
-    if (!S.geojson || !S.geojson.features) return [];
-    const xs = [], ys = [];
-    const empuja = ring => {
-      for (const [lon, lat] of ring) { xs.push(lon); ys.push(lat); }
-      xs.push(null); ys.push(null);
-    };
-    for (const f of S.geojson.features) {
-      const g = f.geometry; if (!g) continue;
-      if (g.type === "Polygon") g.coordinates.forEach(empuja);
-      else if (g.type === "MultiPolygon") g.coordinates.forEach(p => p.forEach(empuja));
-    }
-    if (!xs.length) return [];
-    const base = { type: "scatter", mode: "lines", x: xs, y: ys, hoverinfo: "skip", showlegend: false };
-    // Lienzo de mapa = papel blanco en ambos temas → halo blanco + línea negra SIEMPRE.
-    return [
-      Object.assign({}, base, { line: { color: "#ffffff", width: 3.4 } }),
-      Object.assign({}, base, { line: { color: "#000000", width: wNegro } }),
-    ];
-  }
-
-  // Relieve continental RELLENO (mapa base): que el mapa no sean puntos pelados.
-  function landTrace() {
-    if (!S.geojson || !S.geojson.features) return null;
-    const xs = [], ys = [];
-    const empuja = ring => { for (const [lo, la] of ring) { xs.push(lo); ys.push(la); } xs.push(null); ys.push(null); };
-    for (const f of S.geojson.features) {
-      const g = f.geometry; if (!g) continue;
-      if (g.type === "Polygon") g.coordinates.forEach(empuja);
-      else if (g.type === "MultiPolygon") g.coordinates.forEach(p => p.forEach(empuja));
-    }
-    if (!xs.length) return null;
-    // Lienzo de mapa = papel blanco en ambos temas → continente blanco casi opaco.
-    return { type: "scatter", mode: "lines", x: xs, y: ys, fill: "toself", hoverinfo: "skip",
-      fillcolor: "rgba(255,255,255,.95)",
-      line: { color: "rgba(0,0,0,0)", width: 0 }, showlegend: false };
-  }
-
-  async function asegurarGeo() {
-    if (S.geojson !== null) return;
-    try { S.geojson = await App.api("/mlnwp/geojson/provincias"); }
-    catch (e) { S.geojson = false; }
-  }
-
-  function ejeGeo() {
-    return {
-      xaxis: { range: [ECU.W, ECU.E], showgrid: false, zeroline: false, visible: false, fixedrange: false },
-      yaxis: { range: [ECU.S, ECU.N], showgrid: false, zeroline: false, visible: false,
-               scaleanchor: "x", scaleratio: 1, fixedrange: false },
-    };
-  }
-
-  function plotMapaPuntos(divId, puntos, opts) {
-    const el = document.getElementById(divId);
-    if (!el) return;
-    asegurarGeo().then(() => construirMapa(el, puntos, opts));
-  }
-
-  function construirMapa(el, puntos, opts) {
-    if (!window.Plotly) { el.innerHTML = `<div class="vacio">Plotly no disponible</div>`; return; }
-    const traces = [];
-    const land = landTrace();        // relieve relleno de base
-    if (land) traces.push(land);
-    // Contorno de Ecuador con encasillado (negro + halo blanco). Ancho por tipo de
-    // mapa: mini-mapas por modelo 1.5 (defecto) · MAPA GRANDE ganador 2.0 (opts.outlineW).
-    traces.push(...outlineTrace(opts.outlineW || 1.5));
-
-    if (!puntos.length) {
-      Plotly.purge(el);
-      el.innerHTML = `<div class="vacio" style="height:100%"><div class="icono">∅</div>Sin estaciones para mostrar</div>`;
-      return;
-    }
-    el.innerHTML = "";
-
-    const x = puntos.map(p => p.lon), y = puntos.map(p => p.lat);
-    const text = puntos.map(opts.hover);
-    const marker = { line: { color: "#fff", width: 2 } };
-
-    if (opts.colorPorModelo) {
-      marker.color = puntos.map(p => p.color);
-      marker.size = puntos.map(opts.tamano);
-    } else if (opts.colorRiesgo) {
-      // "Por riesgo": recolorea el marcador con el color de nivel de riesgo del dato.
-      marker.color = puntos.map(p => RIESGO_COLOR[p.riesgo] || "#3DA4DD");
-      marker.size = opts.size || 11;
-    } else {
-      marker.color = puntos.map(p => p.valor);
-      marker.colorscale = opts.colorscale;
-      marker.cmin = opts.cmin; marker.cmax = opts.cmax;
-      marker.size = opts.size || 11;
-      marker.showscale = false;
-    }
-
-    const trace = { type: "scatter", mode: opts.etiquetas ? "markers+text" : "markers",
-      x, y, text, hoverinfo: "text", marker };
-    if (opts.etiquetas) {
-      trace.text = puntos.map(p => num(p.valor, 0));
-      trace.hovertext = puntos.map(opts.hover);
-      trace.hoverinfo = "text";
-      trace.textposition = "top center";
-      trace.textfont = { family: "IBM Plex Mono, monospace", size: 9, color: "#0F1B2D" };
-    }
-    traces.push(trace);
-
-    const geo = ejeGeo();
-    const layout = App.plotlyLayoutBase({
-      showlegend: false, margin: { l: 0, r: 0, t: 0, b: 0 },
-      xaxis: geo.xaxis, yaxis: geo.yaxis, dragmode: "pan",
-    });
-    Plotly.newPlot(el, traces, layout, App.plotlyConfig({ scrollZoom: true })).then(() => {
-      if (App.pinchZoomMapa) App.pinchZoomMapa(el);   // v17: pinza = zoom del mapa
-      if (opts.onClick) {
-        el.on("plotly_click", ev => {
-          const idx = ev.points && ev.points[0] && ev.points[0].pointNumber;
-          if (idx == null) return;
-          // el primer trace puede ser el outline; localizar el punto por curva.
-          const curva = ev.points[0].curveNumber;
-          const tr = traces[curva];
-          if (tr !== trace) return;
-          opts.onClick(puntos[idx]);
-        });
-      }
-    });
-  }
+  /* Mapa nacional de puntos RETIRADO (v12: la vista Nacional/Mapas ya no
+     existe). El bloque plotMapaPuntos/construirMapa/outlineTrace/landTrace y
+     la descarga de /mlnwp/geojson/provincias se ELIMINARON el 2026-08-28
+     porque ninguna pantalla los invocaba; si algún día vuelve un mapa de
+     selección, debe rehacerse con barra de colores y paleta legible. */
 
   /* ============================================================
      SERIE TEMPORAL (dentro de la vista de estación de Validación)
@@ -1641,15 +1607,33 @@
       `Código ${meta.codigo || d.codigo || "—"}`,
       redEst(meta), coord(meta.lat, "Lat"), coord(meta.lon, "Lon"), altitud, region,
     ].filter(Boolean).map(x => `<span class="ml-serie-chip">${esc(x)}</span>`).join("");
+    // Fecha de EMISIÓN del dato (campo "hoy" del fichero) y su antigüedad frente
+    // al día real: la tarjeta la declara siempre, y en color de aviso si el
+    // pronóstico ya lleva días congelado.
+    const emision = FECHA_ISO_RE.test(String(d.hoy || "")) ? String(d.hoy) : null;
+    const hoyReal = (App.hoyEC ? App.hoyEC() : new Date().toISOString().slice(0, 10));
+    const diasEmision = emision && FECHA_ISO_RE.test(String(hoyReal || ""))
+      ? Math.round((fechaMs(hoyReal) - fechaMs(emision)) / DIA_MS) : null;
+    const notaEmision = emision
+      ? `<div class="ml-serie-emision${diasEmision > 1 ? " vieja" : ""}">Pronóstico emitido el ${emision.slice(8, 10)}/${emision.slice(5, 7)}/${emision.slice(0, 4)}${diasEmision > 1 ? ` · hace ${diasEmision} días` : (diasEmision === 1 ? " · hace 1 día" : "")}</div>`
+      : "";
+    // Título propio del gráfico (se imprime en la imagen que exporta Plotly y
+    // lo lee el lector de pantalla): estación, variable, unidad y emisión.
+    const tituloGrafico = `${meta.nombre || d.nombre || d.codigo || "Estación"} (${meta.codigo || d.codigo || "—"}) · ${varMet} en ${unidad}${emision ? ` · emitido ${emision.slice(8, 10)}/${emision.slice(5, 7)}/${emision.slice(0, 4)}` : ""}`;
     const cabecera = `<header class="ml-serie-cabecera">
       <h2>${esc(meta.nombre || d.nombre || d.codigo || "Estación")}</h2>
       <div class="ml-serie-chips">${chips}</div>
       <div class="ml-serie-subtitulo">${esc(varMet)}<span aria-hidden="true"> · </span>${esc(aggMet)}</div>
+      ${notaEmision}
     </header>`;
     const modelosCandidatos = Array.isArray(d.modelos) ? d.modelos : [];
     const shadowCandidatos = Array.isArray(d.shadow_modelos)
       ? d.shadow_modelos : [];
-    const hoyVisual = (App.hoyEC ? App.hoyEC() : d.hoy);
+    // El corte medido/pronosticado y la ventana visible salen de la FECHA DEL
+    // DATO (emisión del fichero), nunca del reloj del visitante: con el visor
+    // congelado, el reloj dejaba la marca fuera del dibujo y con los días
+    // vaciaba la ventana entera. El reloj queda solo de respaldo sin emisión.
+    const hoyVisual = emision || (App.hoyEC ? App.hoyEC() : d.hoy);
     const lookbackVisual = Number.isFinite(Number(d.lookback)) ? Number(d.lookback) : LOOKBACK_SERIE;
     const desdeVisual = moverFechaISO(hoyVisual, -Math.max(0, lookbackVisual));
     // La leyenda y el gráfico se reconstruyen con la variable activa. Una curva
@@ -1676,11 +1660,18 @@
     // en estaciones nuevas EPMAPS que aún no califican modelos). Mantener el
     // aviso, pero continuar hasta construir la traza observada y su estado.
     const famSinModelos = d.familia_activa || d.familia || "seleccionada";
+    const etiquetaFamiliaSerie = ({ ML: "aprendizaje automático",
+      Postprocesamiento: "ajuste estadístico" })[famSinModelos] || famSinModelos;
+    // Si la familia elegida depende del aprendizaje automático y este no emite,
+    // el mensaje dice la verdad GENERAL en vez de culpar a la estación elegida.
+    const mlFueraFam = S.mlFuera === true && FAMILIAS_ML.includes(famSinModelos);
     const avisoSinModelos = modelosRespuesta.length ? "" : `
       <div class="ml-serie-vacia ml-serie-vacia-modelos" role="status">
         <div class="icono">∅</div>
-        <b>Sin curvas para esta selección.</b>
-        <span>No hay modelos de ${esc(famSinModelos)} con datos en esta estación y variable; la observación disponible se conserva debajo.</span>
+        ${mlFueraFam ? `<b>Fuera de servicio.</b>
+        <span>El pronóstico por aprendizaje automático no está emitiendo: ninguna estación tiene estas curvas ahora mismo. La observación disponible se conserva debajo.</span>`
+        : `<b>Sin curvas para esta selección.</b>
+        <span>No hay modelos de ${esc(etiquetaFamiliaSerie)} con datos en esta estación y variable; la observación disponible se conserva debajo.</span>`}
       </div>`;
     card.innerHTML = `
       ${cabecera}
@@ -1714,7 +1705,8 @@
       <div class="ml-time-scroll" role="region" tabindex="0"
            aria-label="Serie y probabilidades alineadas por fecha">
         <div class="ml-time-track">
-          <div class="ml-serie-plot" id="ml-plot-serie"></div>
+          <div class="ml-serie-plot" id="ml-plot-serie" role="img"
+               aria-label="Gráfico: ${esc(tituloGrafico)}. Pronóstico de cada modelo frente a la observación local, día por día."></div>
           <div class="ml-serie-probs" id="ml-serie-probs"></div>
         </div>
       </div>`;
@@ -1753,11 +1745,20 @@
       const ultimaCorta = FECHA_ISO_RE.test(ultimaServidor)
         ? `${ultimaServidor.slice(8, 10)}/${ultimaServidor.slice(5, 7)}/${ultimaServidor.slice(0, 4)}`
         : null;
+      // Si el fichero SÍ trae mediciones pero todas quedaron antes de la
+      // ventana dibujada, se dice eso (la estación mide; la ventana avanzó),
+      // nunca un "sin observación" que suene a estación apagada.
+      const ultimaLocal = obsFechas
+        .filter(fecha => FECHA_ISO_RE.test(String(fecha || ""))).sort().slice(-1)[0] || null;
+      const ultimaLocalCorta = ultimaLocal
+        ? `${ultimaLocal.slice(8, 10)}/${ultimaLocal.slice(5, 7)}/${ultimaLocal.slice(0, 4)}` : null;
       const mensajeSinObs = estadoServidor.estado === "sin_reporte_reciente"
         ? `Sin reporte reciente; último ${ultimaCorta || "no informado"}. No se dibuja una serie sustituta.`
         : estadoServidor.estado === "variable_no_observada"
           ? "Esta estación no observa esta variable en la agregación seleccionada."
-          : "Sin observación local en esta ventana; se muestran pronósticos sin fabricar una serie sustituta.";
+          : (ultimaLocal && desdeVisual && ultimaLocal < desdeVisual
+            ? `La estación sí mide: su última medición es del ${ultimaLocalCorta}, anterior a la ventana mostrada.`
+            : "Sin observación local en esta ventana; se muestran pronósticos sin fabricar una serie sustituta.");
       obsEstadoEl.classList.toggle("sin-datos", !hayObsVentana);
       obsEstadoEl.innerHTML = hayObsVentana
         ? `<span aria-hidden="true">●</span> Observación local · ${observacionesVentana.length} fecha(s) · última ${esc(observacionesVentana[observacionesVentana.length - 1].fecha)}`
@@ -1826,6 +1827,11 @@
     // El backend antepone los productos operativos que alimentan alertas/cartas;
     // el cupo restante muestra los comparadores con mayor skill.
     const modelosVisibles = modelosRespuesta.slice(0, 8);
+    // Color por PUESTO de desempeño (paleta cerrada): los ocho visibles nunca
+    // comparten familia de color. El respaldo punteado conserva su gris propio.
+    const colorPorModelo = new Map(
+      ordenarModelosPorDesempeno(modelosVisibles).map((modelo, i) =>
+        [modelo, PALETA_SERIE[i % PALETA_SERIE.length]]));
     const modelosEtiquetados = new Set(
       ordenarModelosPorDesempeno(modelosVisibles).slice(0, 3));
     const iRecomendado = indiceRecomendadoModelos(modelosVisibles);
@@ -1842,7 +1848,9 @@
       const iModelo = modelosVisibles.indexOf(original);
       const ordenDesempeno = item.ordenDesempeno;
       let m = original;   // el respaldo se re-etiqueta abajo
-      const color = m.color;
+      const color = (original.dash || original.sin_entrenar)
+        ? (m.color || "#8C99AD")
+        : (colorPorModelo.get(original) || m.color);
       const esRecomendado = iRecomendado >= 0 && iModelo === iRecomendado;
       const op = opacidadPorSkill(m.rating, m.score ?? m.skill, oscuro);
       const wLin = esRecomendado ? Math.max(3, m.width ?? 1.5)
@@ -1869,25 +1877,30 @@
           } },
           opacity: op, offsetgroup: `lluvia-${String(item.posicion).padStart(2, "0")}`,
           alignmentgroup: "precipitacion-diaria", legendrank: ordenDesempeno + 1,
-          hovertemplate: `${esc(m.modelo)} · desempeño #${ordenDesempeno + 1}<br>%{x|%d/%m/%Y}: %{y:.1f} ${esc(unidad)}<extra></extra>` });
+          // Hover unificado: la fecha ya la pone la cabecera del globo, así que
+          // cada línea solo lleva nombre legible, valor y unidad.
+          hovertemplate: `${esc(aliasModeloPNG(m, 24))}: %{y:.1f} ${esc(unidad)}<extra></extra>` });
       } else {
         // connectgaps:false + eje completo con null (series.py): un hueco de fechas
         // se ve como hueco, NO como diagonal fantasma (queja La Argelia 84270 03/07).
         traces.push({ type: "scatter", mode: "lines", x: fx(m.fechas), y: m.valores, name: `${m.modelo}${otxt}${rtxt}`,
           line: { color, width: wLin, ...(m.dash ? { dash: m.dash } : {}) }, opacity: op, connectgaps: false,
-          hovertemplate: `${esc(m.modelo)}<br>%{x|%d/%m/%Y}: %{y:.1f} ${esc(unidad)}<extra></extra>` });
+          hovertemplate: `${esc(aliasModeloPNG(m, 24))}: %{y:.1f} ${esc(unidad)}<extra></extra>` });
       }
       opacidadesTrazas.push(op);
       const swStyle = m.dash ? `border-top:2px dotted ${esc(color)};height:0`
                              : `background:${esc(color)};opacity:${op}`;
       const aliasPublico = aliasModeloPNG(m, 24);
-      const nombreCompleto = `${aliasPublico}${otxt}${rtxt}`;
-      const notaLeyenda = m.sin_entrenar ? "s/cal."
-        : `${esRecomendado ? "★ · " : (m.operacional ? "op. · " : "")}${num(m.rating, 1)}`;
+      const nombreCompleto = `${aliasPublico}${otxt}${rtxt}`
+        + (esRecomendado
+          ? " — recomendado por la mejor calificación verificada entre los modelos operativos"
+          : "");
+      const notaLeyenda = m.sin_entrenar ? "sin calificar"
+        : `${esRecomendado ? "★ · " : (m.operacional ? "en operación · " : "")}nota ${num(m.rating, 1)}/10`;
       leyenda.push({ orden: ordenDesempeno,
         html: `<span class="it" title="${esc(nombreCompleto)}" aria-label="${esc(nombreCompleto)}">
           <span class="sw-caja" style="${swStyle}"></span>
-          <span class="ml-leyenda-nombre">${esc(aliasModeloPNG(m, 19))}</span>
+          <span class="ml-leyenda-nombre">${esc(aliasModeloPNG(m, 28))}</span>
           <span class="ml-leyenda-nota">${esc(notaLeyenda)}</span>
         </span>` });
     }
@@ -1905,7 +1918,7 @@
         name: String(m.alias || m.modelo || "SHADOW"),
         line: { color, width: 1.35, dash: "dot" }, opacity: 0.48,
         connectgaps: false, showlegend: false,
-        hovertemplate: `SHADOW · ${esc(m.alias || m.modelo || "modelo")}<br>%{x|%d/%m/%Y}: %{y:.1f} ${esc(unidad)}<extra>No operativo</extra>`,
+        hovertemplate: `Comparador ${esc(m.alias || m.modelo || "SHADOW")}: %{y:.1f} ${esc(unidad)}<extra>no operativo</extra>`,
       });
       opacidadesTrazas.push(0.48);
       shadowLeyenda.push(`<span class="it-shadow" title="Comparador descriptivo; no participa en ranking, selector, consenso ni alertas">
@@ -1930,7 +1943,7 @@
         name: "Observado", opacity: 1, line: { color: C.obs, width: 3.2 }, connectgaps: false,
         marker: { color: C.obs, size: 9, symbol: "circle",
           line: { color: oscuro ? "#111827" : "#FFFFFF", width: 1.4 } },
-        hovertemplate: `Observado<br>%{x|%d/%m/%Y}: %{y:.1f} ${esc(unidad)}<extra></extra>` });
+        hovertemplate: `Observado: %{y:.1f} ${esc(unidad)}<extra></extra>` });
       opacidadesTrazas.push(1);
     }
 
@@ -1958,7 +1971,7 @@
       new Date(`${ejeFechas[ejeFechas.length - 1]}T00:00:00Z`).getTime() + 43200000,
     ] : null;
 
-    const layout = App.plotlyLayoutSerie("", {
+    const layout = App.plotlyLayoutSerie(esc(tituloGrafico), {
       // Cada fecha es un grupo: ninguna barra tapa a otra. El orden de trazas ya
       // ubica al mejor modelo en el centro y desplaza los siguientes hacia afuera.
       // El eje X sigue siendo temporal para alinear observado y probabilidades.
@@ -1980,10 +1993,15 @@
                ...(rangoX ? { range: rangoX } : {}),
                ...(angosto ? { fixedrange: true } : {}) },
     });
-    // Distinción HISTORIA vs PRONÓSTICO: franja de fondo desde HOY hasta el final +
-    // línea divisoria. F5: "hoy" se calcula en el CLIENTE (TZ Ecuador) — el visor
-    // congela los JSON y el 'hoy' del backend envejece; d.hoy queda de fallback.
-    const _hoy = hoyVisual;
+    // Distinción HISTORIA vs PRONÓSTICO: franja de fondo desde la EMISIÓN hasta
+    // el final + línea divisoria. El corte es la fecha de emisión del dato; si
+    // por lo que sea quedara fuera del eje dibujado, se sujeta al borde para que
+    // la marca "Pronóstico" siempre sea visible dentro del gráfico.
+    let _hoy = hoyVisual;
+    if (_hoy && ejeFechas.length) {
+      if (_hoy < ejeFechas[0]) _hoy = ejeFechas[0];
+      if (_hoy > ejeFechas[ejeFechas.length - 1]) _hoy = ejeFechas[ejeFechas.length - 1];
+    }
     if (_hoy) {
       // finX = la fecha MÁS TARDÍA entre banda y modelos (no solo la banda): banda y
       // líneas salen de bases distintas y solo comparten el 'desde'; tomar el máximo
@@ -2009,6 +2027,11 @@
       // lee el dominio efectivamente renderizado, no el margen solicitado, y así
       // cada centro de columna coincide con su tick incluso tras un resize.
       sincronizarMargenesTabla(el, timeTrack);
+      // Al cambiar el tamaño de la ventana (o girar el teléfono) Plotly
+      // redibuja y emite relayout: la tabla se realinea con los ticks nuevos
+      // para que cada columna siga bajo su día. Plotly.purge libera el listener.
+      if (typeof el.on === "function")
+        el.on("plotly_relayout", () => sincronizarMargenesTabla(el, timeTrack));
       // En móvil, ubica el presente con dos días de contexto histórico. Escritorio
       // no tiene desplazamiento horizontal y siempre muestra el eje completo.
       const sc = el.closest(".ml-time-scroll");
@@ -2050,10 +2073,13 @@
         : "";
       const modelosHTML = leyenda.sort((a, b) => a.orden - b.orden)
         .map(item => item.html).join("");
-      const totalLeyenda = leyenda.length + (hayObsVentana ? 1 : 0);
-      leyEl.style.setProperty("--ml-legend-count", String(Math.max(1, totalLeyenda)));
       leyEl.dataset.variable = String(d.variable || "");
-      leyEl.innerHTML = observadoHTML + modelosHTML;
+      // Recorte declarado: si hay más modelos con datos que el cupo dibujado, se
+      // dice cuántos y dónde ver el resto (la clasificación de abajo los lista).
+      const notaRecorte = modelosRespuesta.length > modelosVisibles.length
+        ? `<span class="it ml-leyenda-mas">se muestran los ${modelosVisibles.length} con mejor puesto de ${modelosRespuesta.length} modelos con datos; la clasificación de abajo lista todos</span>`
+        : "";
+      leyEl.innerHTML = observadoHTML + modelosHTML + notaRecorte;
     }
 
     // Tabla de probabilidades por umbral: los porcentajes por nivel de lluvia (antes
@@ -2113,24 +2139,22 @@
             !fila.acreditada && fila.veredicto
               ? (fila.veredicto.etiqueta || fila.veredicto.estado) : null,
           ].filter(Boolean).join(" · ");
+          // El motivo se PINTA bajo el umbral (visible también en táctil);
+          // el title queda solo como refuerzo para quien pase el cursor.
           const detalle = motivos ? ` title="${esc(motivos)}"` : "";
-          return `<tr><th class="ml-pb-u"${detalle}><span>${etiqueta}</span></th>${celdas}<td class="ml-pb-spacer" aria-hidden="true"></td></tr>`;
+          const motivoVisible = motivos ? `<small>${esc(motivos)}</small>` : "";
+          return `<tr><th class="ml-pb-u"${detalle}><span>${etiqueta}</span>${motivoVisible}</th>${celdas}<td class="ml-pb-spacer" aria-hidden="true"></td></tr>`;
         }).join("");
         const hayNoAcreditados = filasUmbral.some(fila => !fila.acreditada);
         const columnas = `<col class="ml-pb-col-umbral">${fechasTabla.map(() =>
           '<col class="ml-pb-col-fecha">').join("")}<col class="ml-pb-col-spacer">`;
-        const diagnosticoProb = pu.diagnostico || {};
-        const estadoProb = diagnosticoProb.validation_standard
-          === "PHYSICAL_ENSEMBLE_AS_ISSUED"
-          ? "ensamble NWP físico · no calibrado ML"
-          : (diagnosticoProb.estado_promocion === "ACCREDITED"
-            ? "calibración acreditada"
-            : "provisional no calibrada");
+        const estadoProb = estadoProbabilidad(
+          pu, d.procedencia_probabilistica).texto;
         probsEl.innerHTML = filasUmbral.some(fila => fila.valores.some(esFinito))
           ? `<div class="ml-pb-tit">Probabilidad de lluvia por umbral · ${estadoProb}</div>
            <div class="ml-pb-wrap"><table class="ml-pb-tabla"><colgroup>${columnas}</colgroup><thead><tr><th class="ml-pb-esq">Umbral</th>${cabFechas}<th class="ml-pb-spacer" aria-hidden="true"></th></tr></thead>
            <tbody>${filasU}</tbody></table></div>${hayNoAcreditados
-             ? `<div class="ml-pb-nota" role="note">° Umbral con destreza NO acreditada en la medición fuera de muestra: sirve para ordenar el riesgo, no como cifra verificada. Pase el cursor por el umbral para ver el motivo.</div>`
+             ? `<div class="ml-pb-nota" role="note">° Umbral con destreza NO acreditada en la medición fuera de muestra: sirve para ordenar el riesgo, no como cifra verificada. El motivo aparece bajo cada umbral marcado.</div>`
              : ""}`
           : `<div class="ml-pb-estado" role="status"><b>Producto probabilístico sin valores finitos en esta ventana.</b></div>`;
       } else {
@@ -2216,7 +2240,9 @@
         <div class="lec">📖 ${esc(m.lectura)}</div>
       </div>`).join("");
 
-    // Tarjeta 3 — Calificación 1–10 y confianza
+    // Tarjeta 3 — Calificación 1–10 y confianza. El campo cal.auditoria (parte
+    // de cambios interno de la fórmula) NO se publica: es una nota para
+    // programadores, no una definición de glosario para el ciudadano.
     const niveles = (conf.niveles || []).map(n => {
       const k = confClase(n.etiqueta);
       return `<li><span class="ml-pill ${k}">${esc(n.etiqueta)}</span> ${esc(n.regla)}.</li>`;
@@ -2236,7 +2262,6 @@
         <div class="tarjeta">
           <h3>${esc(cal.titulo || "Calificación 1–10 y confianza")}</h3>
           <p style="font-size:13px;color:var(--ink-2);line-height:1.6;margin:0 0 10px">${esc(cal.intro || "")}</p>
-          ${cal.auditoria ? `<div class="ml-gloss-conf"><b>Auditoría v4:</b> ${esc(cal.auditoria)}</div>` : ""}
           <p style="font-size:13px;color:var(--ink-2);line-height:1.6;margin:12px 0 0">${esc(conf.intro || "")}</p>
           <ul class="ml-gloss-niveles">${niveles}</ul>
           ${conf.nota ? `<p class="suave" style="font-size:12px;margin:10px 0 0">${esc(conf.nota)}</p>` : ""}
@@ -2271,6 +2296,8 @@
     _nombreArchivoSeriePNG: nombreArchivoSeriePNG,
     _figuraTemporalPNG: figuraTemporalPNG,
     _figuraProbabilidadesPNG: figuraProbabilidadesPNG,
+    _estadoProbabilidad: estadoProbabilidad,
+    _detectarMLFuera: detectarMLFuera,
     _estacionesSelector: estacionesSelector,
     async render(vista) {
       // La cabecera global ya la gestiona el módulo anfitrión (Pronóstico):
@@ -2301,10 +2328,16 @@
   redirigirLegado();
   window.addEventListener("hashchange", redirigirLegado);
 
-  // Bus de refresco: tras CUALQUIER actualización, invalida el mapa cacheado (el
-  // resumen/validación ya re-fetchean al pintar) y, si la vista está montada,
-  // re-pinta la pestaña activa con datos frescos.
+  // Bus de refresco: tras CUALQUIER actualización, si la vista está montada,
+  // re-pinta la pestaña activa con datos frescos (la validación re-fetchea al pintar).
   document.addEventListener("datos-actualizados", () => {
     if (typeof cuerpo === "function" && cuerpo()) { try { pintarTab(); } catch (e) {} }
+  });
+
+  // Cambio de tema: la serie Plotly elige sus colores AL DIBUJAR (trazas, marco,
+  // franja, textos), así que hay que redibujar — igual que hacen cartas, clima,
+  // geoglows o datos. Solo se re-pinta la vista de estación si está montada.
+  document.addEventListener("temacambiado", () => {
+    if (cuerpo() && S.estacion) { try { pintarVistaAmbito(); } catch (e) {} }
   });
 })();

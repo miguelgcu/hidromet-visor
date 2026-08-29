@@ -34,6 +34,8 @@
   display: inline-flex; align-items: center; justify-content: center; }
 .ct-nav:hover { background: var(--surface-3); }
 .ct-nav:disabled { opacity: .4; cursor: not-allowed; }
+/* botones de salto de día (◀◀ ▶▶): glifo doble algo más compacto para caber en 32px */
+.ct-nav[data-rol="dprev"], .ct-nav[data-rol="dnext"] { font-size: 10px; letter-spacing: -1px; }
 .ct-instante { font: 500 12.5px var(--mono); color: var(--ink); }
 
 /* ---------- toggles de capa (activo = relleno slate) ---------- */
@@ -43,16 +45,23 @@
   user-select: none; transition: background .14s, color .14s, border-color .14s; }
 .ct-toggle:hover { border-color: var(--line-2); }
 .ct-toggle.activo { color: #fff; background: var(--slate); border-color: var(--slate); }
+/* tema oscuro: --slate se vuelve CLARO (#7E8DA6) y el texto blanco del toggle
+   encendido no se leía; tinta oscura sobre ese relleno claro. */
+html[data-tema="oscuro"] .ct-toggle.activo { color: #101B33; }
 
 /* v10: navegación de instante agrupada con los selectores (izquierda); toggles de capa a la derecha */
 .ct-inst-nav { display: flex; align-items: center; gap: 6px; }
 .ct-capas { display: flex; align-items: center; gap: 6px; margin-left: auto; }
-/* leyenda POR CARTA: cada carta lleva su propia barra de color (no una sola compartida) */
+/* leyenda POR CARTA solo donde cada carta tiene escala PROPIA (FFGS y heladas);
+   las grillas de una misma variable × modelos usan la barra compartida bajo la grilla */
 .ct-carta .ct-ley-card { padding: 8px 13px 12px; border-top: 1px solid var(--line-3); }
 .ct-carta .ct-ley-card:empty { display: none; }
 
-/* ---------- grilla de cartas: 3 por fila en TODOS los apartados (como FFGS) ---------- */
+/* ---------- grilla de cartas: 3 por fila por defecto (FFGS y heladas);
+   con EXACTAMENTE 4 tarjetas (clase .n4, la pone el JS) → 2×2 real, sin
+   dejar la cuarta sola abajo con dos huecos. ---------- */
 .ct-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 13px; margin-bottom: 14px; }
+.ct-grid.n4 { grid-template-columns: repeat(2, 1fr); }
 @media (max-width: 1180px) { .ct-grid { grid-template-columns: repeat(2, 1fr); } }
 
 /* FFGS: rejilla de TODOS los productos del paso horario (leyenda por carta) */
@@ -65,10 +74,15 @@
 /* ---------- tarjeta de carta (figure + img sobre degradado de mar) ---------- */
 .ct-carta { margin: 0; background: var(--surface); border: 1px solid var(--line);
   border-radius: 13px; overflow: hidden; box-shadow: var(--shadow-card); }
+/* min-height + meta en UNA línea con recorte (…): las cabeceras de una misma fila
+   arrancan el mapa a la misma altura (el texto completo va en el title del span). */
 .ct-carta-cab { display: flex; align-items: baseline; justify-content: space-between;
-  gap: 10px; padding: 11px 14px 9px; }
+  gap: 10px; padding: 11px 14px 9px; min-height: 40px; box-sizing: border-box; }
 .ct-carta-cab .titulo { font-size: 15px; font-weight: 650; color: var(--ink); }
-.ct-carta-cab .meta { font: 500 11.5px var(--mono); color: var(--muted-2); }
+.ct-carta-cab .meta { font: 500 11.5px var(--mono); color: var(--muted-2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; max-width: 55%; }
+/* sigla técnica DETRÁS del título en castellano (cartas de crecidas FFGS) */
+.ct-carta-cab .titulo .ct-sigla { font: 600 10px var(--mono); color: var(--muted-2); letter-spacing: .05em; margin-left: 4px; }
 .ct-lienzo { position: relative; aspect-ratio: 63 / 67;
   background: linear-gradient(180deg, var(--sea-top), var(--sea-bottom)); overflow: hidden; }
 /* Grillas del módulo PRONÓSTICO (pronóstico/calibrado/hidro/heladas): papel BLANCO
@@ -115,9 +129,11 @@
 .ct-leyenda-barra { display: flex; height: 12px; border-radius: 4px; overflow: hidden;
   border: 1px solid var(--line-2); }
 .ct-leyenda-barra span { flex: 1; }
-.ct-leyenda-ticks { position: relative; height: 16px; margin-top: 3px; }
+/* números de la leyenda legibles: 11 px y tinta más oscura (antes 9.5 px en gris claro,
+   al límite de lo legible; ahora la barra es ancha y hay sitio). */
+.ct-leyenda-ticks { position: relative; height: 18px; margin-top: 3px; }
 .ct-leyenda-ticks .t { position: absolute; transform: translateX(-50%); top: 0;
-  font: 500 9.5px var(--mono); color: var(--muted-2); white-space: nowrap; }
+  font: 500 11px var(--mono); color: var(--muted); white-space: nowrap; }
 
 /* ---------- panel de validación de desempeño ---------- */
 .ct-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 13px;
@@ -178,7 +194,7 @@
 
 /* ---------- responsive (área de trabajo estrecha) ---------- */
 @media (max-width: 980px) {
-  .ct-grid { grid-template-columns: 1fr; }
+  .ct-grid, .ct-grid.n4 { grid-template-columns: 1fr; }
   .ct-hv .ct-panel-cab { align-items: stretch; }
   .ct-hv-controles { margin-left: 0; flex-wrap: wrap; }
   .ct-hv-controles label:first-child { min-width: min(100%, 360px); flex: 1; }
@@ -198,7 +214,7 @@
   /* controles de instante cómodos al tacto (40px = no revertir el target de base.css) */
   .ct-nav { width: 40px; height: 40px; }
   /* grillas de cartas → 1 columna */
-  .ct-grid, .ct-grid.cuencas { grid-template-columns: 1fr; }
+  .ct-grid, .ct-grid.n4, .ct-grid.cuencas { grid-template-columns: 1fr; }
   /* paneles y tarjetas con menos padding */
   .ct-panel { padding: 14px; }
   /* tabla de umbrales (modal) con scroll horizontal */
