@@ -1,5 +1,5 @@
 {
-  "generado": "2026-08-29 13:07",
+  "generado": "2026-09-01 14:04",
   "fuente": "Actualización operativa",
   "ok": true,
   "parcial": false,
@@ -8,5 +8,6 @@
   "areas_degradadas": [
     "mlnwp:F2"
   ],
+  "productos_retenidos_qc_fisico": [],
   "aviso_degradacion": "DEGRADADO POR ORDEN DEL DUEÑO — respaldo físico etiquetado, no acreditado"
 }

@@ -1,20 +1,20 @@
 {
   "esquema": "hidromet.degradado.v1",
   "etiqueta": "DEGRADADO — se publicó igual, sin acreditar; el dato va etiquetado",
-  "generado_utc": "2026-08-29T18:07:58+00:00",
-  "total": 16,
+  "generado_utc": "2026-09-01T19:05:20+00:00",
+  "total": 15,
   "degradado": [
     {
       "area": "sla",
-      "motivo": "motor operativo: el plazo daba 7169s y la tarea pide 21600s; se le da el tope pedido — el plazo mide, no recorta"
+      "motivo": "motor operativo: el plazo daba 7162s y la tarea pide 21600s; se le da el tope pedido — el plazo mide, no recorta"
     },
     {
       "area": "Cartas (descarga)",
-      "motivo": "Calibrados + consenso (código 1)"
+      "motivo": "Variantes de alertas (fija y ZPH) (código 1)"
     },
     {
       "area": "cartas:F1",
-      "motivo": "Cartas y alertas falló: Calibrados + consenso (código 1)"
+      "motivo": "Cartas y alertas falló: Variantes de alertas (fija y ZPH) (código 1)"
     },
     {
       "area": "cartas:F2",
@@ -22,35 +22,35 @@
     },
     {
       "area": "mlnwp:memoria",
-      "motivo": "pipeline.lanzar:models: memoria por debajo del umbral de fábrica RAM libre 20.00 GB < 25.47 GB — se arrancó igual por orden del dueño"
+      "motivo": "pipeline.lanzar:models: memoria por debajo del umbral de fábrica RAM libre 18.55 GB < 25.47 GB — se arrancó igual por orden del dueño"
     },
     {
       "area": "mlnwp:F2",
-      "motivo": "Validación ML-NWP · cómputo falló: Preflight operational_horizon_only rechazado; cache ausente: BD historico ML.parquet; cache ausente: BD historico probabilistico.parquet"
-    },
-    {
-      "area": "observaciones:F2",
-      "motivo": "observaciones:F2: auditoría de frescura online ausente"
+      "motivo": "Validación ML-NWP · cómputo falló: El pipeline terminó con código 1 (ver log de la tarea)."
     },
     {
       "area": "cartas:F2",
-      "motivo": "cartas:F2: corrida de alertas obsoleta (159.4 h; máximo 18 h)"
+      "motivo": "cartas:F2: corrida de alertas obsoleta (232.4 h; máximo 18 h)"
     },
     {
       "area": "cartas:F2",
-      "motivo": "cartas:F2: horizonte de alertas insuficiente (2026-08-29; mínimo 2026-09-02)"
+      "motivo": "cartas:F2: horizonte de alertas insuficiente (2026-08-29; mínimo 2026-09-05)"
     },
     {
       "area": "cartas:F2",
-      "motivo": "cartas:F2: última emisión de alertas obsoleta (2026-08-22; retraso 7 d)"
+      "motivo": "cartas:F2: última emisión de alertas obsoleta (2026-08-22; retraso 10 d)"
     },
     {
       "area": "cartas:F1",
       "motivo": "cartas:F1: FFGS sin manifiesto ECU operativo"
     },
     {
-      "area": "cartas:F2",
-      "motivo": "cartas:F2: validación espacial estricta no pertenece a la autoridad observacional ACTIVE (identidad observacional/registro discrepante: transaction_id, snapshot_id, stable_logical_sha256, stable_physical_sha256, stable_rows, pointer_sha256, climate_registry.sha256)"
+      "area": "cartas:F1",
+      "motivo": "cartas:F1: IMERG 07-07 producto obsoleto: 102.5 h (máximo 72 h)"
+    },
+    {
+      "area": "cartas:F1",
+      "motivo": "cartas:F1: PDIR 07-07 producto obsoleto: 102.5 h (máximo 48 h)"
     },
     {
       "area": "cartas:F2",
@@ -63,10 +63,6 @@
     {
       "area": "mlnwp:F2",
       "motivo": "mlnwp:F2: base probabilística viva ausente"
-    },
-    {
-      "area": "mlnwp:F2",
-      "motivo": "mlnwp:F2: salida vigente sin pronósticos derivados"
     }
   ]
 }
