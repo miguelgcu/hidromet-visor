@@ -1,12 +1,16 @@
 {
   "esquema": "hidromet.degradado.v1",
   "etiqueta": "DEGRADADO — se publicó igual, sin acreditar; el dato va etiquetado",
-  "generado_utc": "2026-09-01T19:05:20+00:00",
-  "total": 15,
+  "generado_utc": "2026-09-01T22:03:15+00:00",
+  "total": 22,
   "degradado": [
     {
       "area": "sla",
-      "motivo": "motor operativo: el plazo daba 7162s y la tarea pide 21600s; se le da el tope pedido — el plazo mide, no recorta"
+      "motivo": "motor operativo: el plazo daba 7168s y la tarea pide 21600s; se le da el tope pedido — el plazo mide, no recorta"
+    },
+    {
+      "area": "mlnwp:memoria",
+      "motivo": "pipeline.lanzar:models: memoria por debajo del umbral de fábrica RAM libre 15.08 GB < 25.47 GB; compromiso libre 31.42 GB < 35.67 GB — se arrancó igual por orden del dueño"
     },
     {
       "area": "Cartas (descarga)",
@@ -21,16 +25,16 @@
       "motivo": "Cartas y alertas · cómputo omitida por dependencias fallidas: cartas:F1"
     },
     {
-      "area": "mlnwp:memoria",
-      "motivo": "pipeline.lanzar:models: memoria por debajo del umbral de fábrica RAM libre 18.55 GB < 25.47 GB — se arrancó igual por orden del dueño"
+      "area": "mlnwp:F2",
+      "motivo": "Validación ML-NWP · cómputo falló: El pipeline terminó con código 1: RuntimeError: El lote operativo no contiene una única fecha de emisión vigente."
     },
     {
-      "area": "mlnwp:F2",
-      "motivo": "Validación ML-NWP · cómputo falló: El pipeline terminó con código 1 (ver log de la tarea)."
+      "area": "sla",
+      "motivo": "límite de seguridad agotado antes de gate de calidad: quedan 0.0s y se requieren 120.0s de reserva"
     },
     {
       "area": "cartas:F2",
-      "motivo": "cartas:F2: corrida de alertas obsoleta (232.4 h; máximo 18 h)"
+      "motivo": "cartas:F2: corrida de alertas obsoleta (235.9 h; máximo 18 h)"
     },
     {
       "area": "cartas:F2",
@@ -46,11 +50,11 @@
     },
     {
       "area": "cartas:F1",
-      "motivo": "cartas:F1: IMERG 07-07 producto obsoleto: 102.5 h (máximo 72 h)"
+      "motivo": "cartas:F1: IMERG 07-07 producto obsoleto: 106.0 h (máximo 72 h)"
     },
     {
       "area": "cartas:F1",
-      "motivo": "cartas:F1: PDIR 07-07 producto obsoleto: 102.5 h (máximo 48 h)"
+      "motivo": "cartas:F1: PDIR 07-07 producto obsoleto: 106.0 h (máximo 48 h)"
     },
     {
       "area": "cartas:F2",
@@ -63,6 +67,30 @@
     {
       "area": "mlnwp:F2",
       "motivo": "mlnwp:F2: base probabilística viva ausente"
+    },
+    {
+      "area": "sla",
+      "motivo": "límite de seguridad agotado antes de admisión de exportación fría: quedan 0.0s y se requieren 900.0s de reserva"
+    },
+    {
+      "area": "sla",
+      "motivo": "límite de seguridad agotado antes de candidato del visor: quedan 0.0s y se requieren 120.0s de reserva"
+    },
+    {
+      "area": "sla",
+      "motivo": "límite de seguridad agotado antes de copia transaccional del visor: quedan 0.0s y se requieren 90.0s de reserva"
+    },
+    {
+      "area": "sla",
+      "motivo": "límite de seguridad agotado antes de fin de copia transaccional del visor: quedan 0.0s y se requieren 90.0s de reserva"
+    },
+    {
+      "area": "sla",
+      "motivo": "límite de seguridad agotado antes de exportación: quedan 0.0s y se requieren 75.0s de reserva"
+    },
+    {
+      "area": "sla",
+      "motivo": "límite de seguridad agotado antes de promoción del candidato web: quedan 0.0s y se requieren 60.0s de reserva"
     }
   ]
 }
