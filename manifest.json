@@ -1,15 +1,16 @@
 {
-  "generado": "2026-09-01 17:02",
+  "generado": "2026-09-02 08:17",
   "fuente": "Actualización operativa",
-  "ok": false,
-  "parcial": false,
+  "ok": true,
+  "parcial": true,
   "productos_con_fallback": 0,
-  "fallos": [
-    "actualizacion_no_apta"
-  ],
+  "fallos": [],
   "areas_degradadas": [
     "mlnwp:F2"
   ],
-  "productos_retenidos_qc_fisico": [],
-  "aviso_degradacion": "DEGRADADO POR ORDEN DEL DUEÑO — respaldo físico etiquetado, no acreditado"
+  "productos_retenidos_qc_fisico": [
+    "mlnwp:F2"
+  ],
+  "aviso_degradacion": "DEGRADADO POR ORDEN DEL DUEÑO — respaldo físico etiquetado, no acreditado",
+  "aviso_qc_fisico": "QC FÍSICO: se retuvo el producto afectado y se conserva su última versión válida; el resto del visor está actualizado."
 }

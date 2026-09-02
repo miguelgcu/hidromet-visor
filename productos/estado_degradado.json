@@ -1,96 +1,56 @@
 {
   "esquema": "hidromet.degradado.v1",
   "etiqueta": "DEGRADADO — se publicó igual, sin acreditar; el dato va etiquetado",
-  "generado_utc": "2026-09-01T22:03:15+00:00",
-  "total": 22,
+  "generado_utc": "2026-09-02T13:17:37+00:00",
+  "total": 12,
   "degradado": [
     {
       "area": "sla",
-      "motivo": "motor operativo: el plazo daba 7168s y la tarea pide 21600s; se le da el tope pedido — el plazo mide, no recorta"
+      "motivo": "motor operativo: el plazo daba 14369s y la tarea pide 21600s; se le da el tope pedido — el plazo mide, no recorta"
     },
     {
-      "area": "mlnwp:memoria",
-      "motivo": "pipeline.lanzar:models: memoria por debajo del umbral de fábrica RAM libre 15.08 GB < 25.47 GB; compromiso libre 31.42 GB < 35.67 GB — se arrancó igual por orden del dueño"
-    },
-    {
-      "area": "Cartas (descarga)",
-      "motivo": "Variantes de alertas (fija y ZPH) (código 1)"
-    },
-    {
-      "area": "cartas:F1",
-      "motivo": "Cartas y alertas falló: Variantes de alertas (fija y ZPH) (código 1)"
-    },
-    {
-      "area": "cartas:F2",
-      "motivo": "Cartas y alertas · cómputo omitida por dependencias fallidas: cartas:F1"
+      "area": "mlnwp:F1",
+      "motivo": "Validación ML-NWP falló: Open-Meteo no alcanza quorum: 0/5 modelos, 0/3 centros; 0/4 modelos largos D+6; {'GFS025_OM': 'JSONDecodeError: red', 'ICON_OM': 'JSONDecodeError: red', 'GEM15_OM': 'JSONDecodeError: red', 'IFSHRES_OM': 'JSONDecodeError: red', 'IFS025_OM': 'JSONDecodeError: red', 'AIFS025_OM"
     },
     {
       "area": "mlnwp:F2",
-      "motivo": "Validación ML-NWP · cómputo falló: El pipeline terminó con código 1: RuntimeError: El lote operativo no contiene una única fecha de emisión vigente."
+      "motivo": "Validación ML-NWP · cómputo omitida por dependencias fallidas: mlnwp:F1"
     },
     {
-      "area": "sla",
-      "motivo": "límite de seguridad agotado antes de gate de calidad: quedan 0.0s y se requieren 120.0s de reserva"
-    },
-    {
-      "area": "cartas:F2",
-      "motivo": "cartas:F2: corrida de alertas obsoleta (235.9 h; máximo 18 h)"
+      "area": "Cartas (cómputo)",
+      "motivo": "Desempeño hidroestimadores tras cohorte final (código 1)"
     },
     {
       "area": "cartas:F2",
-      "motivo": "cartas:F2: horizonte de alertas insuficiente (2026-08-29; mínimo 2026-09-05)"
+      "motivo": "Cartas y alertas · cómputo falló: Desempeño hidroestimadores tras cohorte final (código 1)"
     },
     {
       "area": "cartas:F2",
-      "motivo": "cartas:F2: última emisión de alertas obsoleta (2026-08-22; retraso 10 d)"
+      "motivo": "cartas:F2: politica de consenso invalida en alerta_lluvia"
+    },
+    {
+      "area": "cartas:F2",
+      "motivo": "cartas:F2: politica de consenso invalida en alerta_tmin"
+    },
+    {
+      "area": "cartas:F2",
+      "motivo": "cartas:F2: politica de consenso invalida en alerta_tmax"
     },
     {
       "area": "cartas:F1",
       "motivo": "cartas:F1: FFGS sin manifiesto ECU operativo"
     },
     {
-      "area": "cartas:F1",
-      "motivo": "cartas:F1: IMERG 07-07 producto obsoleto: 106.0 h (máximo 72 h)"
-    },
-    {
-      "area": "cartas:F1",
-      "motivo": "cartas:F1: PDIR 07-07 producto obsoleto: 106.0 h (máximo 48 h)"
-    },
-    {
-      "area": "cartas:F2",
-      "motivo": "cartas:F2: cohorte de extremos/anomalías inválida (los extremos no corresponden a la climatología vigente)"
-    },
-    {
-      "area": "cartas:F2",
-      "motivo": "cartas:F2: horizonte calibrado insuficiente (2026-08-29)"
-    },
-    {
       "area": "mlnwp:F2",
       "motivo": "mlnwp:F2: base probabilística viva ausente"
     },
     {
-      "area": "sla",
-      "motivo": "límite de seguridad agotado antes de admisión de exportación fría: quedan 0.0s y se requieren 900.0s de reserva"
+      "area": "qc-fisico",
+      "motivo": "mlnwp:F2: serie OBS diverge del Parquet observacional estable (huérfanas=0, faltantes=57, valores_distintos=0); se retira el bloque observacional divergente"
     },
     {
-      "area": "sla",
-      "motivo": "límite de seguridad agotado antes de candidato del visor: quedan 0.0s y se requieren 120.0s de reserva"
-    },
-    {
-      "area": "sla",
-      "motivo": "límite de seguridad agotado antes de copia transaccional del visor: quedan 0.0s y se requieren 90.0s de reserva"
-    },
-    {
-      "area": "sla",
-      "motivo": "límite de seguridad agotado antes de fin de copia transaccional del visor: quedan 0.0s y se requieren 90.0s de reserva"
-    },
-    {
-      "area": "sla",
-      "motivo": "límite de seguridad agotado antes de exportación: quedan 0.0s y se requieren 75.0s de reserva"
-    },
-    {
-      "area": "sla",
-      "motivo": "límite de seguridad agotado antes de promoción del candidato web: quedan 0.0s y se requieren 60.0s de reserva"
+      "area": "gate",
+      "motivo": "QC FÍSICO (retiene ese producto) — mlnwp:F2: serie OBS diverge del Parquet observacional estable (huérfanas=0, faltantes=57, valores_distintos=0); se retira el bloque observacional divergente"
     }
   ]
 }
