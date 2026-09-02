@@ -1,20 +1,12 @@
 {
   "esquema": "hidromet.degradado.v1",
   "etiqueta": "DEGRADADO — se publicó igual, sin acreditar; el dato va etiquetado",
-  "generado_utc": "2026-09-02T13:17:37+00:00",
-  "total": 12,
+  "generado_utc": "2026-09-02T16:07:36+00:00",
+  "total": 10,
   "degradado": [
     {
       "area": "sla",
       "motivo": "motor operativo: el plazo daba 14369s y la tarea pide 21600s; se le da el tope pedido — el plazo mide, no recorta"
-    },
-    {
-      "area": "mlnwp:F1",
-      "motivo": "Validación ML-NWP falló: Open-Meteo no alcanza quorum: 0/5 modelos, 0/3 centros; 0/4 modelos largos D+6; {'GFS025_OM': 'JSONDecodeError: red', 'ICON_OM': 'JSONDecodeError: red', 'GEM15_OM': 'JSONDecodeError: red', 'IFSHRES_OM': 'JSONDecodeError: red', 'IFS025_OM': 'JSONDecodeError: red', 'AIFS025_OM"
-    },
-    {
-      "area": "mlnwp:F2",
-      "motivo": "Validación ML-NWP · cómputo omitida por dependencias fallidas: mlnwp:F1"
     },
     {
       "area": "Cartas (cómputo)",
@@ -23,6 +15,14 @@
     {
       "area": "cartas:F2",
       "motivo": "Cartas y alertas · cómputo falló: Desempeño hidroestimadores tras cohorte final (código 1)"
+    },
+    {
+      "area": "mlnwp:memoria",
+      "motivo": "pipeline.lanzar:models: memoria por debajo del umbral de fábrica RAM libre 19.26 GB < 25.47 GB — se arrancó igual por orden del dueño"
+    },
+    {
+      "area": "mlnwp:F2",
+      "motivo": "Validación ML-NWP · cómputo falló: El pipeline terminó con código 1: ValueError: gate probabilistico incompleto/no fisico: emitted_cells=0, emitted_zero_cells=0, missing_cells=3090, duplicate_cells=0, conflicting_cells=0, invalid_cells=0, monotonicity_violations=0."
     },
     {
       "area": "cartas:F2",
@@ -43,14 +43,6 @@
     {
       "area": "mlnwp:F2",
       "motivo": "mlnwp:F2: base probabilística viva ausente"
-    },
-    {
-      "area": "qc-fisico",
-      "motivo": "mlnwp:F2: serie OBS diverge del Parquet observacional estable (huérfanas=0, faltantes=57, valores_distintos=0); se retira el bloque observacional divergente"
-    },
-    {
-      "area": "gate",
-      "motivo": "QC FÍSICO (retiene ese producto) — mlnwp:F2: serie OBS diverge del Parquet observacional estable (huérfanas=0, faltantes=57, valores_distintos=0); se retira el bloque observacional divergente"
     }
   ]
 }
