@@ -1,45 +1,9 @@
 {
   "esquema": "hidromet.degradado.v1",
   "etiqueta": "DEGRADADO — se publicó igual, sin acreditar; el dato va etiquetado",
-  "generado_utc": "2026-09-03T21:17:22+00:00",
-  "total": 15,
+  "generado_utc": "2026-09-03T22:16:15+00:00",
+  "total": 53,
   "degradado": [
-    {
-      "area": "sla",
-      "motivo": "motor operativo: el plazo daba 21569s y la tarea pide 21600s; se le da el tope pedido — el plazo mide, no recorta"
-    },
-    {
-      "area": "Cartas (cómputo)",
-      "motivo": "Desempeño hidroestimadores tras cohorte final (código 1)"
-    },
-    {
-      "area": "cartas:F2",
-      "motivo": "Cartas y alertas · cómputo falló: Desempeño hidroestimadores tras cohorte final (código 1)"
-    },
-    {
-      "area": "cartas:F2",
-      "motivo": "cartas:F2: cohorte de extremos/anomalías inválida (helada_riesgo_24h.nc difiere del manifiesto)"
-    },
-    {
-      "area": "cartas:F2",
-      "motivo": "cartas:F2: cohorte de extremos/anomalías inválida (olacalor_riesgo_24h.nc difiere del manifiesto)"
-    },
-    {
-      "area": "cartas:F2",
-      "motivo": "cartas:F2: cohorte de extremos/anomalías inválida (helada_anom_tmin_24h.nc difiere del manifiesto)"
-    },
-    {
-      "area": "cartas:F2",
-      "motivo": "cartas:F2: cohorte de extremos/anomalías inválida (olacalor_anom_tmax_24h.nc difiere del manifiesto)"
-    },
-    {
-      "area": "cartas:F2",
-      "motivo": "cartas:F2: cohorte de extremos/anomalías inválida (lluvia_anomalia_climatologica_24h.nc difiere del manifiesto)"
-    },
-    {
-      "area": "cartas:F2",
-      "motivo": "cartas:F2: cohorte de extremos/anomalías inválida (los extremos no corresponden a la cohorte de alertas vigente)"
-    },
     {
       "area": "cartas:F2",
       "motivo": "cartas:F2: familia calibrada fija/Tmin pierde skill HSS frente al mejor NWP (0.387 vs 0.458)"
@@ -54,15 +18,203 @@
     },
     {
       "area": "qc-fisico",
+      "motivo": "cartas:F2: máscara alerta-valor no coincide para AIFS/lluvia; se retira esa fuente"
+    },
+    {
+      "area": "qc-fisico",
+      "motivo": "cartas:F2: máscara alerta-valor no coincide para GFS/lluvia; se retira esa fuente"
+    },
+    {
+      "area": "qc-fisico",
+      "motivo": "cartas:F2: máscara alerta-valor no coincide para ICON/lluvia; se retira esa fuente"
+    },
+    {
+      "area": "qc-fisico",
+      "motivo": "cartas:F2: máscara alerta-valor no coincide para IFS-ENS/lluvia; se retira esa fuente"
+    },
+    {
+      "area": "qc-fisico",
+      "motivo": "cartas:F2: máscara alerta-valor no coincide para IFS/lluvia; se retira esa fuente"
+    },
+    {
+      "area": "qc-fisico",
+      "motivo": "cartas:F2: máscara alerta-valor no coincide para MONAN/lluvia; se retira esa fuente"
+    },
+    {
+      "area": "qc-fisico",
+      "motivo": "cartas:F2: máscara alerta-valor no coincide para BIAS/lluvia; se retira esa fuente"
+    },
+    {
+      "area": "qc-fisico",
+      "motivo": "cartas:F2: máscara alerta-valor no coincide para ML_MALLA/lluvia; se retira esa fuente"
+    },
+    {
+      "area": "qc-fisico",
+      "motivo": "cartas:F2: máscara alerta-valor no coincide para AIFS/tmin; se retira esa fuente"
+    },
+    {
+      "area": "qc-fisico",
+      "motivo": "cartas:F2: máscara alerta-valor no coincide para GFS/tmin; se retira esa fuente"
+    },
+    {
+      "area": "qc-fisico",
+      "motivo": "cartas:F2: máscara alerta-valor no coincide para ICON/tmin; se retira esa fuente"
+    },
+    {
+      "area": "qc-fisico",
+      "motivo": "cartas:F2: máscara alerta-valor no coincide para IFS-ENS/tmin; se retira esa fuente"
+    },
+    {
+      "area": "qc-fisico",
+      "motivo": "cartas:F2: máscara alerta-valor no coincide para IFS/tmin; se retira esa fuente"
+    },
+    {
+      "area": "qc-fisico",
+      "motivo": "cartas:F2: máscara alerta-valor no coincide para MONAN/tmin; se retira esa fuente"
+    },
+    {
+      "area": "qc-fisico",
+      "motivo": "cartas:F2: máscara alerta-valor no coincide para BIAS/tmin; se retira esa fuente"
+    },
+    {
+      "area": "qc-fisico",
+      "motivo": "cartas:F2: máscara alerta-valor no coincide para ML_MALLA/tmin; se retira esa fuente"
+    },
+    {
+      "area": "qc-fisico",
+      "motivo": "cartas:F2: máscara alerta-valor no coincide para AIFS/tmax; se retira esa fuente"
+    },
+    {
+      "area": "qc-fisico",
+      "motivo": "cartas:F2: máscara alerta-valor no coincide para GFS/tmax; se retira esa fuente"
+    },
+    {
+      "area": "qc-fisico",
+      "motivo": "cartas:F2: máscara alerta-valor no coincide para ICON/tmax; se retira esa fuente"
+    },
+    {
+      "area": "qc-fisico",
+      "motivo": "cartas:F2: máscara alerta-valor no coincide para IFS-ENS/tmax; se retira esa fuente"
+    },
+    {
+      "area": "qc-fisico",
+      "motivo": "cartas:F2: máscara alerta-valor no coincide para IFS/tmax; se retira esa fuente"
+    },
+    {
+      "area": "qc-fisico",
+      "motivo": "cartas:F2: máscara alerta-valor no coincide para MONAN/tmax; se retira esa fuente"
+    },
+    {
+      "area": "qc-fisico",
+      "motivo": "cartas:F2: máscara alerta-valor no coincide para BIAS/tmax; se retira esa fuente"
+    },
+    {
+      "area": "qc-fisico",
+      "motivo": "cartas:F2: máscara alerta-valor no coincide para ML_MALLA/tmax; se retira esa fuente"
+    },
+    {
+      "area": "qc-fisico",
       "motivo": "mlnwp:F2: serie OBS diverge del Parquet observacional estable (huérfanas=0, faltantes=92, valores_distintos=69); se retira el bloque observacional divergente"
     },
     {
       "area": "gate",
-      "motivo": "QC FÍSICO (retiene ese producto) — mlnwp:F2: serie OBS diverge del Parquet observacional estable (huérfanas=0, faltantes=92, valores_distintos=69); se retira el bloque observacional divergente"
+      "motivo": "QC FÍSICO (retiene ese producto) — cartas:F2: máscara alerta-valor no coincide para AIFS/lluvia; se retira esa fuente"
     },
     {
-      "area": "export",
-      "motivo": "1 producto(s) no regenerado(s): conservan su versión anterior, etiquetada con su propia fecha (fuentes-cartas-mutaron-durante-export)"
+      "area": "gate",
+      "motivo": "QC FÍSICO (retiene ese producto) — cartas:F2: máscara alerta-valor no coincide para GFS/lluvia; se retira esa fuente"
+    },
+    {
+      "area": "gate",
+      "motivo": "QC FÍSICO (retiene ese producto) — cartas:F2: máscara alerta-valor no coincide para ICON/lluvia; se retira esa fuente"
+    },
+    {
+      "area": "gate",
+      "motivo": "QC FÍSICO (retiene ese producto) — cartas:F2: máscara alerta-valor no coincide para IFS-ENS/lluvia; se retira esa fuente"
+    },
+    {
+      "area": "gate",
+      "motivo": "QC FÍSICO (retiene ese producto) — cartas:F2: máscara alerta-valor no coincide para IFS/lluvia; se retira esa fuente"
+    },
+    {
+      "area": "gate",
+      "motivo": "QC FÍSICO (retiene ese producto) — cartas:F2: máscara alerta-valor no coincide para MONAN/lluvia; se retira esa fuente"
+    },
+    {
+      "area": "gate",
+      "motivo": "QC FÍSICO (retiene ese producto) — cartas:F2: máscara alerta-valor no coincide para BIAS/lluvia; se retira esa fuente"
+    },
+    {
+      "area": "gate",
+      "motivo": "QC FÍSICO (retiene ese producto) — cartas:F2: máscara alerta-valor no coincide para ML_MALLA/lluvia; se retira esa fuente"
+    },
+    {
+      "area": "gate",
+      "motivo": "QC FÍSICO (retiene ese producto) — cartas:F2: máscara alerta-valor no coincide para AIFS/tmin; se retira esa fuente"
+    },
+    {
+      "area": "gate",
+      "motivo": "QC FÍSICO (retiene ese producto) — cartas:F2: máscara alerta-valor no coincide para GFS/tmin; se retira esa fuente"
+    },
+    {
+      "area": "gate",
+      "motivo": "QC FÍSICO (retiene ese producto) — cartas:F2: máscara alerta-valor no coincide para ICON/tmin; se retira esa fuente"
+    },
+    {
+      "area": "gate",
+      "motivo": "QC FÍSICO (retiene ese producto) — cartas:F2: máscara alerta-valor no coincide para IFS-ENS/tmin; se retira esa fuente"
+    },
+    {
+      "area": "gate",
+      "motivo": "QC FÍSICO (retiene ese producto) — cartas:F2: máscara alerta-valor no coincide para IFS/tmin; se retira esa fuente"
+    },
+    {
+      "area": "gate",
+      "motivo": "QC FÍSICO (retiene ese producto) — cartas:F2: máscara alerta-valor no coincide para MONAN/tmin; se retira esa fuente"
+    },
+    {
+      "area": "gate",
+      "motivo": "QC FÍSICO (retiene ese producto) — cartas:F2: máscara alerta-valor no coincide para BIAS/tmin; se retira esa fuente"
+    },
+    {
+      "area": "gate",
+      "motivo": "QC FÍSICO (retiene ese producto) — cartas:F2: máscara alerta-valor no coincide para ML_MALLA/tmin; se retira esa fuente"
+    },
+    {
+      "area": "gate",
+      "motivo": "QC FÍSICO (retiene ese producto) — cartas:F2: máscara alerta-valor no coincide para AIFS/tmax; se retira esa fuente"
+    },
+    {
+      "area": "gate",
+      "motivo": "QC FÍSICO (retiene ese producto) — cartas:F2: máscara alerta-valor no coincide para GFS/tmax; se retira esa fuente"
+    },
+    {
+      "area": "gate",
+      "motivo": "QC FÍSICO (retiene ese producto) — cartas:F2: máscara alerta-valor no coincide para ICON/tmax; se retira esa fuente"
+    },
+    {
+      "area": "gate",
+      "motivo": "QC FÍSICO (retiene ese producto) — cartas:F2: máscara alerta-valor no coincide para IFS-ENS/tmax; se retira esa fuente"
+    },
+    {
+      "area": "gate",
+      "motivo": "QC FÍSICO (retiene ese producto) — cartas:F2: máscara alerta-valor no coincide para IFS/tmax; se retira esa fuente"
+    },
+    {
+      "area": "gate",
+      "motivo": "QC FÍSICO (retiene ese producto) — cartas:F2: máscara alerta-valor no coincide para MONAN/tmax; se retira esa fuente"
+    },
+    {
+      "area": "gate",
+      "motivo": "QC FÍSICO (retiene ese producto) — cartas:F2: máscara alerta-valor no coincide para BIAS/tmax; se retira esa fuente"
+    },
+    {
+      "area": "gate",
+      "motivo": "QC FÍSICO (retiene ese producto) — cartas:F2: máscara alerta-valor no coincide para ML_MALLA/tmax; se retira esa fuente"
+    },
+    {
+      "area": "gate",
+      "motivo": "QC FÍSICO (retiene ese producto) — mlnwp:F2: serie OBS diverge del Parquet observacional estable (huérfanas=0, faltantes=92, valores_distintos=69); se retira el bloque observacional divergente"
     }
   ]
 }
