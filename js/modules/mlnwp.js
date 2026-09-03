@@ -51,14 +51,15 @@
     return abreviado.length <= maximo
       ? abreviado : `${abreviado.slice(0, Math.max(1, maximo - 1)).trimEnd()}…`;
   }
-  // Paleta CERRADA de la serie en pantalla (Okabe-Ito ampliada): ocho colores
-  // máximamente separados y seguros para daltonismo, asignados AL DIBUJAR según
-  // el puesto en la clasificación. Los colores fijos que llegan del backend
-  // traían pares casi idénticos (dos verdes, dos naranjas) imposibles de
-  // emparejar con la leyenda en barras de ~8 px.
+  // Paleta CERRADA de la serie en pantalla (Okabe-Ito ampliada): doce colores
+  // (uno por curva del cupo de «Todos», TOPE_CURVAS_SERIE) separados y seguros
+  // para daltonismo, asignados AL DIBUJAR según el puesto en la clasificación.
+  // Los colores fijos que llegan del backend traían pares casi idénticos (dos
+  // verdes, dos naranjas) imposibles de emparejar con la leyenda en barras de ~8 px.
   const PALETA_SERIE = Object.freeze([
     "#0072B2", "#D55E00", "#009E73", "#CC79A7",
     "#E69F00", "#56B4E9", "#785EF0", "#444444",
+    "#DC267F", "#A6761D", "#00A9A5", "#B33DC6",
   ]);
   const OPACIDAD_SKILL_MIN = 0.28;
   const OPACIDAD_SKILL_MAX = 0.92;
@@ -266,6 +267,18 @@
       ?? modelo.nombre_corto)) || "").trim();
     return abreviarModeloLeyenda(explicito || claveModeloPNG(modelo), maximo);
   };
+  // Los alias publicados son largos («Referencia · lluvia cero (siempre 0 mm)»,
+  // «GFS 0,25° (NCEP)»). La LEYENDA del gráfico mantiene su recorte corto; las
+  // TABLAS muestran el alias entero hasta 40 caracteres y llevan siempre el
+  // alias completo y la clave interna en el title.
+  const ALIAS_TABLA_MAX = 40;
+  const aliasModeloCompleto = modelo => aliasModeloPNG(modelo, Number.POSITIVE_INFINITY);
+  const aliasModeloTabla = modelo => aliasModeloPNG(modelo, ALIAS_TABLA_MAX);
+  const tituloModeloTabla = modelo => {
+    const completo = aliasModeloCompleto(modelo);
+    const clave = claveModeloPNG(modelo);
+    return completo && completo !== clave ? `${completo} · ${clave}` : clave;
+  };
 
   function colorModeloPNG(modelo) {
     const clave = claveModeloPNG(modelo);
@@ -279,8 +292,9 @@
     ];
   }
 
-  // Mismo cupo que la pantalla (8): la imagen descargada no debe enseñar menos
-  // modelos que el gráfico que el usuario estaba viendo.
+  // La imagen conserva un cupo de 8: su leyenda es UNA fila de texto y no
+  // admite más entradas legibles. La pantalla dibuja hasta TOPE_CURVAS_SERIE
+  // (12); la clasificación de abajo lista siempre todos los modelos.
   function seleccionarModelosPNG(modelos, inicio, fin, maximo = 8) {
     const candidatos = (modelos || []).map((modelo, indice) => ({
       modelo, indice, clave: claveModeloPNG(modelo), score: scoreModeloPNG(modelo),
@@ -923,6 +937,32 @@
     if (!familia || familia === "Todos" || familia === "Mejor desempeño") return lista;
     return lista.filter(modelo => modelo && modelo.familia === familia);
   };
+  // Cupo de curvas de la serie en «Todos». Cada serie trae hasta 18 modelos
+  // (ML servido, 6 familias ML, BC, ENS_MEAN y 9 NWP crudos, MONAN incluido)
+  // y 18 curvas son ilegibles. Criterio: SIEMPRE la curva servida
+  // (operacional=true); garantizadas las 3 mejores NWP crudas (Convencionales /
+  // No convencionales) aunque tengan peor nota, para que el físico siempre se
+  // vea junto al ML; el resto del cupo (tope 12) se llena por nota y las sin
+  // nota van detrás. Con una familia elegida se dibuja toda la familia.
+  const TOPE_CURVAS_SERIE = 12;
+  const NWP_CRUDAS_GARANTIZADAS = 3;
+  const FAMILIAS_NWP_CRUDO = ["Convencionales", "No convencionales"];
+  function seleccionarModelosVisiblesSerie(modelos, familia) {
+    const lista = (Array.isArray(modelos) ? modelos : []).filter(Boolean);
+    if (familia && familia !== "Todos" && familia !== "Mejor desempeño") return lista;
+    const ranking = ordenarModelosPorDesempeno(lista);
+    const elegidos = new Set(lista.filter(m => m.operacional === true));
+    ordenarModelosPorDesempeno(lista.filter(m => FAMILIAS_NWP_CRUDO.includes(m.familia)))
+      .slice(0, NWP_CRUDAS_GARANTIZADAS).forEach(m => elegidos.add(m));
+    for (const m of ranking) {
+      if (elegidos.size >= TOPE_CURVAS_SERIE) break;
+      elegidos.add(m);
+    }
+    // Orden final: la servida primero, después por nota (sin nota al final).
+    const visibles = ranking.filter(m => elegidos.has(m));
+    return [...visibles.filter(m => m.operacional === true),
+      ...visibles.filter(m => m.operacional !== true)];
+  }
   const HORIZONTES_VALIDACION = Object.freeze([1, 2, 3, 4, 5]);
   function normalizarHorizonteValidacion(horizonte) {
     if (String(horizonte).toLowerCase() === "todos") return "todos";
@@ -1257,8 +1297,18 @@
   // Tipo legible de la familia de modelo (para la columna de la tabla).
   function famTipo(familia) {
     return { Convencionales: "convencional", "No convencionales": "no convencional",
-      ML: "ML", Postprocesamiento: "post. estadístico" }[familia] || "crudo";
+      ML: "ML", Postprocesamiento: "post. estadístico",
+      Referencia: "referencia" }[familia] || "crudo";
   }
+  // Tipo corto que acompaña al nombre en las tablas de clasificación. Las
+  // referencias (CERO/PERSISTENCIA/CLIMATOLOGIA, familia 'Referencia') no son
+  // modelos: se etiquetan como tales y nunca reciben la estrella de «mejor».
+  const FAMILIA_REFERENCIA = "Referencia";
+  const esReferencia = m => !!m && m.familia === FAMILIA_REFERENCIA;
+  const tipoFamTabla = familia => ({ Convencionales: "grillado",
+    "No convencionales": "grillado", ML: "modelo ML",
+    Postprocesamiento: "combinación", [FAMILIA_REFERENCIA]: "referencia" })[familia] || "crudo";
+  const NOTA_REFERENCIAS = `<div class="ml-pb-nota">Referencias (no son modelos, sirven de vara de comparación): CERO = lluvia cero, siempre 0 mm · PERSISTENCIA = el valor de ayer · CLIMATOLOGÍA = media del día del año.</div>`;
 
   // Carga /validacion (datos del mapa nacional + lista para el selector) y
   // despacha la vista del ámbito activo (Nacional o una estación).
@@ -1394,6 +1444,7 @@
     // ganador y el banner son POR BLOQUE, no uno global: es más honesto.
     let mejorIdx = -1, mejorRating = -Infinity;
     modelos.forEach((m, i) => {
+      if (esReferencia(m)) return;   // una referencia publica su nota, pero no compite
       if (m.califica && m.rating != null && m.rating > mejorRating) { mejorRating = m.rating; mejorIdx = i; }
     });
 
@@ -1405,14 +1456,13 @@
       const contradice = !sinCal && ((esFinito(m.corr) && Number(m.corr) < 0)
         || (esFinito(m.r2) && Number(m.r2) < 0));
       const [bg, fg] = contradice ? calColor(null) : calColor(m.rating);
-      const tipoFam = { Convencionales: "grillado", "No convencionales": "grillado",
-        ML: "modelo ML", Postprocesamiento: "combinación" }[m.familia] || "crudo";
+      const tipoFam = tipoFamTabla(m.familia);
       const metTds = metHead.map(([k]) =>
         `<td class="num">${sinCal ? "—" : fmtMet(m, k)}</td>`).join("");
       const esMejor = i === mejorIdx;
       return `<tr class="${sinCal ? "sin-calif" : ""}${esMejor ? " ml-best" : ""}">
         <td class="idx">${sinCal ? "—" : i + 1}</td>
-        <td title="${esc(m.modelo)}"><span class="ml-mod-punto" style="background:${esc(m.color)}"></span>${esc(aliasModeloPNG(m, 30))}${esMejor ? " ★" : ""}<span class="ml-mod-tipo"> · ${tipoFam}</span></td>
+        <td title="${esc(tituloModeloTabla(m))}"><span class="ml-mod-punto" style="background:${esc(m.color)}"></span>${esc(aliasModeloTabla(m))}${esMejor ? " ★" : ""}<span class="ml-mod-tipo"> · ${tipoFam}</span></td>
         <td class="ml-lead">D+${Number(m.lead)}</td>
         <td>${sinCal ? `<span style="color:var(--muted-2)">sin calif.</span>`
           : `<span class="ml-calif-badge" style="background:${bg};color:${fg}"${contradice ? ` title="Nota con correlación o ajuste negativos en esta muestra: acompaña lo real peor que usar el promedio. Tómala con cautela."` : ""}>${num(m.rating, 1)}${contradice ? " ⚠" : ""}</span>`}</td>
@@ -1428,7 +1478,7 @@
       ? ` · <b>medido sobre pocas fechas: tómalo como indicio, no como veredicto</b>` : "";
     const banner = mg
       ? `<div class="ml-mejor-banner"><span class="ml-mejor-estrella">★</span> Mejor en ${esDet ? "detección de eventos" : "cuantificación"}:
-         <b>${esc(aliasModeloPNG(mg, 30))} · D+${Number(mg.lead)}</b> — calif. ${num(mg.rating, 1)}/10 · confianza ${esc(String(mg.confianza || "—")).toLowerCase()} · <b>${mg.n}</b> fechas${cautelaMg}</div>`
+         <b>${esc(aliasModeloCompleto(mg))} · D+${Number(mg.lead)}</b> — calif. ${num(mg.rating, 1)}/10 · confianza ${esc(String(mg.confianza || "—")).toLowerCase()} · <b>${mg.n}</b> fechas${cautelaMg}</div>`
       : "";
 
     // Nota al pie en TODAS las variables (antes solo la tabla de lluvia la
@@ -1438,6 +1488,7 @@
       : esTemp
         ? `<div class="ml-pb-nota">MAE/RMSE error medio en °C (menor es mejor) · Sesgo: + pronostica de más, − de menos · Corr/R² qué tanto acompaña las subidas y bajadas de lo medido · ΔT = cambio de un día al siguiente: MAE ΔT su error, Acierto ΔT la fracción de días con la dirección correcta y Fallo plano los días en que el modelo dijo «sin cambio» y sí lo hubo.</div>`
         : `<div class="ml-pb-nota">MAE/RMSE error medio en mm (menor es mejor) · Sesgo: + pronostica de más, − de menos · Corr/R² qué tanto acompaña las subidas y bajadas de lo medido.</div>`;
+    const notaReferencias = modelos.some(esReferencia) ? NOTA_REFERENCIAS : "";
 
     return `${banner}
       <table class="ml-tabla-modelos">
@@ -1446,7 +1497,7 @@
           ${metHeadHTML}
         </tr></thead>
         <tbody>${filas || `<tr><td colspan="${nCols}" class="suave" style="padding:14px">Sin modelos para esta estación.</td></tr>`}</tbody>
-      </table>${notaMetricas}`;
+      </table>${notaMetricas}${notaReferencias}`;
   }
 
   // UNA SOLA tabla para precip (pedido del dueño 2026-07-09): detección Y cuantificación
@@ -1463,8 +1514,9 @@
     const orden = [...cua];
     const clavesCua = new Set(cua.map(clave));
     det.forEach(m => { if (!clavesCua.has(clave(m))) orden.push({ ...m, _soloDet: true }); });
+    // Una referencia publica su nota, pero nunca compite por la estrella.
     const mejorDe = ms => { let bn = null, br = -Infinity;
-      ms.forEach(m => { if (m.califica && m.rating != null && m.rating > br) { br = m.rating; bn = clave(m); } }); return bn; };
+      ms.forEach(m => { if (!esReferencia(m) && m.califica && m.rating != null && m.rating > br) { br = m.rating; bn = clave(m); } }); return bn; };
     const bestCua = mejorDe(cua), bestDet = mejorDe(det);
     const sinC = m => !m || !m.califica || m.rating == null;
     const f2 = v => (v == null || Number.isNaN(v)) ? "—" : Number(v).toFixed(2);
@@ -1478,10 +1530,9 @@
     const filas = orden.map((base, i) => {
       const mc = base._soloDet ? null : base;
       const md = dmap.get(clave(base)) || (base._soloDet ? base : null);
-      const tipoFam = { Convencionales: "grillado", "No convencionales": "grillado",
-        ML: "modelo ML", Postprocesamiento: "combinación" }[base.familia] || "crudo";
+      const tipoFam = tipoFamTabla(base.familia);
       return `<tr>
-        <td class="ml-uni-mod" title="${esc(base.modelo)}"><span class="ml-uni-idx">${i + 1}</span><span class="ml-mod-punto" style="background:${esc(base.color)}"></span>${esc(aliasModeloPNG(base, 30))}<span class="ml-mod-tipo"> · ${tipoFam}</span></td>
+        <td class="ml-uni-mod" title="${esc(tituloModeloTabla(base))}"><span class="ml-uni-idx">${i + 1}</span><span class="ml-mod-punto" style="background:${esc(base.color)}"></span>${esc(aliasModeloTabla(base))}<span class="ml-mod-tipo"> · ${tipoFam}</span></td>
         <td class="ml-lead">D+${Number(base.lead)}</td>
         <td>${badge(md, bestDet)}</td>
         <td class="num">${sinC(md) ? "—" : f2(md.pod)}</td>
@@ -1502,7 +1553,7 @@
       const cautela = mg && String(mg.confianza || "") === "Baja"
         ? ` · <b>medido sobre pocas fechas: tómalo como indicio, no como veredicto</b>` : "";
       return mg ? `<div class="ml-mejor-banner"><span class="ml-mejor-estrella">★</span> Mejor en ${etq}:
-        <b>${esc(aliasModeloPNG(mg, 30))} · D+${Number(mg.lead)}</b> — calif. ${num(mg.rating, 1)}/10 · <b>${mg.n}</b> fechas${cautela}</div>` : "";
+        <b>${esc(aliasModeloCompleto(mg))} · D+${Number(mg.lead)}</b> — calif. ${num(mg.rating, 1)}/10 · <b>${mg.n}</b> fechas${cautela}</div>` : "";
     };
     return `${ban(det, bestDet, "detección de eventos")}${ban(cua, bestCua, "cuantificación")}
       <div class="ml-uni-wrap">
@@ -1518,7 +1569,7 @@
         </thead>
         <tbody>${filas || `<tr><td colspan="14" class="suave" style="padding:14px">Sin modelos para esta estación y horizonte.</td></tr>`}</tbody>
       </table></div>
-      <div class="ml-pb-nota">Detección: POD acierto · FAR falsa alarma · CSI global. Cuantificación: MAE/RMSE error en mm · Sesgo · Corr. Desliza la tabla para ver todas las métricas; el modelo y su calificación quedan fijos.</div>`;
+      <div class="ml-pb-nota">Detección: POD acierto · FAR falsa alarma · CSI global. Cuantificación: MAE/RMSE error en mm · Sesgo · Corr. Desliza la tabla para ver todas las métricas; el modelo y su calificación quedan fijos.</div>${orden.some(esReferencia) ? NOTA_REFERENCIAS : ""}`;
   }
 
   // Tarjeta 'Clasificación de modelos'. d = bloque principal (cuantificación en
@@ -1824,10 +1875,11 @@
     // los tres modelos con mejor calificación verificable de la variable activa.
     const leyenda = [];
     const _hoyEt = hoyVisual;
-    // El backend antepone los productos operativos que alimentan alertas/cartas;
-    // el cupo restante muestra los comparadores con mayor skill.
-    const modelosVisibles = modelosRespuesta.slice(0, 8);
-    // Color por PUESTO de desempeño (paleta cerrada): los ocho visibles nunca
+    // Cupo de «Todos» (servida + 3 NWP crudas garantizadas + mejores por nota,
+    // tope 12) o la familia elegida completa: ver seleccionarModelosVisiblesSerie.
+    const modelosVisibles = seleccionarModelosVisiblesSerie(
+      modelosRespuesta, d.familia_activa || d.familia);
+    // Color por PUESTO de desempeño (paleta cerrada de 12): los visibles nunca
     // comparten familia de color. El respaldo punteado conserva su gris propio.
     const colorPorModelo = new Map(
       ordenarModelosPorDesempeno(modelosVisibles).map((modelo, i) =>
@@ -1890,7 +1942,8 @@
       opacidadesTrazas.push(op);
       const swStyle = m.dash ? `border-top:2px dotted ${esc(color)};height:0`
                              : `background:${esc(color)};opacity:${op}`;
-      const aliasPublico = aliasModeloPNG(m, 24);
+      // El title/aria-label lleva el alias entero; el texto visible sigue corto.
+      const aliasPublico = aliasModeloCompleto(m);
       const nombreCompleto = `${aliasPublico}${otxt}${rtxt}`
         + (esRecomendado
           ? " — recomendado por la mejor calificación verificada entre los modelos operativos"
@@ -1958,8 +2011,8 @@
       [...fechasGrafico], hoyVisual, lookbackVisual);
     const timeTrack = card.querySelector(".ml-time-track");
     if (timeTrack) {
-      // Ocho barras caben sin solaparse en escritorio; en teléfono se ensancha
-      // cada día y el carril temporal ya existente permite recorrerlas con el dedo.
+      // Hasta doce barras caben en escritorio (el día se ensancha con su número);
+      // en teléfono el carril temporal ya existente permite recorrerlas con el dedo.
       const anchoDia = esPrecip ? Math.max(68, nBarrasLluvia * 10) : 56;
       timeTrack.style.setProperty("--ml-time-track-width",
         `${Math.max(720, MARGEN_EJE_IZQ_PX + MARGEN_EJE_DER_PX
@@ -2077,7 +2130,7 @@
       // Recorte declarado: si hay más modelos con datos que el cupo dibujado, se
       // dice cuántos y dónde ver el resto (la clasificación de abajo los lista).
       const notaRecorte = modelosRespuesta.length > modelosVisibles.length
-        ? `<span class="it ml-leyenda-mas">se muestran los ${modelosVisibles.length} con mejor puesto de ${modelosRespuesta.length} modelos con datos; la clasificación de abajo lista todos</span>`
+        ? `<span class="it ml-leyenda-mas">se muestran ${modelosVisibles.length} de ${modelosRespuesta.length} modelos con datos (la curva servida, las 3 mejores NWP crudas y el resto por nota); la clasificación de abajo lista todos</span>`
         : "";
       leyEl.innerHTML = observadoHTML + modelosHTML + notaRecorte;
     }
@@ -2293,6 +2346,9 @@
     _colorModeloPNG: colorModeloPNG,
     _aliasModeloPNG: aliasModeloPNG,
     _seleccionarModelosPNG: seleccionarModelosPNG,
+    _seleccionarModelosVisiblesSerie: seleccionarModelosVisiblesSerie,
+    _aliasModeloTabla: aliasModeloTabla,
+    _tipoFamTabla: tipoFamTabla,
     _nombreArchivoSeriePNG: nombreArchivoSeriePNG,
     _figuraTemporalPNG: figuraTemporalPNG,
     _figuraProbabilidadesPNG: figuraProbabilidadesPNG,

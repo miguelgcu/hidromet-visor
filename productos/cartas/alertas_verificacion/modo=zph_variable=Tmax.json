@@ -1,0 +1,1 @@
+{"ambito":"estacion","contrato":"ESQUEMA_ALERTAS.md §2.8","etiquetas":["ledger nuevo sin casos verificables aún"],"fecha_corte":null,"filas":[],"fuentes":[],"generador":"zph","lead":-1,"leads":[],"modo":"zph","n_filas":0,"origen":"D:\\HidroMet\\2_BASES\\alertas\\verificacion.parquet","region":"nacional","variable":"Tmax","variable_alerta":"tmax","ventana_dias":90,"ventanas":[]}

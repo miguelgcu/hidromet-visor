@@ -271,7 +271,7 @@
   .cl-serie-controles select[data-rol=est]{min-width:0}
 }
 
-/* ── IUV experimental CAMS ─────────────────────────────────────────────── */
+/* ── IUV por estación (CAMS en el punto · escala oficial OMS) ──────────── */
 .cl-iuv-intro{background:
   radial-gradient(circle at 92% 10%,color-mix(in srgb,#f29e2e 20%,transparent),transparent 36%),
   linear-gradient(135deg,var(--cl-acc-bg),transparent 72%)}
@@ -279,9 +279,24 @@
 .cl-iuv-badges span{display:inline-flex;align-items:center;min-height:27px;padding:4px 10px;
   border:1px solid var(--cl-acc-bd);border-radius:999px;background:var(--surface);
   color:var(--ink-2);font:650 10.5px var(--mono)}
+/* etiqueta honesta: la corrección Jipijapa NO está acreditada (tono de aviso, no de error) */
+.cl-iuv-badges span.no{border-color:var(--warn-bd);background:var(--warn-bg);color:var(--warn)}
 .cl-iuv-toolbar select{border:1px solid var(--line);border-radius:var(--r-ctrl,8px);padding:8px 10px;
   font:600 12px var(--fuente);background:var(--surface);color:var(--ink)}
-.cl-iuv-lineage code{font:650 11px var(--mono);color:var(--ink-2)}
+/* selector de día D0..D5: celdas segmentadas (reusa .cl-mes) con la fecha debajo */
+.cl-iuv-leads .cl-mes{display:inline-flex;flex-direction:column;align-items:center;gap:1px;
+  min-width:56px;padding:4px 7px;line-height:1.15}
+.cl-iuv-leads .cl-mes small{font:500 9.5px var(--mono);letter-spacing:0;opacity:.8}
+/* leyenda oficial bajo el mapa: una ficha por banda + estrella de Jipijapa + "sin valor" */
+.cl-iuv-leyenda{display:flex;flex-wrap:wrap;gap:6px 14px;margin:10px 0 0;
+  font:600 11px var(--fuente);color:var(--ink-2)}
+.cl-iuv-banda{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.cl-iuv-banda i{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;
+  border-radius:50%;background:var(--bc,var(--surface-3));border:1.5px solid #fff;
+  box-shadow:0 0 0 1px var(--line);font-style:normal;font-size:11px;line-height:1;color:var(--ink)}
+.cl-iuv-banda.sin i{background:transparent;border:1.5px dashed var(--muted-2);box-shadow:none}
+.cl-iuv-banda.estrella i{background:transparent;border:none;box-shadow:none;font-size:15px}
+.cl-iuv-obs td .cl-iuv-banda{font-weight:600}
 .cl-iuv-grid{display:grid;grid-template-columns:minmax(360px,1.35fr) minmax(300px,.65fr);
   gap:14px;align-items:start}
 .cl-iuv-grid>*{min-width:0}.cl-iuv-map{min-height:440px}.cl-iuv-local .cl-kpis{grid-template-columns:repeat(2,1fr)}
@@ -291,4 +306,5 @@
 @media(max-width:520px){
   .cl-iuv-local .cl-kpis{grid-template-columns:1fr 1fr}
   .cl-iuv-toolbar .cl-grupo,.cl-iuv-toolbar select{width:100%}
+  .cl-iuv-leads{flex-wrap:wrap}
 }

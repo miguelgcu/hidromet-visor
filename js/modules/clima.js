@@ -1432,106 +1432,272 @@
     updateAll();
   }
 
-  // IUV EXPERIMENTAL — CAMS UV/AOD + única estación disponible ----------------
-  function pintarIuv(host, payload, campo) {
-    if (!window.Plotly || !host) return;
-    const rows = (payload && payload.data || []).filter(r =>
-      r.latitude != null && r.longitude != null);
-    if (!rows.length) { limpiarPlot(host); host.innerHTML = vacio("☀", "Sin campo CAMS para esta fecha."); return; }
-    const lons = [...new Set(rows.map(r => Number(r.longitude)))].sort((a, b) => a - b);
-    const lats = [...new Set(rows.map(r => Number(r.latitude)))].sort((a, b) => a - b);
-    const ix = new Map(lons.map((v, i) => [v, i])), iy = new Map(lats.map((v, i) => [v, i]));
-    const z = lats.map(() => lons.map(() => null));
-    const raw = lats.map(() => lons.map(() => null));
-    const aod = lats.map(() => lons.map(() => null));
-    rows.forEach(r => {
-      const y = iy.get(Number(r.latitude)), x = ix.get(Number(r.longitude));
-      const value = r[campo];
-      z[y][x] = value == null ? null : Number(value);
-      raw[y][x] = r.cams_raw_uvi == null ? null : Number(r.cams_raw_uvi);
-      aod[y][x] = r.aod == null ? null : Number(r.aod);
+  // IUV POR ESTACIÓN — índice UV máximo diario CAMS en el punto de cada estación ----
+  // Fuente: /clima/iuv_estaciones (base 5, hidromet.puente_uv). Por estación con
+  // coordenadas, el valor de la celda CAMS Global de 0,4° MÁS CERCANA, sin interpolar,
+  // para D0..D5 de la última captura; tres campos: CAMS crudo, corregido Jipijapa
+  // (experimental, no acreditado) y CAMS cielo despejado. Nada se rellena: una
+  // estación sin valor no se dibuja (nunca se pinta un cero).
+  //
+  // Escala OFICIAL de salud del índice UV (OMS): la que la gente ya conoce.
+  const ESCALA_IUV = Object.freeze([
+    { min: 0, max: 2, rotulo: "bajo", color: "#3EA72D" },
+    { min: 3, max: 5, rotulo: "moderado", color: "#FFF300" },
+    { min: 6, max: 7, rotulo: "alto", color: "#F18B00" },
+    { min: 8, max: 10, rotulo: "muy alto", color: "#E53210" },
+    { min: 11, max: null, rotulo: "extremo", color: "#B54CFF" },
+  ]);
+  const TOPE_IUV = 12;   // tope de la escala de color: 11+ (extremo) satura
+  const CAMPOS_IUV = Object.freeze([
+    { id: "cams", et: "CAMS crudo", corto: "CAMS crudo",
+      t: "Índice UV máximo diario de CAMS Global en la celda de 0,4° (~44 km) más cercana a la estación, sin interpolar." },
+    { id: "corr", et: "Corregido Jipijapa (experimental)", corto: "corregido Jipijapa",
+      t: "CAMS crudo más el residual observado en Jipijapa, atenuado con la distancia: exp(−d/75 km). Una sola estación, coordenadas aproximadas: no acreditado." },
+    { id: "cs", et: "CAMS cielo despejado", corto: "cielo despejado",
+      t: "Índice UV máximo diario que CAMS daría sin nubes: el tope físico del día." },
+  ]);
+  const DIAS_CORTOS = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
+
+  // Escala del producto si viene bien formada (min numérico + color); si no, la oficial.
+  function escalaIuv(payload) {
+    const lista = payload && Array.isArray(payload.escala) ? payload.escala : null;
+    if (!lista || !lista.length) return ESCALA_IUV;
+    const ok = lista.every(b => b && isFinite(Number(b.min)) && typeof b.color === "string" && b.color);
+    if (!ok) return ESCALA_IUV;
+    return lista.map(b => ({ min: Number(b.min), max: b.max == null ? null : Number(b.max),
+      rotulo: String(b.rotulo || ""), color: b.color })).sort((a, b) => a.min - b.min);
+  }
+  // Banda oficial de un valor: {indice, rotulo, color}. Sin dato → índice −1 y color null.
+  function bandaIuv(v, escala) {
+    const bandas = escala && escala.length ? escala : ESCALA_IUV;
+    const x = v == null || v === "" ? NaN : Number(v);
+    if (!isFinite(x)) return { indice: -1, rotulo: "sin dato", color: null };
+    let i = 0;
+    for (let k = 1; k < bandas.length; k++) if (x >= bandas[k].min) i = k;
+    return { indice: i, rotulo: bandas[i].rotulo, color: bandas[i].color };
+  }
+  // Escala de color DISCRETA para Plotly: escalones en 0/3/6/8/11 sobre 0..12.
+  function colorscaleIuv(escala, tope) {
+    const bandas = escala && escala.length ? escala : ESCALA_IUV, top = tope || TOPE_IUV;
+    const stops = [];
+    bandas.forEach((b, i) => {
+      const a = i === 0 ? 0 : Math.min(1, b.min / top);
+      const z = i + 1 < bandas.length ? Math.min(1, bandas[i + 1].min / top) : 1;
+      stops.push([a, b.color], [z, b.color]);
     });
-    const etiqueta = campo === "cams_raw_uvi" ? "CAMS crudo" : "IUV experimental";
-    // Código de colores OFICIAL de salud del índice UV (el que la gente ya conoce):
-    // 0–2 bajo (verde), 3–5 moderado (amarillo), 6–7 alto (naranja), 8–10 muy alto
-    // (rojo), 11+ extremo (violeta). Bandas discretas sobre tope de escala 12.
-    const heat = {
-      type: "heatmap", x: lons, y: lats, z, customdata: lats.map((_, y) =>
-        lons.map((__, x) => [raw[y][x], aod[y][x]])),
-      colorscale: [[0, "#3EA72D"], [3 / 12, "#3EA72D"], [3 / 12, "#FFF300"], [6 / 12, "#FFF300"],
-        [6 / 12, "#F18B00"], [8 / 12, "#F18B00"], [8 / 12, "#E53210"], [11 / 12, "#E53210"],
-        [11 / 12, "#B54CFF"], [1, "#B54CFF"]],
-      zmin: 0, zmax: 12, zsmooth: false, hoverongaps: false, showscale: true,
-      colorbar: { title: { text: "IUV" }, thickness: 12, len: .72,
-        tickvals: [1.5, 4.5, 7, 9.5, 11.6],
-        ticktext: ["0–2 bajo", "3–5 moderado", "6–7 alto", "8–10 muy alto", "11+ extremo"] },
-      hovertemplate: `<b>${etiqueta}: %{z:.1f}</b><br>CAMS crudo: %{customdata[0]:.1f}` +
-        `<br>AOD: %{customdata[1]:.2f}<br>lat %{y:.2f}, lon %{x:.2f}<extra></extra>`,
+    return stops;
+  }
+  function rotuloBanda(b) { return b.max == null ? `${b.min}+ ${b.rotulo}` : `${b.min}–${b.max} ${b.rotulo}`; }
+  // Valor de un campo (cams|corr|cs|aod) en un lead; null si falta (jamás 0 por defecto).
+  function valorIuv(e, campo, lead) {
+    const v = e && e.valores && e.valores[String(lead)] ? e.valores[String(lead)][campo] : null;
+    const x = v == null || v === "" ? NaN : Number(v);
+    return isFinite(x) ? x : null;
+  }
+  // Puntos ALINEADOS (x=lon, y=lat, valor, estaciones) del campo en el lead. Omite las
+  // estaciones sin valor o sin coordenadas y las cuenta en `omitidas`; `total` es el
+  // tamaño del subconjunto pedido (todas o solo activas).
+  function puntosIuv(payload, campo, lead, soloActivas) {
+    const out = { x: [], y: [], valor: [], estaciones: [], omitidas: 0, total: 0 };
+    for (const e of (payload && payload.estaciones) || []) {
+      if (!e || (soloActivas && !e.activa)) continue;
+      out.total++;
+      const lat = Number(e.lat), lon = Number(e.lon), v = valorIuv(e, campo, lead);
+      if (e.lat == null || e.lon == null || !isFinite(lat) || !isFinite(lon) || v == null) { out.omitidas++; continue; }
+      out.x.push(lon); out.y.push(lat); out.valor.push(v); out.estaciones.push(e);
+    }
+    return out;
+  }
+  // Último observado válido de Jipijapa ({fecha, valor}) o null.
+  function ultimoObservado(jip) {
+    const obs = ((jip && jip.obs) || []).filter(o => o && o.fecha && o.valor != null && isFinite(Number(o.valor)));
+    if (!obs.length) return null;
+    obs.sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
+    const u = obs[obs.length - 1];
+    return { fecha: String(u.fecha), valor: Number(u.valor) };
+  }
+  function distanciaKm(lat1, lon1, lat2, lon2) {
+    const r = Math.PI / 180, R = 6371.0088;
+    const dLat = (lat2 - lat1) * r, dLon = (lon2 - lon1) * r;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * r) * Math.cos(lat2 * r) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+  }
+  // Peso de la corrección Jipijapa con la distancia: exp(−d/75 km) (decisión D-B5).
+  function pesoJipijapa(dKm, escalaKm) { return Math.exp(-Math.max(0, Number(dKm) || 0) / (escalaKm || 75)); }
+  // "2026-09-03" → "jue 03/09" sin pasar por la zona horaria del navegador.
+  function rotuloFechaCorta(iso) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
+    if (!m) return "";
+    const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+    if (isNaN(d.getTime()) || d.getUTCDate() !== +m[3]) return "";
+    return `${DIAS_CORTOS[d.getUTCDay()]} ${m[3]}/${m[2]}`;
+  }
+  function fechaLead(payload, lead) {
+    const l = ((payload && payload.leads) || []).find(x => x && String(x.lead) === String(lead));
+    return l && l.fecha ? String(l.fecha) : "";
+  }
+
+  // Mapa de PUNTOS: una traza scatter por estación coloreada con la escala oficial y,
+  // encima, la estrella de Jipijapa con su último observado. Devuelve los puntos
+  // dibujados (para el conteo honesto bajo el mapa).
+  function pintarIuv(host, payload, campo, lead, soloActivas) {
+    if (!window.Plotly || !host) return null;
+    const escala = escalaIuv(payload), pts = puntosIuv(payload, campo, lead, soloActivas);
+    const cf = CAMPOS_IUV.find(x => x.id === campo) || CAMPOS_IUV[0];
+    const jip = (payload && payload.jipijapa) || {}, hayJip = jip.lat != null && jip.lon != null;
+    const fecha = fechaLead(payload, lead), osc = App.tema && App.tema() === "oscuro";
+    if (!pts.x.length && !hayJip) {
+      limpiarPlot(host); host.innerHTML = vacio("☀", `Sin ${cf.corto} para D${esc(lead)}: ninguna estación trae valor.`);
+      return pts;
+    }
+    const muchos = pts.x.length > 400;
+    const red = v => (App.redEtiqueta ? App.redEtiqueta(v || "") : String(v || ""));
+    const puntos = {
+      type: "scatter", mode: "markers", meta: "estaciones", showlegend: false, name: cf.corto,
+      x: pts.x, y: pts.y,
+      customdata: pts.estaciones.map((e, i) => {
+        const dJ = hayJip ? distanciaKm(Number(e.lat), Number(e.lon), Number(jip.lat), Number(jip.lon)) : null;
+        const celda = e.dist_celda_km != null ? ` · celda CAMS a ${num(e.dist_celda_km, 0)} km` : "";
+        return [e.nombre || e.codigo, e.codigo, [red(e.red), e.region].filter(Boolean).join(" · "),
+          num(pts.valor[i], 1), bandaIuv(pts.valor[i], escala).rotulo,
+          num(valorIuv(e, "cams", lead), 1), num(valorIuv(e, "corr", lead), 1), num(valorIuv(e, "cs", lead), 1),
+          num(valorIuv(e, "aod", lead), 2),
+          dJ == null ? celda.replace(/^ · /, "") : `Jipijapa a ${num(dJ, 0)} km · peso de la corrección ${num(pesoJipijapa(dJ), 2)}${celda}`];
+      }),
+      marker: { size: muchos ? 5 : 7, color: pts.valor, colorscale: colorscaleIuv(escala), cmin: 0, cmax: TOPE_IUV,
+        showscale: false, line: { color: "#ffffff", width: muchos ? 0.6 : 1.2 } },
+      hovertemplate: `<b>%{customdata[0]}</b> (%{customdata[1]})<br>%{customdata[2]}<br>` +
+        `<b>IUV ${esc(cf.corto)}: %{customdata[3]}</b> · %{customdata[4]}<br>` +
+        `CAMS crudo %{customdata[5]} · corregido %{customdata[6]} · cielo despejado %{customdata[7]}<br>` +
+        `AOD %{customdata[8]}${fecha ? " · " + esc(fecha) : ""}<br>%{customdata[9]}<extra></extra>`,
     };
+    const trazas = [puntos];
+    if (hayJip) {
+      const obs = ultimoObservado(jip), bObs = bandaIuv(obs && obs.valor, escala);
+      const estJip = jip.valores ? jip
+        : ((payload && payload.estaciones) || []).find(e => e && String(e.codigo) === String(jip.codigo || "IUVJIP")) || null;
+      trazas.push({
+        type: "scatter", mode: "markers", meta: "jipijapa", showlegend: false, name: "Jipijapa",
+        x: [Number(jip.lon)], y: [Number(jip.lat)],
+        marker: { symbol: "star", size: 15, color: bObs.color || "#9aa4b5",
+          line: { color: osc ? "#ffffff" : "#000000", width: 1.4 } },
+        customdata: [[obs ? num(obs.valor, 1) : "—", obs ? (rotuloFechaCorta(obs.fecha) || obs.fecha) : "sin observación reciente",
+          bObs.rotulo, num(valorIuv(estJip, "cams", lead), 1), num(valorIuv(estJip, "corr", lead), 1)]],
+        hovertemplate: `<b>★ Jipijapa</b> (${esc(jip.codigo || "IUVJIP")})<br>` +
+          `<b>Observado: %{customdata[0]}</b> · %{customdata[2]} · %{customdata[1]}<br>` +
+          `CAMS crudo D${esc(lead)} %{customdata[3]} · corregido %{customdata[4]}<br>` +
+          `coordenadas aproximadas · corrección no acreditada<extra></extra>`,
+      });
+    }
     const layout = App.plotlyLayoutBase({
       height: Math.max(410, Math.min(620, Math.round((host.clientWidth || 620) * .78))),
-      margin: { l: 8, r: 42, t: 8, b: 8 },
+      margin: { l: 8, r: 8, t: 8, b: 8 }, hovermode: "closest",
       xaxis: { visible: false, scaleanchor: "y", constrain: "domain", range: [-92.5, -75.0] },
       yaxis: { visible: false, range: [-5.5, 2.0] },
     });
     quitarPlaceholder(host);
-    Plotly.react(host, [heat, ...contorno()], layout, configEs());
+    Plotly.react(host, [...contorno(), ...trazas], layout, configEs());
     observarTamanoMapa(host);
     if (App.pinchZoomMapa) App.pinchZoomMapa(host);
+    return pts;
+  }
+
+  function tablaObsJipijapa(jip, escala) {
+    const obs = ((jip && jip.obs) || []).filter(o => o && o.fecha)
+      .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))).slice(0, 7);
+    if (!obs.length) return `<p class="cl-nota">Sin observación de Jipijapa en los últimos días.</p>`;
+    return `<div class="cl-tabla-scroll"><table class="cl-tabla cl-tabla-obs cl-iuv-obs"><thead><tr>
+      <th>Fecha</th><th>Observado</th><th>Banda</th></tr></thead><tbody>${obs.map(o => {
+        const b = bandaIuv(o.valor, escala);
+        return `<tr><td><span class="cl-fecha">${esc(rotuloFechaCorta(o.fecha) || o.fecha)}</span></td>` +
+          `<td>${num(o.valor, 1)}</td><td>${b.color ? `<span class="cl-iuv-banda" style="--bc:${esc(b.color)}"><i></i>${esc(b.rotulo)}</span>` : "sin dato"}</td></tr>`;
+      }).join("")}</tbody></table></div>`;
   }
 
   async function tabIuv(c) {
     inyectarCSS(); _alTema = null; await cargarGeo();
-    c.innerHTML = cargando("Leyendo la cohorte CAMS UV/AOD…");
-    let national, station;
-    try {
-      [national, station] = await Promise.all([
-        App.api("/clima/iuv_experimental?scope=national"),
-        App.api("/clima/iuv_experimental?scope=station"),
-      ]);
-    } catch (e) { c.innerHTML = vacio("⚠", esc(e.message)); return; }
-    if (!national.available) {
-      c.innerHTML = `<div class="cl-wrap"><div class="cl-glo-intro cl-iuv-intro">
-        <h3>IUV nacional experimental</h3><p>${esc(national.diagnostic ||
-          "La autoridad CAMS aún no está materializada. No se muestra un campo anterior ni se infieren ceros.")}</p>
-        </div></div>`;
+    c.innerHTML = cargando("Leyendo el índice UV por estación…");
+    let p;
+    try { p = await App.api("/clima/iuv_estaciones"); }
+    catch (e) { c.innerHTML = vacio("⚠", esc(e.message)); return; }
+    if (!p || p.error || !p.available) {
+      c.innerHTML = `<div class="cl-wrap"><div class="cl-glo-intro cl-iuv-intro"><h3>IUV por estación</h3>
+        <p>${esc((p && (p.diagnostic || p.error)) || "Sin base de índice UV: no se muestra un campo anterior ni se infieren valores.")}</p></div></div>`;
       return;
     }
-    const local = (station.data || [])[0] || {};
-    const correction = national.national_correction_enabled === true;
+    const escala = escalaIuv(p);
+    const leads = Array.isArray(p.leads) && p.leads.length ? p.leads.filter(l => l && l.lead != null)
+      : [0, 1, 2, 3, 4, 5].map(l => ({ lead: l, fecha: "" }));
+    const ests = Array.isArray(p.estaciones) ? p.estaciones : [];
+    const nTot = ests.length, nAct = ests.filter(e => e && e.activa).length;
+    const jip = p.jipijapa || {}, obs = ultimoObservado(jip);
+    const estJip = jip.valores ? jip : ests.find(e => e && String(e.codigo) === String(jip.codigo || "IUVJIP")) || null;
+    // D-B3: por defecto solo las estaciones activas; el toggle enseña todas las que tienen coordenadas.
+    const st = { lead: String(leads[0].lead), campo: "cams", activas: nAct > 0 };
+    const etiquetas = Array.isArray(p.etiquetas) ? p.etiquetas.map(String)
+      : (p.etiquetas && typeof p.etiquetas === "object" ? Object.entries(p.etiquetas).map(([k, v]) => `${k}: ${v}`) : []);
+    const captura = String(p.captura_utc || "").replace("T", " ").slice(0, 16);
     c.innerHTML = `<div class="cl-wrap cl-iuv-wrap">
-      <div class="cl-glo-intro cl-iuv-intro"><h3>IUV nacional experimental · ${esc(national.valid_date || "")}</h3>
-        <p>Campo físico CAMS Global de índice UV y aerosoles. La única estación disponible se usa para validación local;
-        <b>no acredita una corrección nacional</b>. Los faltantes permanecen vacíos y CAMS crudo siempre se conserva.</p>
-        <div class="cl-iuv-badges"><span>Experimental</span><span>No oficial</span>
-          <span>${correction ? "Ajuste multirregional habilitado" : "CAMS nacional sin corregir"}</span></div></div>
-      <div class="cl-toolbar cl-iuv-toolbar"><div class="cl-grupo"><span>Campo visible</span>
-        <select data-rol="campo"><option value="cams_raw_uvi">CAMS crudo</option>
-          <option value="iuv_experimental">IUV experimental</option></select></div>
-        <div class="cl-grupo cl-iuv-lineage"><span>Cohorte</span><code>${esc(String(national.transaction_id || "").slice(0, 12))}</code></div></div>
-      <div class="cl-iuv-grid"><div class="cl-card"><h3 class="cl-maptit" data-rol="iuv-tit">CAMS crudo</h3>
-        <div class="cl-plot cl-iuv-map" data-rol="iuv-map"></div>
-        <p class="cl-nota">Índice UV máximo diario local. AOD es el espesor óptico de aerosoles medio diario de CAMS.</p></div>
-        <div class="cl-card cl-iuv-local"><h3 class="cl-maptit">Control observacional local</h3>
+      <div class="cl-glo-intro cl-iuv-intro"><h3>IUV por estación · emisión ${esc(p.fecha_emision || "")}</h3>
+        <p>Índice UV máximo diario en el punto de cada estación: el valor de la celda CAMS Global de 0,4° (~44 km)
+        más cercana, <b>sin interpolar</b>. La corrección local Jipijapa es <b>experimental</b> (una sola estación,
+        coordenadas aproximadas) y <b>no está acreditada</b>. Una estación sin valor no se dibuja: nunca se infiere cero.</p>
+        <div class="cl-iuv-badges"><span>CAMS Global${captura ? ` · captura ${esc(captura)} UTC` : ""}</span>
+          <span>${num(nTot)} estaciones con pronóstico UV · ${num(nAct)} activas</span>
+          <span class="no">Corrección Jipijapa no acreditada</span>
+          ${etiquetas.filter(Boolean).map(t => `<span>${esc(t)}</span>`).join("")}</div></div>
+      <div class="cl-toolbar cl-iuv-toolbar">
+        <div class="cl-grupo"><span>Día</span><div class="cl-meses cl-iuv-leads" data-rol="leads">
+          ${leads.map(l => `<button class="cl-mes ${String(l.lead) === st.lead ? "on" : ""}" data-lead="${esc(l.lead)}" title="${esc(l.fecha || "")}">D${esc(l.lead)}<small>${esc(rotuloFechaCorta(l.fecha) || l.fecha || "sin fecha")}</small></button>`).join("")}
+        </div></div>
+        <div class="cl-grupo"><span>Campo</span><select data-rol="campo">
+          ${CAMPOS_IUV.map(f => `<option value="${f.id}" title="${esc(f.t)}">${esc(f.et)}</option>`).join("")}</select></div>
+        <div class="cl-grupo"><span>Estaciones</span>
+          <label class="cl-chk"><input type="checkbox" data-rol="activas" ${st.activas ? "checked" : ""}> solo activas (${num(nAct)} de ${num(nTot)})</label></div>
+      </div>
+      <div class="cl-iuv-grid"><div class="cl-card"><h3 class="cl-maptit" data-rol="iuv-tit">IUV</h3>
+        <div class="cl-plot cl-plot-mapa cl-iuv-map" data-rol="iuv-map"></div>
+        <div class="cl-iuv-leyenda" aria-label="Escala oficial del índice UV (OMS)">
+          ${escala.map(b => `<span class="cl-iuv-banda" style="--bc:${esc(b.color)}"><i></i>${esc(rotuloBanda(b))}</span>`).join("")}
+          <span class="cl-iuv-banda estrella"><i>★</i>Jipijapa: último observado</span>
+          <span class="cl-iuv-banda sin"><i></i>sin valor: sin punto</span></div>
+        <p class="cl-nota" data-rol="iuv-conteo"></p>
+        <p class="cl-nota" data-rol="iuv-campo"></p></div>
+        <div class="cl-card cl-iuv-local"><h3 class="cl-maptit">Jipijapa · control observacional</h3>
           <div class="cl-kpis">
-            ${kpi("Observado", local.observed_uvi, "IUV", 1, "#10243f")}
-            ${kpi("CAMS crudo", local.cams_raw_uvi, "IUV", 1, "#e89a28")}
-            ${kpi("Producto", local.iuv_experimental, "IUV", 1, "#2f9e8f")}
-            ${kpi("AOD", local.aod, "", 2, "#7b61a8")}
+            ${kpi(obs ? `Observado · ${rotuloFechaCorta(obs.fecha) || obs.fecha}` : "Observado", obs && obs.valor, "IUV", 1, "#10243f")}
+            ${kpi("CAMS crudo D0", valorIuv(estJip, "cams", 0), "IUV", 1, "#e89a28")}
+            ${kpi("Corregido D0", valorIuv(estJip, "corr", 0), "IUV", 1, "#2f9e8f")}
+            ${kpi(`Residual obs − CAMS · ${num(jip.n_pares, 0)} pares`, jip.residual, "IUV", 2, "#7b61a8")}
           </div>
-          <div class="cl-aviso"><span class="ic">ⓘ</span><p><b>${esc(local.station_id || "Estación IUV")}</b><br>
-            Estado: ${esc(local.uncertainty_status || "sin observación coincidente")}<br>
-            Distancia a celda CAMS: ${num(local.cams_grid_distance_km, 1)} km.</p></div>
-          <p class="cl-nota">Producto ${esc(national.publication_class || "EXPERIMENTAL")}; calibración oficial: no.
-            La trazabilidad completa queda sellada mediante SHA-256 en el recibo local.</p></div></div>
+          <div class="cl-aviso"><span class="ic">ⓘ</span><p><b>${esc(jip.codigo || "IUVJIP")}</b> ·
+            coordenadas ${jip.coords_aproximadas === false ? "verificadas" : "aproximadas"} ·
+            acreditado: <b>${jip.acreditado === true ? "sí" : "no"}</b>${jip.shrink != null ? ` · factor de encogimiento ${num(jip.shrink, 2)}` : ""}.<br>
+            ${esc(jip.nota || "La corrección se atenúa con la distancia, exp(−d/75 km): a más de ~200 km es prácticamente CAMS crudo.")}</p></div>
+          ${tablaObsJipijapa(jip, escala)}
+          <p class="cl-nota">Observado = máximo diario del sensor UV de Jipijapa (base 1). El residual es la media de
+            observado − CAMS en los últimos pares, encogida según el número de pares.</p></div></div>
     </div>`;
-    const map = c.querySelector('[data-rol="iuv-map"]'), title = c.querySelector('[data-rol="iuv-tit"]');
-    const select = c.querySelector('[data-rol="campo"]');
+    const map = c.querySelector('[data-rol="iuv-map"]'), tit = c.querySelector('[data-rol="iuv-tit"]'),
+      conteo = c.querySelector('[data-rol="iuv-conteo"]'), notaCampo = c.querySelector('[data-rol="iuv-campo"]'),
+      leadsEl = c.querySelector('[data-rol="leads"]'), selCampo = c.querySelector('[data-rol="campo"]'),
+      chkAct = c.querySelector('[data-rol="activas"]');
     const draw = () => {
-      title.textContent = select.value === "cams_raw_uvi" ? "CAMS crudo" : "IUV experimental";
-      pintarIuv(map, national, select.value);
+      const cf = CAMPOS_IUV.find(f => f.id === st.campo) || CAMPOS_IUV[0], fecha = fechaLead(p, st.lead);
+      tit.textContent = `${cf.et} · D${st.lead}${fecha ? " · " + (rotuloFechaCorta(fecha) || fecha) : ""}`;
+      notaCampo.textContent = cf.t;
+      const pts = pintarIuv(map, p, st.campo, st.lead, st.activas);
+      conteo.textContent = !pts ? "" :
+        `${num(pts.x.length)} puntos con valor de ${num(pts.total)} estaciones ${st.activas ? "activas" : "con pronóstico UV"}` +
+        (pts.omitidas ? ` · ${num(pts.omitidas)} sin valor en D${st.lead} (no se dibujan)` : "") + ".";
     };
-    select.onchange = draw;
+    leadsEl.querySelectorAll(".cl-mes").forEach(b => { b.onclick = () => {
+      st.lead = String(b.dataset.lead);
+      leadsEl.querySelectorAll(".cl-mes").forEach(x => x.classList.toggle("on", x === b));
+      draw();
+    }; });
+    selCampo.onchange = () => { st.campo = selCampo.value; draw(); };
+    chkAct.onchange = () => { st.activas = chkAct.checked; draw(); };
     _alTema = () => { if (c.isConnected) draw(); };
     draw();
   }
@@ -1559,12 +1725,19 @@
           { id: "mapas", etiqueta: "Explorar", render: tabMapas },
           { id: "diario", etiqueta: "Series y acumulados", render: tabDiario },
           { id: "enso", etiqueta: "El Niño histórico", render: tabEnso },
-          { id: "iuv", etiqueta: "IUV experimental", render: tabIuv },
+          { id: "iuv", etiqueta: "IUV por estación", render: tabIuv },
           // "Por coordenada" consulta lat/lon libres (imposible de congelar) → oculta en el visor.
           window.HIDROMET_VISOR ? null : { id: "punto", etiqueta: "Por coordenada", render: tabPunto },
           { id: "glosario", etiqueta: "Metodología", render: tabGlosario },
         ],
       });
     },
+  });
+
+  // Superficie pura para las pruebas Node de la pestaña IUV (mismo patrón que
+  // cartas.js). En navegador no se expone ningún global adicional.
+  if (typeof module === "object" && module.exports) module.exports = Object.freeze({
+    ESCALA_IUV, TOPE_IUV, CAMPOS_IUV, escalaIuv, bandaIuv, colorscaleIuv, rotuloBanda, valorIuv,
+    puntosIuv, ultimoObservado, distanciaKm, pesoJipijapa, rotuloFechaCorta, fechaLead,
   });
 })();

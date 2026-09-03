@@ -160,6 +160,29 @@ html[data-tema="oscuro"] .ct-toggle.activo { color: #101B33; }
 .ct-fuente-estado.diagnostico { color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn-bd); }
 .ct-fuente-estado.acreditada { color: var(--ok); background: var(--ok-bg); border: 1px solid var(--ok-bd); }
 
+/* ---------- Verificación por generador (subsistema hidromet/alertas) ---------- */
+.ct-ver { margin-top: 14px; }
+.ct-ver .ct-panel-cab { align-items: center; }
+.ct-ver-lead { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; }
+.ct-ver-lead .et { font: 600 10px var(--mono); letter-spacing: .08em; color: var(--faint); text-transform: uppercase; }
+.ct-ver-lead select { min-height: 32px; font: 500 12.5px var(--fuente); color: var(--ink); }
+.ct-ver-tabla-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 11px; background: var(--surface-2); padding: 6px; }
+.ct-ver-tabla-wrap > .suave { display: block; padding: 8px 6px; font-size: 12px; }
+.ct-ver-tabla { width: 100%; border-collapse: collapse; font-size: 11.5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ct-ver-tabla th { padding: 6px 7px; color: var(--muted-2); text-align: left; border-bottom: 1px solid var(--line);
+  font: 600 9.5px var(--mono); text-transform: uppercase; letter-spacing: .04em; }
+.ct-ver-tabla td { padding: 5px 7px; border-bottom: 1px solid var(--line-3); color: var(--muted); }
+.ct-ver-tabla th.num, .ct-ver-tabla td.num { text-align: right; font-family: var(--mono); }
+.ct-ver-tabla td.mono { color: var(--ink); font-weight: 600; }
+.ct-ver-tabla tbody tr:last-child td { border-bottom: 0; }
+.ct-ver-tabla tbody tr:hover td { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.ct-ver-tabla .ct-fuente-estado { margin-left: 0; }
+/* estado vacío honesto: sin métricas sustitutas */
+.ct-ver-vacio { padding: 10px 12px; border-radius: 9px; font-size: 12px; line-height: 1.55;
+  color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn-bd); }
+/* nota del overlay cantonal bajo la grilla de Advertencias */
+.ct-nota-cantonal [data-rol="cant-resumen"] { font-family: var(--mono); color: var(--muted); }
+
 /* ---------- §P9: validación de hidroestimadores (pestaña Hidroestimadores) ---------- */
 .ct-hv { margin-top: 2px; }
 .ct-hv .ct-panel-cab { align-items: end; gap: 16px; }
@@ -223,4 +246,8 @@ html[data-tema="oscuro"] .ct-toggle.activo { color: #101B33; }
      tabla de hidroestimadores ocupa una fila completa y nunca se recorta. */
   .ct-hv-tabla-wrap { overflow-x: auto; }
   .ct-hv-met { min-width: 780px; }
+  /* verificación por generador: desplazamiento horizontal deliberado en teléfono */
+  .ct-ver .ct-panel-cab { align-items: stretch; }
+  .ct-ver-lead { margin-left: 0; }
+  .ct-ver-tabla { min-width: 720px; }
 }

@@ -6,6 +6,8 @@
    · /cartas/productos            → árbol tipo→variable→período→{fuentes,instantes}
    · /cartas/carta.png            → imagen real (matplotlib) por archivo+capa+record
    · /cartas/alertas_programa     → métricas y series de desempeño causal
+   · /cartas/alertas_verificacion → verificación por generador (hidromet/alertas)
+   · /cartas/alertas_cantonal     → nivel por cantón (toggle Cantones sobre Consenso)
    · /cartas/umbrales_fijos       → editor Fijos/ZPH (GET/POST)
    · /cartas/actualizar           → tarea de regeneración (botón oscuro)
    Las cartas NO se dibujan a mano: son <img src="/api/cartas/carta.png?...">.
@@ -83,12 +85,24 @@
     { id: "alerta_tmax",   etiqueta: "Alerta T. máxima", val: "Tmax" },
   ];
   // Fuentes de la grilla de Alertas, en orden de preferencia: pronóstico (Consenso +
-  // crudos GFS/ICON/IFS) y luego CALIBRADOS (BIAS/RF/GB/CAT/LSTM). La grilla pinta las
-  // realmente presentes en el .nc; oculta capas meta (Confianza / Modelo de referencia).
-  const ALERTA_FUENTES = ["CONSENSO", "GFS", "ICON", "IFS", "BIAS", "RF", "GB", "CAT", "LSTM"];
+  // crudos GFS/ICON/IFS/AIFS/IFS-ENS/MONAN) y luego CALIBRADOS (BIAS, ML de malla y los
+  // calibradores viejos RF/GB/CAT/LSTM). La grilla pinta las realmente presentes en el
+  // .nc; oculta capas meta (Confianza / Modelo de referencia). 2026-09-03: entran las
+  // fuentes que el archivo nuevo (hidromet/alertas) publica y que antes salían con id
+  // crudo al final de la grilla (AIFS, IFS-ENS, MONAN, ML_MALLA).
+  const ALERTA_FUENTES = ["CONSENSO", "GFS", "ICON", "IFS", "AIFS", "IFS-ENS", "MONAN",
+    "BIAS", "ML_MALLA", "RF", "GB", "CAT", "LSTM"];
   const ALERTA_FUENTE_ROTULO = { CONSENSO: "Consenso", GFS: "GFS", ICON: "ICON", IFS: "IFS HRES",
+    AIFS: "AIFS", "IFS-ENS": "IFS ENS", MONAN: "MONAN (INPE)", ML_MALLA: "ML · malla",
     BIAS: "Calibrado · BIAS", RF: "Calibrado · RF", GB: "Calibrado · GB", CAT: "Calibrado · CAT", LSTM: "Calibrado · LSTM" };
   const ALERTA_FUENTE_OCULTA = new Set(["Confianza", "Modelo de referencia", "Cobertura (n.º modelos)"]);
+  // Nombre CORTO de una fuente del ledger/verificación nuevos (NWP_GFS → GFS, CAL_BIAS →
+  // BIAS, CONSENSO → CONSENSO). Pura: el backend ya la acorta, esto es la red de seguridad.
+  function fuenteCorta(s) {
+    const t = String(s || "").trim();
+    return t.replace(/^(NWP|CAL)_/, "");
+  }
+  const rotuloFuente = s => ALERTA_FUENTE_ROTULO[fuenteCorta(s)] || fuenteCorta(s);
 
   // MÉTODO DE UMBRAL POR ALERTA (2026-08-20). Con el tercer método encendido, en
   // el MISMO archivo conviven alertas suyas (lluvia, helada) y del método vigente
@@ -105,9 +119,60 @@
     zph: "Tipo (b) · ZPH (zonas homogéneas de precipitación)",
     pctl: "Tipo (c) · Climatológico — percentil local",
     irf: "Tipo (c) · Climatológico — índice regional + física (tercer método)",
+    // Sellos del subsistema nuevo (hidromet/alertas): el archivo confiesa su generador.
+    fijo: "Tipo (a) · Umbral fijo regional (hidromet)",
+    propio: "Tipo (c) · Climatológico — percentil propio del día del año (hidromet)",
   };
-  // Etiquetas cortas del selector de umbral (solo los modos con variante real).
+  // Etiquetas cortas del selector de umbral (solo los modos con variante real). Las
+  // CLAVES son los modos legado del visor (fija/zph/pctl): el archivo nuevo escribe
+  // umbrales_alertas/alertas_diarias_{fija,zph,pctl}.nc con ese mismo vocabulario.
   const MODO_UMBRAL_BOTON = { fija: "Fijos", zph: "ZPH", pctl: "Percentil", irf: "Climatológico" };
+  // Modo del visor → generador del subsistema nuevo (claves del cantonal y de la
+  // verificación publicada: `${generador}|${fuente}|${variable}`).
+  const GENERADOR_DE_MODO = { fija: "fijo", zph: "zph", pctl: "propio", irf: "propio" };
+  // Variable UI → variable del ledger nuevo (precip/tmin/tmax).
+  const VAR_LEDGER = { alerta_lluvia: "precip", alerta_tmin: "tmin", alerta_tmax: "tmax" };
+  const NIVEL_ROTULO = { 0: "Sin alerta", 1: "Medio", 2: "Alto", 3: "Muy alto" };
+
+  // Pura: variantes de umbral que de verdad se pueden SERVIR. App viva: las que tienen
+  // variante pre-calculada en disco (productos.umbrales_variantes). Visor estático: de
+  // esas, SOLO las que el exportador congeló (claves de productos.fuentes_alerta_por_modo);
+  // un build antiguo sin esa clave conserva fija/zph, que era lo que exportaba.
+  function variantesUmbral(productos, esVisor) {
+    const P = productos || {};
+    const enDisco = Array.isArray(P.umbrales_variantes)
+      ? P.umbrales_variantes.filter(m => MODO_UMBRAL_BOTON[m]) : [];
+    if (!esVisor) return enDisco;
+    const porModo = P.fuentes_alerta_por_modo;
+    const congeladas = (porModo && typeof porModo === "object" && !Array.isArray(porModo))
+      ? Object.keys(porModo).filter(m => MODO_UMBRAL_BOTON[m]) : [];
+    if (!congeladas.length) return ["fija", "zph"];
+    const base = enDisco.length ? enDisco : congeladas;
+    const out = base.filter(m => congeladas.includes(m));
+    return out.length ? out : congeladas;
+  }
+  // Pura: modo del selector que corresponde al SELLO del archivo activo (attr
+  // metodo_umbral leído por productos → alertas_meta.metodo_umbral o metodo_por_capa).
+  // El archivo confiesa con qué generador nació; ese sello manda sobre la configuración
+  // (config cartas_umbrales puede quedarse en 'pctl' mientras el archivo ya es fijo).
+  const MODO_DE_SELLO = { fija: "fija", fijo: "fija", zph: "zph", pctl: "pctl", propio: "pctl", irf: "irf" };
+  function modoDeSello(alertasMeta) {
+    const M = alertasMeta || {};
+    let sello = M.metodo_umbral;
+    if (!sello) {
+      const porCapa = M.metodo_por_capa || {};
+      const k = Object.keys(porCapa).find(c => /_CONSENSO$/.test(c)) || Object.keys(porCapa)[0];
+      sello = k && porCapa[k] && porCapa[k].metodo;
+    }
+    return MODO_DE_SELLO[String(sello || "").toLowerCase()] || null;
+  }
+  // Pura: ZPH solo existe para precipitación; el resto de variantes vale para las tres.
+  const variantesParaVariable = (lista, varId) =>
+    (lista || []).filter(m => m !== "zph" || varId === "alerta_lluvia");
+  // Pura: ¿hace falta pedir la carta congelada con &modo=<m> en el visor? 'fija' es el
+  // archivo activo (sin parámetro) y zph solo tiene variante en lluvia.
+  const modoParaCarta = (modo, varId) =>
+    (modo && modo !== "fija" && (modo !== "zph" || varId === "alerta_lluvia")) ? modo : null;
 
   // Pura (probada en Node): {texto, titulo} del sello de método de una alerta,
   // o null si el archivo aún no trae sello (cartas generadas antes del sellado).
@@ -125,6 +190,130 @@
       titulo: "Método que generó los umbrales de esta alerta (sello leído del archivo)."
         + (parcial ? ` Acreditado SOLO en los niveles ${niveles}: por encima, el aviso se emite con la etiqueta del nivel más alto acreditado.` : ""),
     };
+  }
+
+  /* ---------- SUBSISTEMA NUEVO (hidromet/alertas): cantonal y verificación ----------
+     Funciones PURAS (probadas en Node). El cantonal publicado (/cartas/alertas_cantonal)
+     es una FeatureCollection con properties.alertas[`${generador}|${fuente}|${variable}`]
+     [lead] = fila con las columnas de leyenda.columnas; la verificación publicada
+     (/cartas/alertas_verificacion?variable&modo) trae filas por fuente × nivel × lead. */
+  const CANTONAL_COLUMNAS = ["nivel_canton", "nivel_area", "nivel_estacion_max", "station_id_max",
+    "frac_n1", "frac_n2", "frac_n3", "p_n1", "p_n2", "p_n3", "valor_max", "valor_medio", "n_estaciones", "nota"];
+  // Clave del cantonal para el modo del visor y la variable UI (fuente CONSENSO = malla).
+  function claveCantonal(modo, varId, fuente) {
+    const g = GENERADOR_DE_MODO[modo] || GENERADOR_DE_MODO.fija;
+    const v = VAR_LEDGER[varId] || VAR_LEDGER.alerta_lluvia;
+    return `${g}|${fuente || "CONSENSO"}|${v}`;
+  }
+  // Lead (día de pronóstico 0..6) de un record del archivo de alertas: los records
+  // alternan 00-24 (temperatura, pares) y 07-07 (lluvia, impares) del MISMO día.
+  const leadDeRecord = idx => (idx !== null && idx !== "" && Number.isFinite(+idx) && +idx >= 0)
+    ? Math.floor(+idx / 2) : null;
+  // Lead por FECHA: días entre la fecha de emisión del cantonal y la fecha local de la
+  // carta. Es la forma honesta cuando la malla y el cantonal no comparten día de
+  // emisión (el motor viejo arranca en ayer; el nuevo en hoy).
+  function leadPorFecha(fechaEmision, fechaCarta) {
+    const a = Date.parse(String(fechaEmision || "").slice(0, 10) + "T00:00:00Z");
+    const b = Date.parse(String(fechaCarta || "").slice(0, 10) + "T00:00:00Z");
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+    return Math.round((b - a) / 86400000);
+  }
+  // Lead que se pide al cantonal para una carta: por fecha si el cantonal declara su
+  // fecha de emisión; si no, por record. null si el cantonal no cubre ese lead (el
+  // overlay se omite: nunca se pinta el cantonal de otro día bajo esta carta).
+  function leadCantonal(payload, fechaCarta, record) {
+    const P = payload || {};
+    let lead = P.fecha_emision ? leadPorFecha(P.fecha_emision, fechaCarta) : null;
+    if (lead === null) lead = leadDeRecord(record);
+    if (lead === null) return null;
+    const leads = Array.isArray(P.leads) ? P.leads.map(Number) : null;
+    if (leads && leads.length && !leads.includes(lead)) return null;
+    return lead;
+  }
+  // Fila cantonal como objeto {codcan, canton, provincia, nivel_canton, …} o null si
+  // el cantón no tiene esa clave/lead. Las columnas las declara el propio producto.
+  function filaCantonal(feature, clave, lead, columnas) {
+    const pr = (feature && feature.properties) || {};
+    const al = pr.alertas && pr.alertas[clave];
+    const fila = al && al[String(lead)];
+    if (!Array.isArray(fila)) return null;
+    const cols = (Array.isArray(columnas) && columnas.length) ? columnas : CANTONAL_COLUMNAS;
+    const o = { codcan: pr.codcan, canton: pr.canton, provincia: pr.provincia };
+    cols.forEach((c, i) => { o[c] = fila[i] === undefined ? null : fila[i]; });
+    return o;
+  }
+  // Polígonos del cantonal agrupados por NIVEL (1..3) para trazas fill:"toself" (sub-
+  // polígonos separados por null), el borde de TODOS los cantones y los centroides con
+  // su fila para el hover. n = cantones con fila; nAlerta = cantones ≥ Medio.
+  function poligonosCantonal(payload, clave, lead) {
+    const feats = (payload && Array.isArray(payload.features)) ? payload.features : [];
+    const columnas = payload && payload.leyenda && payload.leyenda.columnas;
+    const porNivel = { 1: { xs: [], ys: [] }, 2: { xs: [], ys: [] }, 3: { xs: [], ys: [] } };
+    const borde = { xs: [], ys: [] };
+    const hover = { x: [], y: [], filas: [] };
+    let n = 0, nAlerta = 0, nPoligonos = 0;
+    const empuja = (X, Y, ring) => { for (const [lo, la] of ring) { X.push(lo); Y.push(la); } X.push(null); Y.push(null); };
+    const centroide = ring => {
+      let sx = 0, sy = 0, k = 0;
+      for (const [lo, la] of ring) { sx += lo; sy += la; k++; }
+      return k ? [sx / k, sy / k] : null;
+    };
+    for (const f of feats) {
+      const g = f && f.geometry; if (!g) continue;
+      const anillos = g.type === "Polygon" ? [g.coordinates[0]]
+        : g.type === "MultiPolygon" ? g.coordinates.map(p => p[0]) : [];
+      if (!anillos.length) continue;
+      nPoligonos++;
+      anillos.forEach(r => empuja(borde.xs, borde.ys, r));
+      const fila = filaCantonal(f, clave, lead, columnas);
+      if (!fila) continue;
+      n++;
+      const nv = fila.nivel_canton == null ? null : Math.round(+fila.nivel_canton);
+      if (nv >= 1 && nv <= 3) { nAlerta++; anillos.forEach(r => empuja(porNivel[nv].xs, porNivel[nv].ys, r)); }
+      let mayor = anillos[0]; for (const r of anillos) if (r.length > mayor.length) mayor = r;
+      const c = centroide(mayor); if (!c) continue;
+      hover.x.push(c[0]); hover.y.push(c[1]); hover.filas.push(fila);
+    }
+    return { porNivel, borde, hover, n, nAlerta, nPoligonos };
+  }
+  // Texto de hover (HTML de Plotly) de una fila cantonal; `unidad` = mm / °C del valor.
+  function textoCantonal(fila, unidad) {
+    const niv = v => (v == null ? "—" : (NIVEL_ROTULO[Math.round(+v)] || String(v)));
+    const pct = v => (v == null ? "—" : Math.round(+v * 100) + " %");
+    const num = v => (v == null ? "—" : (Math.abs(+v) < 10 ? (+v).toFixed(1) : (+v).toFixed(0)));
+    const partes = [
+      `<b>${esc(fila.canton || fila.codcan || "")}</b>${fila.provincia ? " · " + esc(fila.provincia) : ""}`,
+      `Nivel cantonal: <b>${esc(niv(fila.nivel_canton))}</b> · área ${esc(niv(fila.nivel_area))} · estación máx. ${esc(niv(fila.nivel_estacion_max))}${fila.station_id_max ? " (" + esc(fila.station_id_max) + ")" : ""}`,
+      `Fracción del cantón ≥Medio / ≥Alto / ≥Muy alto: ${pct(fila.frac_n1)} / ${pct(fila.frac_n2)} / ${pct(fila.frac_n3)}`,
+      `Valor máx. ${num(fila.valor_max)}${fila.valor_max == null ? "" : " " + esc(unidad || "")} · estaciones: ${fila.n_estaciones == null ? "—" : esc(fila.n_estaciones)}`,
+    ];
+    if (fila.nota) partes.push(`<i>${esc(String(fila.nota))}</i>`);
+    return partes.join("<br>");
+  }
+
+  // VERIFICACIÓN publicada del subsistema nuevo. Pura: filas del lead pedido (−1 = todos
+  // los leads agregados; null = sin filtro), ordenadas por nivel y por el orden de fuentes
+  // de la grilla. NO inventa filas: si el ledger no tiene casos, devuelve [].
+  function filasVerificacion(payload, lead) {
+    const filas = (payload && Array.isArray(payload.filas)) ? payload.filas : [];
+    const L = (lead === undefined || lead === null || lead === "" || !Number.isFinite(+lead)) ? null : +lead;
+    const orden = s => { const i = ALERTA_FUENTES.indexOf(fuenteCorta(s)); return i < 0 ? ALERTA_FUENTES.length : i; };
+    return filas
+      .filter(f => f && typeof f === "object" && (L === null || +f.lead_day === L))
+      .slice()
+      .sort((a, b) => (+a.nivel - +b.nivel) || (orden(a.fuente) - orden(b.fuente))
+        || (+a.lead_day - +b.lead_day) || String(a.fuente).localeCompare(String(b.fuente)));
+  }
+  // Pura: leads disponibles (declarados en `leads` o deducidos de las filas), ascendente
+  // (−1 = todos queda primero). Sin filas ni leads → [].
+  function leadsVerificacion(payload) {
+    const P = payload || {};
+    const set = new Set();
+    (Array.isArray(P.leads) ? P.leads : []).forEach(l => { if (l !== null && l !== "" && Number.isFinite(+l)) set.add(+l); });
+    (Array.isArray(P.filas) ? P.filas : []).forEach(f => {
+      if (f && f.lead_day !== null && f.lead_day !== undefined && Number.isFinite(+f.lead_day)) set.add(+f.lead_day);
+    });
+    return [...set].sort((a, b) => a - b);
   }
 
   // Toggles de capa: id (param de carta.png) + etiqueta + valor inicial (1=on).
@@ -176,6 +365,7 @@
     _cacheDatos.clear();
     _ffrFechas = null; _ffrEstado = "desconocido"; _ffrZonas.clear();
     _hvDatos = null;                          // §P9: resumen de validación hidro
+    _cantonal = null;                         // cantonal del subsistema nuevo (Cantones)
   }
   async function apiDatosCarta(url) {
     if (_cacheDatos.has(url)) {
@@ -306,6 +496,62 @@
       line: { color: col, width: 1.2, dash: "dot" },
       name: "Indicador de susceptibilidad FFR", hoverinfo: "skip", showlegend: false,
     }];
+  }
+
+  /* CANTONAL del subsistema nuevo (hidromet/alertas/cantonal.py) como overlay sobre la
+     carta CONSENSO de Advertencias cuando el toggle "Cantones" está activo. Una sola
+     petición por sesión (el producto trae los 222 cantones × generadores × leads). */
+  let _cantonal = null;                        // payload /cartas/alertas_cantonal | false
+  async function asegurarCantonal() {
+    if (_cantonal !== null) return;
+    try {
+      const r = await App.api("/cartas/alertas_cantonal");
+      _cantonal = (r && Array.isArray(r.features) && r.features.length) ? r : false;
+    } catch (e) { _cantonal = false; }
+  }
+  // rgba(...) con alfa de un color "#hex" o "rgb(a)(...)" (los colores de la escala de
+  // alertas vienen en ambos formatos según el motor).
+  function _rgbaDe(color, alfa) {
+    const s = String(color || "").trim();
+    let c = null;
+    if (s[0] === "#") c = _hexRgb(s);
+    else { const m = /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/.exec(s); if (m) c = [+m[1], +m[2], +m[3]]; }
+    if (!c) c = [215, 38, 61];
+    return `rgba(${c[0]},${c[1]},${c[2]},${alfa})`;
+  }
+  const CANTONAL_COLOR_NIVEL = { 1: "#ffd24d", 2: "#ff8c2b", 3: "#d7263d" };
+  // Trazas del cantonal para una carta: relleno por nivel (mismos colores que la escala
+  // de la carta), borde de todos los cantones y marcadores invisibles en el centroide
+  // con el popup. Devuelve {traces, resumen} o null si no hay cantonal para ese lead.
+  async function trazasCantonalSobreCarta(clave, fechaCarta, record, d, oscuro) {
+    await asegurarCantonal();
+    if (!_cantonal) return null;
+    const lead = leadCantonal(_cantonal, fechaCarta, record);
+    if (lead === null) return null;
+    const pol = poligonosCantonal(_cantonal, clave, lead);
+    if (!pol.n) return null;
+    const colores = coloresBanda((d && d.colorscale) || []);   // [nivel 0 transparente, Medio, Alto, Muy alto]
+    const colorNivel = k => (colores.length === 4 && colores[k]) ? colores[k] : CANTONAL_COLOR_NIVEL[k];
+    const traces = [{
+      type: "scatter", mode: "lines", x: pol.borde.xs, y: pol.borde.ys, meta: "cantonal-borde",
+      line: { color: oscuro ? "rgba(214,222,236,.45)" : "rgba(20,30,50,.42)", width: 0.7 },
+      hoverinfo: "skip", showlegend: false }];
+    for (const k of [1, 2, 3]) {
+      const P = pol.porNivel[k]; if (!P.xs.length) continue;
+      traces.push({ type: "scatter", mode: "lines", x: P.xs, y: P.ys, fill: "toself", meta: "cantonal-nivel",
+        fillcolor: _rgbaDe(colorNivel(k), 0.62), line: { color: _rgbaDe(colorNivel(k), 0.95), width: 1.1 },
+        name: NIVEL_ROTULO[k], hoverinfo: "skip", showlegend: false });
+    }
+    const unidad = /\|precip$/.test(clave) ? "mm" : "°C";
+    traces.push({ type: "scatter", mode: "markers", x: pol.hover.x, y: pol.hover.y, meta: "cantonal-hover",
+      text: pol.hover.filas.map(f => textoCantonal(f, unidad)),
+      marker: { size: 13, color: "rgba(0,0,0,0)" },
+      hovertemplate: "%{text}<extra></extra>",
+      hoverlabel: { bgcolor: oscuro ? "#0B1322" : "#ffffff", bordercolor: oscuro ? "#46597A" : "#c7cfdb",
+        font: { color: oscuro ? "#fff" : "#1c2433", size: 11 } },
+      showlegend: false });
+    return { traces, resumen: { lead, n: pol.n, nAlerta: pol.nAlerta, nPoligonos: pol.nPoligonos,
+      fecha_emision: _cantonal.fecha_emision || null, phi: _cantonal.phi } };
   }
 
   // Microcuencas operativas del FFGS (NWSAFFGS, 1682 subcuencas): contorno que se
@@ -576,8 +822,13 @@
     // §P18a: data-ffr = fecha (ISO) de la carta cuando es ALERTA DE LLUVIA → el
     // overlay del indicador de susceptibilidad FFR se dibuja encima en pintarMapaCarta.
     const ffrAttr = params.ffr ? ` data-ffr="${esc(params.ffr)}"` : "";
+    // Toggle Cantones (Advertencias): clave `${generador}|CONSENSO|${variable}` + fecha
+    // local y record de la carta → pintarMapaCarta dibuja el cantonal encima.
+    const cantAttr = params.cantonal
+      ? ` data-cantonal="${esc(params.cantonal)}" data-cantonal-fecha="${esc(params.cantonalFecha || "")}" data-cantonal-record="${esc(params.cantonalRecord == null ? "" : params.cantonalRecord)}"`
+      : "";
     return `
-      <div class="ct-lienzo${papelFijo() ? " ct-lienzo-fijo" : ""}" data-datos="${esc(datosUrl)}"${ffrAttr}>
+      <div class="ct-lienzo${papelFijo() ? " ct-lienzo-fijo" : ""}" data-datos="${esc(datosUrl)}"${ffrAttr}${cantAttr}>
         <a class="ct-dl ct-dl-jpg" role="button" tabindex="0" data-jpg="${esc(jpgRuta)}" data-nombre="${esc(slugNombre)}"
            title="Descargar carta (imagen)" aria-label="Descargar carta">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -941,6 +1192,26 @@
       if (!vivo()) return;
       if (zf) traces.push(...zf);
     }
+    // Toggle Cantones (Advertencias): nivel cantonal del subsistema nuevo SOBRE la carta
+    // Consenso (relleno por nivel + borde + popup por cantón). data-cantonal la pone
+    // cuerpoAlertas solo en la tarjeta CONSENSO. La nota bajo la grilla confiesa emisión
+    // y cobertura reales del cantonal; si no cubre este lead, no se pinta nada.
+    if (div.dataset.cantonal) {
+      const zc = await trazasCantonalSobreCarta(div.dataset.cantonal, div.dataset.cantonalFecha,
+        div.dataset.cantonalRecord, d, oscuro);
+      if (!vivo()) return;
+      const notaC = document.querySelector('[data-rol="nota-cantonal"]');
+      const resC = notaC && notaC.querySelector('[data-rol="cant-resumen"]');
+      if (zc) {
+        traces.push(...zc.traces);
+        if (resC) resC.textContent =
+          ` · emisión ${zc.resumen.fecha_emision || "—"} · lead D+${zc.resumen.lead} · ${zc.resumen.nAlerta} de ${zc.resumen.n} cantones ≥ Medio (${zc.resumen.nPoligonos} polígonos)`;
+      } else if (resC) {
+        resC.textContent = _cantonal
+          ? " · el cantonal publicado no cubre la fecha de esta carta: no se dibuja"
+          : " · cantonal no publicado aún";
+      }
+    }
 
     // §P4: muestra para el hover de estaciones (malla ya cargada + formateador).
     const _muestra = (PR && PR.campo && PR.campo.length)
@@ -1203,11 +1474,13 @@
   // cartas interactivas. El estado vive en E.capas y lo lee pintarMapaCarta.
   // §P16: `sinIsolineas` oculta el toggle Isolíneas en ADVERTENCIAS (niveles categóricos:
   // los contornos no aplican); el resto de toggles se conserva.
-  function capasHTML(sinIsolineas) {
+  // `conCantones` (Advertencias): toggle del cantonal del subsistema nuevo sobre la
+  // carta Consenso (arranca apagado: es una capa de lectura, no la carta en sí).
+  function capasHTML(sinIsolineas, conCantones) {
     const c = (E && E.capas) || {};
-    const b = (id, et) => `<button class="ct-toggle ${c[id] ? "activo" : ""}" data-capa="${id}"
-      aria-pressed="${c[id] ? "true" : "false"}" title="Mostrar u ocultar la capa ${et}">${et}</button>`;
-    return `<div class="ct-capas">${b("grilla", "Grilla")}${sinIsolineas ? "" : b("isolineas", "Isolíneas")}${b("galapagos", "Galápagos")}${b("estaciones", "Estaciones")}</div>`;
+    const b = (id, et, tit) => `<button class="ct-toggle ${c[id] ? "activo" : ""}" data-capa="${id}"
+      aria-pressed="${c[id] ? "true" : "false"}" title="${esc(tit || ("Mostrar u ocultar la capa " + et))}">${et}</button>`;
+    return `<div class="ct-capas">${b("grilla", "Grilla")}${sinIsolineas ? "" : b("isolineas", "Isolíneas")}${b("galapagos", "Galápagos")}${b("estaciones", "Estaciones")}${conCantones ? b("cantones", "Cantones", "Nivel por cantón (hidromet/alertas) del generador activo, dibujado sobre la carta Consenso") : ""}</div>`;
   }
 
   // §P1: la serie temporal que vivía BAJO la grilla de cartas (pintarSeriePron) se
@@ -1842,6 +2115,11 @@
       const p = (v.periodos || [])[0];
       if (p && (a.inst == null || a.inst >= p.instantes.length)) a.inst = instanteDefecto(p.instantes);
     }
+    // El modo activo tiene que ser uno que el selector OFRECE (en el visor, uno que el
+    // exportador congeló de verdad): sin esto el índice podía dejar a.modo='pctl' con
+    // botones Fijos/ZPH y ninguno activo (auditoría 2026-09-03).
+    const _vs = variantesParaVariable(variantesUmbral(E.productos, !!window.HIDROMET_VISOR), a.varId);
+    if (_vs.length && !_vs.includes(a.modo)) a.modo = _vs.includes("fija") ? "fija" : _vs[0];
     return a;
   }
 
@@ -1862,14 +2140,11 @@
 
     // Selector de TIPO de umbral: en la app se ofrecen los modos con variante
     // pre-calculada en disco (productos.umbrales_variantes) — así el tercer tipo
-    // (Climatológico) aparece solo cuando de verdad se puede servir sin
-    // recalcular. El visor estático conserva fija/zph, que son las variantes que
-    // exporta hoy (extenderlo es trabajo del export, no de este selector).
-    const _variantes = (!window.HIDROMET_VISOR
-      && Array.isArray((E.productos || {}).umbrales_variantes)
-      && E.productos.umbrales_variantes.length)
-      ? E.productos.umbrales_variantes.filter(m => MODO_UMBRAL_BOTON[m])
-      : ["fija", "zph"];
+    // (Climatológico) aparece solo cuando de verdad se puede servir sin recalcular.
+    // En el visor, SOLO las variantes que el exportador congeló (claves de
+    // fuentes_alerta_por_modo). ZPH solo existe para lluvia; Fijos/Percentil valen
+    // para las tres variables (variantesUmbral / variantesParaVariable, puras).
+    const _variantes = variantesParaVariable(variantesUmbral(E.productos, !!window.HIDROMET_VISOR), a.varId);
     const segBotones = _variantes.map(m =>
       `<button class="${a.modo === m ? "activo" : ""}" data-modo="${m}">${MODO_UMBRAL_BOTON[m]}</button>`).join("");
 
@@ -1918,12 +2193,20 @@
           <div class="ct-lienzo"><div class="fallo"><div class="icono">⚠️</div>Sin producto disponible para ${esc(rotulo)}</div></div></figure>`;
       }
       const params = paramsDescriptor(descriptor);
-      // VISOR en modo ZPH: pedir la variante congelada &modo=zph (solo capas de
-      // alerta de lluvia; en la app el POST ya intercambió el .nc y no hace falta).
-      if (window.HIDROMET_VISOR && a.modo === "zph" && a.varId === "alerta_lluvia") params.modo = "zph";
+      // VISOR: pedir la variante congelada &modo=<m> (zph solo en lluvia; pctl en las
+      // tres variables; fija = archivo activo, sin parámetro). En la app el POST ya
+      // intercambió el .nc y no hace falta.
+      if (window.HIDROMET_VISOR) { const _m = modoParaCarta(a.modo, a.varId); if (_m) params.modo = _m; }
       // §P18a: SOLO en precipitación (nunca temperatura) el indicador FFR
       // (FFR) se dibujan SOBRE la carta si el FFR cubre la fecha de este instante.
       if (a.varId === "alerta_lluvia" && inst) params.ffr = fechaLocalISO(inst.inicio);
+      // Toggle Cantones: el cantonal del subsistema nuevo se dibuja SOLO sobre la carta
+      // CONSENSO (clave `${generador}|CONSENSO|${variable}`, lead por fecha/record).
+      if (E.capas.cantones && fuente === "CONSENSO" && inst) {
+        params.cantonal = claveCantonal(a.modo, a.varId);
+        params.cantonalFecha = fechaLocalISO(inst.inicio);
+        params.cantonalRecord = descriptor.record;
+      }
       // Leyenda COMPARTIDA bajo la grilla (misma escala de niveles en todas las fuentes).
       return `<figure class="ct-carta">
         <div class="ct-carta-cab"><span class="titulo">${esc(rotulo)}${badge}</span><span class="meta">${meta}</span></div>
@@ -1948,14 +2231,22 @@
     const selloMetodoHTML = _sello
       ? `<span class="ct-fuente-estado" data-rol="metodo-umbral" title="${esc(_sello.titulo)}">${esc(_sello.texto)}</span>`
       : "";
+    // Nota del overlay cantonal (el resumen real lo rellena pintarMapaCarta al cargarlo).
+    const notaCantonal = E.capas.cantones
+      ? `<p class="ct-nota ct-nota-cantonal" data-rol="nota-cantonal" style="margin:-4px 0 14px">
+           <b>Cantones</b>: nivel por cantón del subsistema hidromet/alertas — generador
+           <b>${esc(GENERADOR_DE_MODO[a.modo] || "fijo")}</b> · fuente CONSENSO (malla) — dibujado sobre la carta Consenso;
+           nivel cantonal = máximo entre el nivel del área (fracción de celdas ≥ nivel, φ) y el de sus estaciones.
+           Cantón sin relleno = sin alerta; el popup trae fracción del área por nivel, valor máximo y nota.<span data-rol="cant-resumen"> · cargando…</span></p>`
+      : "";
 
     return `
       <div class="ct-barra compacta">
         <label><span class="et">Variable</span><select data-rol="avar">${optsVar}</select></label>
         ${selloMetodoHTML}
         <span class="ct-div"></span>
-        ${a.varId === "alerta_lluvia" ? `
-        <span class="et" title="Tipo de umbral de la alerta: (a) fijo regional, (b) ZPH (zonas homogéneas de precipitación), (c) climatológico. Solo se ofrecen los tipos con variante pre-calculada.">Umbrales</span>
+        ${_variantes.length ? `
+        <span class="et" title="Tipo de umbral de la alerta: (a) fijo regional, (b) ZPH (zonas homogéneas de precipitación, solo lluvia), (c) climatológico (percentil). Solo se ofrecen los tipos con variante realmente servible.">Umbrales</span>
         <div class="segmentado" data-rol="umbral" style="--seg-color:var(--blue)">${segBotones}</div>` : ""}
         <button class="boton azulclaro chico" data-rol="editar">✎ Editar umbrales</button>
         <div class="ct-inst-nav">
@@ -1963,12 +2254,13 @@
           <select class="ct-instante" data-rol="ainst" aria-label="Fecha y hora">${optsInst}</select>
           <button class="ct-nav" data-rol="anext" title="Paso siguiente" aria-label="Paso siguiente" ${(!p || a.inst >= p.instantes.length - 1) ? "disabled" : ""}>▶</button>
         </div>
-        ${capasHTML(true)}
+        ${capasHTML(true, true)}
       </div>
       ${sinArbol}
       <div class="ct-grid${_hayDato && _lista.length === 4 ? " n4" : ""}">${cartas}</div>
       <div class="ct-leyenda-carta" data-rol="leyenda-carta"></div>
       ${notaFFR}
+      ${notaCantonal}
       <div class="ct-panel" id="ct-desempeno">
         <div class="ct-panel-cab">
           <h3>Desempeño causal de las advertencias <span class="suave" data-rol="dsub">· cargando…</span></h3>
@@ -1979,37 +2271,45 @@
         <div class="ct-serie ct-desempeno-temporal" data-rol="serie" role="img"
           aria-label="Gráfico de barras: error de intensidad de las advertencias frente a observaciones diarias"></div>
         <p class="ct-nota" data-rol="dnota"></p>
+      </div>
+      <div class="ct-panel ct-ver" id="ct-verificacion">
+        <div class="ct-panel-cab">
+          <h3>Verificación por generador <span class="suave" data-rol="vsub">· cargando…</span></h3>
+          <label class="ct-ver-lead"><span class="et">Lead</span><select data-rol="vlead" aria-label="Día de pronóstico verificado"></select></label>
+        </div>
+        <div class="ct-ver-tabla-wrap" data-rol="vtabla"><span class="suave">Leyendo la verificación publicada…</span></div>
+        <p class="ct-nota" data-rol="vnota"></p>
       </div>`;
   }
 
   function conectarAlertas(cont) {
     const a = E.alerta;
     const re = () => pintarCuerpo();
+    // Cambiar de modo COPIA la variante pre-calculada sobre alertas_diarias.nc; sin
+    // esto el toggle no cambiaba el archivo y fija/zph se veían idénticos. En el visor
+    // (solo lectura) se omite SOLO el POST: re() re-pinta igualmente y las cartas piden
+    // la variante congelada &modo=<m> (cuerpoAlertas), así el toggle no es cosmético.
+    const fijarModo = async (m) => {
+      if (!m || a.modo === m) return;
+      a.modo = m;
+      if (!window.HIDROMET_VISOR) {
+        try { await App.api("/cartas/umbrales_modo", { method: "POST", body: { modo: m } }); }
+        catch (e) { App.aviso(e.message, "error"); }
+      }
+      limpiarCacheDatos();   // §P14: el swap de variante cambió el .nc → la caché de mallas caduca
+    };
     // No llamamos cargarDesempeno() aquí: re()→pintarCuerpo()→conectarAlertas ya
-    cont.querySelector('[data-rol="avar"]').onchange = (e) => {
+    cont.querySelector('[data-rol="avar"]').onchange = async (e) => {
       a.varId = e.target.value;
-      // ZPH solo existe para precipitación. Si se cambia a temperatura, usar
-      // explícitamente la cohorte fija para que el panel oculto no conserve un
-      // modo pluvial y consulte evidencia térmica bajo una etiqueta incorrecta.
-      if (a.varId !== "alerta_lluvia") a.modo = "fija";
+      // ZPH solo existe para precipitación: al pasar a temperatura se vuelve a Fijos
+      // (con el POST en la app, para que el archivo servido sea de verdad el fijo).
+      // Fijos y Percentil se conservan: valen para las tres variables.
+      if (a.modo === "zph" && a.varId !== "alerta_lluvia") await fijarModo("fija");
       a.inst = null;
       re();
     };
     cont.querySelectorAll('[data-rol="umbral"] button').forEach(b =>
-      b.onclick = async () => {
-        a.modo = b.dataset.modo;
-        // Cambiar de modo COPIA la variante pre-calculada sobre alertas_diarias.nc; sin
-        // esto el toggle no cambiaba el archivo y fija/zph se veían idénticos. En el visor
-        // (solo lectura) se omite SOLO el POST: re() re-pinta igualmente y las cartas de
-        // alerta de lluvia piden la variante congelada &modo=zph (cuerpoAlertas), así el
-        // toggle deja de ser cosmético en el visor.
-        if (!window.HIDROMET_VISOR) {
-          try { await App.api("/cartas/umbrales_modo", { method: "POST", body: { modo: a.modo } }); }
-          catch (e) { App.aviso(e.message, "error"); }
-        }
-        limpiarCacheDatos();   // §P14: el swap fija/zph cambió el .nc → la caché de mallas caduca
-        re();
-      });
+      b.onclick = async () => { await fijarModo(b.dataset.modo); re(); });
     cont.querySelector('[data-rol="editar"]').onclick = abrirEditorUmbrales;
 
     const t = tipoNodo("alertas");
@@ -2024,6 +2324,7 @@
     cont.querySelectorAll('.ct-toggle[data-capa]').forEach(b => b.onclick = () => { E.capas[b.dataset.capa] = !E.capas[b.dataset.capa]; re(); });
 
     cargarDesempeno();
+    cargarVerificacion();
   }
 
   // Datos de desempeño causal cacheados por variable+modo.
@@ -2035,6 +2336,93 @@
     const r = await App.api("/cartas/alertas_programa?" + qs({ variable: varVal, modo: a.modo }));
     a._desClave = clave; a._desDatos = r;
     return r;
+  }
+
+  /* ============================================================
+     Verificación por generador (subsistema nuevo hidromet/alertas):
+     /cartas/alertas_verificacion?variable&modo → filas fuente × nivel × lead con
+     POD/FAR/CSI/HSS, n, eventos, avisos, sesgo y acreditado. Se pide SOLO por
+     variable+modo (es lo que el exportador congela); el lead se filtra en cliente.
+     ============================================================ */
+  async function datosVerificacion() {
+    const a = E.alerta;
+    const varVal = (VAR_ALERTA.find(x => x.id === a.varId) || VAR_ALERTA[0]).val;
+    const clave = varVal + "|" + a.modo;
+    if (a._verClave === clave && a._verDatos) return a._verDatos;
+    const r = await App.api("/cartas/alertas_verificacion?" + qs({ variable: varVal, modo: a.modo }));
+    a._verClave = clave; a._verDatos = r;
+    return r;
+  }
+  const _fmtMetrica = v => (v == null || v === "" || !Number.isFinite(+v)) ? "—" : (+v).toFixed(2);
+  const _etiquetasPayload = r => {
+    const P = r || {};
+    const lista = Array.isArray(P.etiquetas) ? P.etiquetas : (P.etiqueta ? [P.etiqueta] : []);
+    return lista.map(x => (typeof x === "string" ? x : JSON.stringify(x)));
+  };
+  // Tabla HTML de las filas (ya filtradas/ordenadas por filasVerificacion).
+  function tablaVerificacionHTML(filas) {
+    if (!filas.length) return "";
+    const cab = ["Fuente", "Nivel", "Lead", "n", "Eventos", "Avisos", "POD", "FAR", "CSI", "HSS", "Sesgo", "Acreditada"];
+    const th = cab.map((c, i) => `<th${i >= 3 ? ' class="num"' : ""}>${esc(c)}</th>`).join("");
+    const tr = filas.map(f => {
+      const acred = f.acreditado === true || f.acreditado === 1 || f.acreditado === "true";
+      const badge = acred
+        ? `<span class="ct-fuente-estado acreditada" title="Pesa en el consenso por desempeño medido (pesos vigentes)">Sí</span>`
+        : `<span class="ct-fuente-estado diagnostico" title="Sin acreditación medida: peso 1,0 por defecto en el consenso">Sin acreditar</span>`;
+      return `<tr>
+        <td class="mono">${esc(rotuloFuente(f.fuente))}</td>
+        <td>${esc(NIVEL_ROTULO[Math.round(+f.nivel)] || f.nivel)}</td>
+        <td>${+f.lead_day < 0 ? "todos" : "D+" + esc(f.lead_day)}</td>
+        <td class="num">${fmtNum(f.n)}</td><td class="num">${fmtNum(f.eventos)}</td><td class="num">${fmtNum(f.avisos)}</td>
+        <td class="num">${_fmtMetrica(f.pod)}</td><td class="num">${_fmtMetrica(f.far)}</td>
+        <td class="num">${_fmtMetrica(f.csi)}</td><td class="num">${_fmtMetrica(f.hss)}</td>
+        <td class="num">${_fmtMetrica(f.sesgo_frec)}</td><td>${badge}</td></tr>`;
+    }).join("");
+    return `<table class="ct-ver-tabla"><thead><tr>${th}</tr></thead><tbody>${tr}</tbody></table>`;
+  }
+  async function cargarVerificacion() {
+    const panel = document.getElementById("ct-verificacion");
+    if (!panel) return;
+    const a = E.alerta;
+    const sub = panel.querySelector('[data-rol="vsub"]');
+    const sel = panel.querySelector('[data-rol="vlead"]');
+    const host = panel.querySelector('[data-rol="vtabla"]');
+    const nota = panel.querySelector('[data-rol="vnota"]');
+    const generador = GENERADOR_DE_MODO[a.modo] || "fijo";
+    let r;
+    try { r = await datosVerificacion(); }
+    catch (e) {
+      if (!panel.isConnected) return;
+      sub.textContent = `· generador ${generador} · sin verificación publicada`;
+      sel.innerHTML = "";
+      host.innerHTML = `<div class="ct-ver-vacio"><b>Verificación no publicada</b> · ${esc(window.HIDROMET_VISOR
+        ? "el visor aún no trae la verificación del subsistema nuevo para esta variable y este generador."
+        : "no se pudo leer la verificación publicada: " + (e && e.message ? e.message : e))}</div>`;
+      nota.textContent = "";
+      return;
+    }
+    if (!panel.isConnected) return;
+    const leads = leadsVerificacion(r);
+    if (a._verLead == null || !leads.includes(+a._verLead))
+      a._verLead = leads.includes(-1) ? -1 : (leads.length ? leads[0] : -1);
+    sel.innerHTML = (leads.length ? leads : [-1]).map(l =>
+      `<option value="${l}" ${+a._verLead === l ? "selected" : ""}>${l < 0 ? "Todos los leads" : "D+" + l}</option>`).join("");
+    const ventana = r.ventana_dias || r.ventana || null;
+    const etiquetas = _etiquetasPayload(r);
+    const pintar = () => {
+      const filas = filasVerificacion(r, a._verLead);
+      sub.textContent = `· generador ${generador}${ventana ? " · ventana " + ventana + " d" : ""}${r.fecha_corte ? " · corte " + r.fecha_corte : ""} · ${fmtNum(filas.length)} filas`;
+      host.innerHTML = filas.length ? tablaVerificacionHTML(filas)
+        : `<div class="ct-ver-vacio"><b>Ledger nuevo sin casos verificables aún</b> · el subsistema hidromet/alertas verifica
+             sus propias emisiones contra observaciones cerradas; para ${esc(generador)}${+a._verLead < 0 ? "" : " y D+" + esc(a._verLead)}
+             todavía no hay filas${etiquetas.length ? " (" + esc(etiquetas.join("; ")) + ")" : ""}. No se muestran métricas sustitutas.</div>`;
+    };
+    sel.onchange = () => { a._verLead = +sel.value; pintar(); };
+    pintar();
+    nota.innerHTML = `Fuente: verificación publicada del subsistema <b>hidromet/alertas</b> (ámbito estación, región nacional,
+      ventana móvil). <b>Acreditada</b> = la fuente pesa en el consenso por desempeño medido; sin pesos medidos toda fuente
+      figura «sin acreditar» (peso 1,0). Es evidencia de otro motor que el panel «Desempeño causal» de arriba (ledger del launcher).${
+      etiquetas.length ? " Etiquetas del producto: " + esc(etiquetas.join("; ")) + "." : ""}`;
   }
 
   /* ============================================================
@@ -2181,7 +2569,7 @@
      ============================================================ */
   async function recargar() {
     if (!E) return;                                   // la vista pudo desmontarse
-    if (E.alerta) E.alerta._desClave = null;          // invalida la caché de desempeño
+    if (E.alerta) { E.alerta._desClave = null; E.alerta._verClave = null; }   // invalida desempeño y verificación
     limpiarCacheDatos();                              // §P14/§P9: mallas y resúmenes caducan
     try { E.productos = await App.api("/cartas/productos"); }
     catch (e) { /* mantiene el árbol previo */ }
@@ -2194,7 +2582,7 @@
     if (!E) {
       E = { tipo: "pronostico", productos: { tipos: [] }, grid: {},
             // §P4: los cuatro toggles de capa inician ACTIVOS en todas las cartas.
-            capas: { grilla: true, isolineas: true, galapagos: true, estaciones: true },
+            capas: { grilla: true, isolineas: true, galapagos: true, estaciones: true, cantones: false },
             alerta: { varId: "alerta_lluvia", modo: "fija", inst: null,
                       opts: Object.fromEntries(TOGGLES.map(t => [t.id, t.on])) } };
     }
@@ -2202,7 +2590,9 @@
       try {
         E.productos = await App.api("/cartas/productos");
         E._stale = false;
-        if (E.productos.umbrales_modo) E.alerta.modo = E.productos.umbrales_modo;
+        // El sello del archivo activo manda; la configuración solo si no hay sello.
+        const _modo = modoDeSello(E.productos.alertas_meta) || E.productos.umbrales_modo;
+        if (_modo) E.alerta.modo = _modo;
       } catch (e) { App.aviso("No se pudo cargar el catálogo de cartas: " + e.message, "error"); }
     }
   }
@@ -2234,8 +2624,8 @@
   // montada, repinta ya; si no, asegurarEstado re-fetchea al volver a entrar.
   document.addEventListener("datos-actualizados", () => {
     if (!E) return;
-    if (E.alerta) E.alerta._desClave = null;
-    limpiarCacheDatos();   // §P14/§P9/§P18: mallas, resumen hidro y zonas FFR caducan
+    if (E.alerta) { E.alerta._desClave = null; E.alerta._verClave = null; }
+    limpiarCacheDatos();   // §P14/§P9/§P18: mallas, resumen hidro, zonas FFR y cantonal caducan
     if (vp) recargar();
     else E._stale = true;   // NO destruir E.productos: rompería un panel FFGS montado bajo Hidrología; re-fetch perezoso en asegurarEstado
   });
@@ -2728,5 +3118,25 @@
     rotuloMetodoUmbral,
     METODO_UMBRAL_ROTULO,
     MODO_UMBRAL_BOTON,
+    // Subsistema nuevo (hidromet/alertas): puras probadas en Node.
+    ALERTA_FUENTES,
+    ALERTA_FUENTE_ROTULO,
+    GENERADOR_DE_MODO,
+    VAR_LEDGER,
+    fuenteCorta,
+    modoDeSello,
+    variantesUmbral,
+    variantesParaVariable,
+    modoParaCarta,
+    claveCantonal,
+    leadDeRecord,
+    leadPorFecha,
+    leadCantonal,
+    filaCantonal,
+    poligonosCantonal,
+    textoCantonal,
+    filasVerificacion,
+    leadsVerificacion,
+    tablaVerificacionHTML,
   });
 })();

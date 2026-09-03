@@ -1,12 +1,20 @@
 {
   "esquema": "hidromet.degradado.v1",
   "etiqueta": "DEGRADADO — se publicó igual, sin acreditar; el dato va etiquetado",
-  "generado_utc": "2026-09-03T08:48:03+00:00",
-  "total": 7,
+  "generado_utc": "2026-09-03T21:17:22+00:00",
+  "total": 15,
   "degradado": [
     {
-      "area": "cartas:F1",
-      "motivo": "cartas:F1: FFGS lote obsoleto: ultimo archivo hace 9.9 h (maximo 6 h)"
+      "area": "sla",
+      "motivo": "motor operativo: el plazo daba 21569s y la tarea pide 21600s; se le da el tope pedido — el plazo mide, no recorta"
+    },
+    {
+      "area": "Cartas (cómputo)",
+      "motivo": "Desempeño hidroestimadores tras cohorte final (código 1)"
+    },
+    {
+      "area": "cartas:F2",
+      "motivo": "Cartas y alertas · cómputo falló: Desempeño hidroestimadores tras cohorte final (código 1)"
     },
     {
       "area": "cartas:F2",
@@ -29,8 +37,32 @@
       "motivo": "cartas:F2: cohorte de extremos/anomalías inválida (lluvia_anomalia_climatologica_24h.nc difiere del manifiesto)"
     },
     {
-      "area": "mlnwp:F2",
-      "motivo": "mlnwp:F2: base probabilística viva ausente"
+      "area": "cartas:F2",
+      "motivo": "cartas:F2: cohorte de extremos/anomalías inválida (los extremos no corresponden a la cohorte de alertas vigente)"
+    },
+    {
+      "area": "cartas:F2",
+      "motivo": "cartas:F2: familia calibrada fija/Tmin pierde skill HSS frente al mejor NWP (0.387 vs 0.458)"
+    },
+    {
+      "area": "cartas:F2",
+      "motivo": "cartas:F2: familia calibrada zph/Tmin pierde skill HSS frente al mejor NWP (0.387 vs 0.458)"
+    },
+    {
+      "area": "cartas:F2",
+      "motivo": "cartas:F2: calibradores con pérdida grave de HSS: fija/Tmin:CAT ΔHSS=-0.140; zph/Tmin:CAT ΔHSS=-0.140"
+    },
+    {
+      "area": "qc-fisico",
+      "motivo": "mlnwp:F2: serie OBS diverge del Parquet observacional estable (huérfanas=0, faltantes=92, valores_distintos=69); se retira el bloque observacional divergente"
+    },
+    {
+      "area": "gate",
+      "motivo": "QC FÍSICO (retiene ese producto) — mlnwp:F2: serie OBS diverge del Parquet observacional estable (huérfanas=0, faltantes=92, valores_distintos=69); se retira el bloque observacional divergente"
+    },
+    {
+      "area": "export",
+      "motivo": "1 producto(s) no regenerado(s): conservan su versión anterior, etiquetada con su propia fecha (fuentes-cartas-mutaron-durante-export)"
     }
   ]
 }
