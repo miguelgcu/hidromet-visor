@@ -1,12 +1,40 @@
 {
   "esquema": "hidromet.degradado.v1",
   "etiqueta": "DEGRADADO — se publicó igual, sin acreditar; el dato va etiquetado",
-  "generado_utc": "2026-09-04T03:05:52+00:00",
-  "total": 3,
+  "generado_utc": "2026-09-04T05:52:00+00:00",
+  "total": 10,
   "degradado": [
     {
-      "area": "cartas:F1",
-      "motivo": "cartas:F1: FFGS lote obsoleto: ultimo archivo hace 7.8 h (maximo 6 h)"
+      "area": "sla",
+      "motivo": "motor operativo: el plazo daba 14368s y la tarea pide 21600s; se le da el tope pedido — el plazo mide, no recorta"
+    },
+    {
+      "area": "Cartas (cómputo)",
+      "motivo": "Desempeño hidroestimadores tras cohorte final (código 1)"
+    },
+    {
+      "area": "cartas:F2",
+      "motivo": "Cartas y alertas · cómputo falló: Desempeño hidroestimadores tras cohorte final (código 1)"
+    },
+    {
+      "area": "cartas:F2",
+      "motivo": "cartas:F2: cohorte de extremos/anomalías inválida (helada_riesgo_24h.nc difiere del manifiesto)"
+    },
+    {
+      "area": "cartas:F2",
+      "motivo": "cartas:F2: cohorte de extremos/anomalías inválida (olacalor_riesgo_24h.nc difiere del manifiesto)"
+    },
+    {
+      "area": "cartas:F2",
+      "motivo": "cartas:F2: cohorte de extremos/anomalías inválida (helada_anom_tmin_24h.nc difiere del manifiesto)"
+    },
+    {
+      "area": "cartas:F2",
+      "motivo": "cartas:F2: cohorte de extremos/anomalías inválida (olacalor_anom_tmax_24h.nc difiere del manifiesto)"
+    },
+    {
+      "area": "cartas:F2",
+      "motivo": "cartas:F2: cohorte de extremos/anomalías inválida (lluvia_anomalia_climatologica_24h.nc difiere del manifiesto)"
     },
     {
       "area": "cartas:F2",
