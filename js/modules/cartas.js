@@ -1643,8 +1643,11 @@
       return;
     }
     if (!host.isConnected) return;
+    // El catálogo llega COMPLETO solo en el producto de red (sin código): los de
+    // estación lo traen vacío para no repetir 883 entradas en cada fichero. El
+    // selector se llena con el primero que sí lo traiga y no se vacía después.
     const estaciones = (datos && datos.estaciones) || [];
-    if (selEst && selEst.options.length <= 1) {
+    if (selEst && estaciones.length && selEst.options.length <= 1) {
       selEst.innerHTML = `<option value="">Promedio de la red 7-7 (${fmtNum(estaciones.length)})</option>` +
         estaciones.map(e => `<option value="${esc(e.codigo)}">${esc(e.codigo)} · ${esc(e.nombre || e.codigo)}</option>`).join("");
       selEst.value = _hvEstado.codigo;

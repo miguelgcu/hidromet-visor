@@ -1247,6 +1247,20 @@
       metricas: { fuera_muestra: formal, diagnostica: diagnostic },
       metodologia: manifest.method || "Dato medido con control de calidad > estimación grillada compatible > vacío; nunca se sobrescribe un dato medido." };
   }
+  /* Rango de fechas que el MAPA de lluvia puede pintar.
+     El mapa solo existe donde hay malla finita, y eso lo dice manifest.grid;
+     manifest.window llega más lejos porque incluye días con serie por estación
+     pero sin malla (el binario los trae rellenos de «missing»).
+     2026-09-03: tomar `window` abría «Mapa de lluvia por rango» EN BLANCO
+     —mapaDesdeChunks exige cobertura completa del rango y el último día tenía
+     0 de 15340 píxeles válidos—, y el usuario tenía que retroceder «Hasta» a
+     mano para ver algo. */
+  function rangoMapaDiario(manifest) {
+    const win = (manifest && manifest.window) || {};
+    const malla = (manifest && manifest.grid) || {};
+    return { desde: malla.desde || win.desde, hasta: malla.hasta || win.hasta };
+  }
+
   async function mapaDesdeChunks(manifest, desde, hasta, operation) {
     const start = fechaUTC(desde), end = fechaUTC(hasta), chunks = [];
     const anomaly = operation === "anomalia_mm" || operation === "anomalia_pct";
@@ -1336,12 +1350,7 @@
         const response = await fetch("productos/clima/diario/manifest.json", { cache: "no-cache" });
         if (!response.ok) throw new Error(`Producto diario no publicado (HTTP ${response.status})`);
         dailyManifest = await response.json();
-        // La disponibilidad la fija manifest.window: es el campo que gobierna la lectura
-        // del binario. manifest.grid podía quedarse un día atrás y el último día publicado
-        // era inalcanzable en el calendario (tope 21/08 con datos hasta el 22/08).
-        const win = dailyManifest.window || {};
-        availability = { mapa_precip: { desde: win.desde || (dailyManifest.grid || {}).desde,
-          hasta: win.hasta || (dailyManifest.grid || {}).hasta } };
+        availability = { mapa_precip: rangoMapaDiario(dailyManifest) };
         stations = dailyManifest.stations || [];
       } else {
         [availability, stations] = await Promise.all([
@@ -1739,5 +1748,6 @@
   if (typeof module === "object" && module.exports) module.exports = Object.freeze({
     ESCALA_IUV, TOPE_IUV, CAMPOS_IUV, escalaIuv, bandaIuv, colorscaleIuv, rotuloBanda, valorIuv,
     puntosIuv, ultimoObservado, distanciaKm, pesoJipijapa, rotuloFechaCorta, fechaLead,
+    rangoMapaDiario,
   });
 })();

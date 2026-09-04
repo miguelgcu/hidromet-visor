@@ -547,7 +547,22 @@ const App = (() => {
     clima: "Climatología",
     sngr: "Eventos de ríos",
     geoglows: "Caudales de ríos",
+    // El parte de degradación no solo trae áreas de CONTENIDO: también trae el
+    // área de la ETAPA que anotó el aviso ("qc-fisico", "gate", "export"…).
+    // Sin traducción salían crudas al tooltip público —"Secciones afectadas:
+    // …, qc-fisico, gate"—, justo los códigos internos que este bloque promete
+    // no enseñar. Están TODAS las que registran actualizador.py y
+    // estado_actualizacion.py (lo verifica hidromet/tests).
+    "qc-fisico": "Control físico del dato",
+    gate: "Control de publicación",
+    calidad: "Control de calidad",
     "pre-export": "Preparación de la publicación",
+    export: "Publicación del visor",
+    "post-export": "Cierre de la publicación",
+    outbox: "Envío de la publicación",
+    sla: "Tiempos de la actualización",
+    ml: "Pronóstico por aprendizaje automático",
+    "bases-nuevas": "Bases de datos del sistema",
   };
   function nombreArea(cod) {
     const base = String(cod == null ? "" : cod).split(":")[0].trim().toLowerCase();

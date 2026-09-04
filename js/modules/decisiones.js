@@ -122,10 +122,22 @@
      tarjeta. Antes el color exigia veredicto acreditado y el conteo no lo
      miraba: el mapa salia gris entero mientras debajo se leia "SI en 131",
      dos cosas contrarias a dos centimetros una de otra. */
+  /* Contrato productor-consumidor del aviso operativo.
+     2026-09-03: se exigia el centinela literal "ACCREDITED" en
+     estado_promocion, y NINGUN producto publicado lo emite: el ML nuevo escribe
+     ahi una frase ("ML nuevo: hindcast + operativo; verificacion publicada") y
+     declara la acreditacion en su propio booleano. Con el literal, las 176
+     estaciones quedaban en "aviso de respaldo" los cinco dias. Se leen los
+     booleanos del productor y se conserva el literal por compatibilidad. */
+  function avisoAcreditado(ll) {
+    return !!ll && ll.operacional === true
+      && (ll.calibrated_ml === true || ll.acreditado === true
+          || ll.estado_promocion === "ACCREDITED");
+  }
+
   function veredictoDe(ll) {
     if (!ll) return "sin_dato";
-    const acreditado = ll.operacional === true
-      && ll.estado_promocion === "ACCREDITED";
+    const acreditado = avisoAcreditado(ll);
     if (!acreditado) return "no_acreditado";
     if (ll.llueve === true) return "si";
     if (ll.llueve === false) return "no";
@@ -659,8 +671,7 @@
           <div class="v dec-sin">sin dato</div></div>
       </div>`;
     } else {
-      const operativa = ll.operacional === true
-        && ll.estado_promocion === "ACCREDITED";
+      const operativa = avisoAcreditado(ll);
       // Aviso de respaldo: el ensamble físico sí trae un SÍ/NO usable — se
       // enseña con su color y diciendo en qué se apoya, no como "sin".
       const respaldo = !operativa && typeof ll.llueve === "boolean";
@@ -698,8 +709,7 @@
         </div>
       </div>`;
     }
-    const pieLluvia = ll && ll.operacional === true
-      && ll.estado_promocion === "ACCREDITED"
+    const pieLluvia = avisoAcreditado(ll)
       ? "Lluvia: aviso operativo verificado con lo observado; SÍ cuando la probabilidad llega al 50 %."
       : "Lluvia: aviso de respaldo del promedio de modelos, sin corrección estadística; tiende a avisar de más.";
 
@@ -896,6 +906,12 @@
       purgarPlots();       // libera la instancia Plotly y su listener de resize
     },
   };
+
+  // Superficie pura para las pruebas Node del contrato de acreditación (mismo
+  // patrón que cartas.js y clima.js). En navegador no se expone ningún global.
+  if (typeof module === "object" && module.exports) module.exports = Object.freeze({
+    avisoAcreditado, veredictoDe,
+  });
 
   // Tras CUALQUIER actualización de datos: los caches quedan viejos → se vacían;
   // si la pestaña está montada, se re-renderiza con datos frescos.
