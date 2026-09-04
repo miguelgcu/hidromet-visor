@@ -52,16 +52,23 @@ html[data-tema="oscuro"] .ct-toggle.activo { color: #101B33; }
 /* v10: navegación de instante agrupada con los selectores (izquierda); toggles de capa a la derecha */
 .ct-inst-nav { display: flex; align-items: center; gap: 6px; }
 .ct-capas { display: flex; align-items: center; gap: 6px; margin-left: auto; }
-/* leyenda POR CARTA solo donde cada carta tiene escala PROPIA (FFGS y heladas);
-   las grillas de una misma variable × modelos usan la barra compartida bajo la grilla */
+/* UNA LEYENDA POR GRÁFICO en TODAS las pestañas de cartas (Advertencias, Pronóstico,
+   Calibrado, Hidroestimadores, FFGS y heladas): cada tarjeta lleva la suya en su propio
+   hueco .ct-ley-card, bajo el mapa y dentro de la tarjeta. Cuando los modelos comparten
+   escala la leyenda se REPITE por tarjeta; ya no hay barra compartida bajo la grilla. */
 .ct-carta .ct-ley-card { padding: 8px 13px 12px; border-top: 1px solid var(--line-3); }
 .ct-carta .ct-ley-card:empty { display: none; }
+/* la leyenda va DEBAJO del mapa dentro de la tarjeta: nunca lo tapa. Los números
+   son hijos absolutos de .ct-leyenda-ticks (position:relative), así que no ensanchan
+   la columna ni deforman el alto del lienzo (aspect-ratio fijo). min-width:0 evita
+   que una etiqueta larga estire la celda de la grilla. */
+.ct-carta .ct-ley-card { min-width: 0; }
 
-/* ---------- grilla de cartas: 3 por fila por defecto (FFGS y heladas);
-   con EXACTAMENTE 4 tarjetas (clase .n4, la pone el JS) → 2×2 real, sin
-   dejar la cuarta sola abajo con dos huecos. ---------- */
+/* ---------- grilla de cartas: SIEMPRE 3 por fila en escritorio, sean 1, 4, 6, 9 o 12
+   tarjetas (orden del dueño, 2026-09-03). La disposición NO depende de cuántas
+   fuentes publique el día: no hay modificador por número de cartas. Degradado:
+   3 columnas → 2 (≤1180px, tableta) → 1 (≤760px, teléfono). ---------- */
 .ct-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 13px; margin-bottom: 14px; }
-.ct-grid.n4 { grid-template-columns: repeat(2, 1fr); }
 @media (max-width: 1180px) { .ct-grid { grid-template-columns: repeat(2, 1fr); } }
 
 /* FFGS: rejilla de TODOS los productos del paso horario (leyenda por carta) */
@@ -70,6 +77,10 @@ html[data-tema="oscuro"] .ct-toggle.activo { color: #101B33; }
 .ct-grid.cuencas .ct-ley-card:empty { display: none; }
 .ct-hint { align-self: center; color: var(--muted-2); font-size: 11px; }
 @media (max-width: 1180px) { .ct-grid.cuencas { grid-template-columns: repeat(2, 1fr); } }
+/* 1 columna solo por debajo de 760px (antes 980): en tableta vertical dos cartas
+   siguen siendo legibles y una sola columna obligaba a desplazarse el doble. Va
+   DESPUÉS del corte de .cuencas: misma especificidad, gana la última regla. */
+@media (max-width: 760px) { .ct-grid, .ct-grid.cuencas { grid-template-columns: 1fr; } }
 
 /* ---------- tarjeta de carta (figure + img sobre degradado de mar) ---------- */
 .ct-carta { margin: 0; background: var(--surface); border: 1px solid var(--line);
@@ -120,7 +131,9 @@ html[data-tema="oscuro"] .ct-toggle.activo { color: #101B33; }
 /* táctil (sin hover): mostrar el hint de zoom tenue para que se sepa que se puede pellizcar */
 @media (hover: none) { .ct-zoomhint { opacity: .6; } }
 
-/* leyenda discreta compartida (debajo de la grilla) */
+/* leyenda discreta bajo un mapa: en CARTAS ya no se usa (todas las pestañas llevan
+   la leyenda POR CARTA, .ct-ley-card, arriba). La conserva el módulo Clima, que reusa
+   esta clase para la leyenda de sus mapas — no borrar. */
 .ct-leyenda-carta { margin: -2px 0 14px; }
 .ct-leyenda-carta:empty { display: none; }
 .ct-leyenda-cab { display: flex; align-items: baseline; gap: 10px; margin-bottom: 5px; }
@@ -217,7 +230,6 @@ html[data-tema="oscuro"] .ct-toggle.activo { color: #101B33; }
 
 /* ---------- responsive (área de trabajo estrecha) ---------- */
 @media (max-width: 980px) {
-  .ct-grid, .ct-grid.n4 { grid-template-columns: 1fr; }
   .ct-hv .ct-panel-cab { align-items: stretch; }
   .ct-hv-controles { margin-left: 0; flex-wrap: wrap; }
   .ct-hv-controles label:first-child { min-width: min(100%, 360px); flex: 1; }
@@ -236,8 +248,6 @@ html[data-tema="oscuro"] .ct-toggle.activo { color: #101B33; }
   .ct-inst-nav, .ct-derecha { flex-wrap: wrap; }
   /* controles de instante cómodos al tacto (40px = no revertir el target de base.css) */
   .ct-nav { width: 40px; height: 40px; }
-  /* grillas de cartas → 1 columna */
-  .ct-grid, .ct-grid.n4, .ct-grid.cuencas { grid-template-columns: 1fr; }
   /* paneles y tarjetas con menos padding */
   .ct-panel { padding: 14px; }
   /* tabla de umbrales (modal) con scroll horizontal */

@@ -865,7 +865,8 @@
     return fr;
   }
 
-  // Leyenda COMPARTIDA (una por grilla). Distingue escala DISCRETA (bandas iguales,
+  // Leyenda de una carta (por tarjeta en Advertencias/FFGS/heladas; compartida bajo la
+  // grilla en pronóstico/calibrado/hidro). Distingue escala DISCRETA (bandas iguales,
   // tick en su frontera real derivada del colorscale) de CONTINUA (gradiente, tick
   // por valor normalizado). Así no amontona ni desborda las etiquetas.
   function leyendaCarta(d, anchoPx) {
@@ -1307,15 +1308,17 @@
         { capture: true, passive: true });
     }
 
-    // Leyenda: POR CARTA si la figura tiene su propio hueco (FFGS: cada producto su
-    // escala); si no, una COMPARTIDA para toda la grilla (mismo producto × fuentes).
+    // UNA LEYENDA POR GRÁFICO (orden del dueño, 2026-09-03): TODAS las grillas de
+    // cartas —Advertencias, Pronóstico, Calibrado, Hidroestimadores, FFGS y heladas—
+    // pintan la leyenda dentro de su propia tarjeta. Ya no existe barra compartida
+    // bajo la grilla, ni siquiera cuando todos los modelos comparten escala.
     const carta = div.closest(".ct-carta");
     const leyCard = carta && carta.querySelector('[data-rol="ley-card"]');
     if (leyCard) {
-      leyCard.innerHTML = leyendaCarta(d, Math.max(0, leyCard.clientWidth - 26));
-    } else {
-      const ley = document.querySelector('[data-rol="leyenda-carta"]');
-      if (ley && !ley.dataset.built) { ley.dataset.built = "1"; ley.innerHTML = leyendaCarta(d, ley.clientWidth); }
+      // Ancho de SU PROPIA tarjeta: el hueco está vacío (y `:empty` lo oculta), así que
+      // su clientWidth sería 0 y la decimación de etiquetas caía siempre al mínimo de 6.
+      const anchoCarta = carta.clientWidth || leyCard.clientWidth || 0;
+      leyCard.innerHTML = leyendaCarta(d, Math.max(0, anchoCarta - 26));
     }
   }
 
@@ -1371,7 +1374,7 @@
 
   /* ============================================================
      CUERPO C — TIPOS GRILLADOS (Pronóstico/Calibrado/Hidro/Heladas/FFGS)
-     Barra: Variable · Período · navegador. Grilla 2×2 con las primeras
+     Barra: Variable · Período · navegador. Grilla de 3 columnas con las primeras
      4 fuentes del período (cada una su carta.png real).
      ============================================================ */
   // Instante por DEFECTO: el que tiene MÁS fuentes (registros) y, entre empates, el más
@@ -1407,6 +1410,11 @@
   // cuántas de las fuentes MOSTRADAS tienen registro en cada instante. Con eso el
   // selector de instantes deshabilita (option disabled + title) las fechas sin
   // ningún dato y anota "n/m" en las incompletas — nadie cae en pantallas vacías.
+  // Tope de fuentes de la grilla Pronóstico/Calibrado/Hidroestimadores. 6 = dos filas
+  // de tres: con 4 se quedaban FUERA los modelos nuevos del árbol (MONAN e IFS ENS en
+  // pronóstico, un calibrador en calibrado). cuerpoGrid y conectarGrid DEBEN usar el
+  // mismo tope: el contador de instantes con dato se calcula sobre las fuentes MOSTRADAS.
+  const MAX_FUENTES_GRID = 6;
   function fuentesVista(p, n) {
     const vistos = new Set(), out = [];
     for (const f of (p && p.fuentes) || []) {
@@ -1500,9 +1508,9 @@
 
     // §menús dinámicos: disponibilidad real por instante sobre las fuentes MOSTRADAS.
     // Si el instante activo quedó sin ninguna (instanteDefecto cuenta TODOS los
-    // registros, incluidos los de fuentes fuera del 2×2), salta al mejor con dato.
-    const fuentes4 = fuentesVista(p, 4);
-    const conteo = conteoInst(p, fuentes4);
+    // registros, incluidos los de fuentes fuera del tope), salta al mejor con dato.
+    const fuentesGrid = fuentesVista(p, MAX_FUENTES_GRID);
+    const conteo = conteoInst(p, fuentesGrid);
     if (!conteo[g.inst]) {
       let best = -1, bn = 0;
       for (let i = 0; i < conteo.length; i++) if (conteo[i] >= bn && conteo[i] > 0) { bn = conteo[i]; best = i; }
@@ -1530,7 +1538,7 @@
     p.instantes.forEach((x, i) => {
       const n = conteo[i];
       const des = n === 0 ? ' disabled title="Ningún modelo mostrado tiene dato en este instante"' : "";
-      const sufijo = n > 0 && n < fuentes4.length ? ` · ${n}/${fuentes4.length}` : "";
+      const sufijo = n > 0 && n < fuentesGrid.length ? ` · ${n}/${fuentesGrid.length}` : "";
       const dia = diaDe(i);
       if (dia !== _diaAbierto) {
         if (_diaAbierto != null) optsInst += "</optgroup>";
@@ -1541,8 +1549,9 @@
     });
     if (_diaAbierto != null) optsInst += "</optgroup>";
 
-    // Grilla 2×2: hasta 4 fuentes ÚNICAS del período (cada una con su capa/archivo).
-    const cartas = fuentes4.map(f => {
+    // Grilla de 3 columnas: hasta MAX_FUENTES_GRID fuentes ÚNICAS del período (cada
+    // una con su capa/archivo) y cada una con SU PROPIA leyenda.
+    const cartas = fuentesGrid.map(f => {
       const rotuloFuente = tipoId === "hidro"
         ? ({ PDIR: "PERSIANN-PDIR", CCS: "PERSIANN-CCS" }[f.fuente] || f.fuente)
         : f.fuente;
@@ -1557,11 +1566,13 @@
       }
       const params = paramsDescriptor(descriptor);
       // §P3: el nombre de descarga lleva la FECHA del instante (fuente_fecha_producto).
-      // La leyenda es COMPARTIDA (misma variable en todos los modelos): va bajo la grilla.
+      // Leyenda POR CARTA (orden del dueño, 2026-09-03): aunque todos los modelos
+      // comparten la MISMA escala, la leyenda se repite en cada tarjeta — no se comparte.
       return `<figure class="ct-carta">
         <div class="ct-carta-cab"><span class="titulo">${esc(rotuloFuente)}</span>
           <span class="meta" title="${esc(metaFuente)}">${esc(metaFuente)}</span></div>
         ${lienzoCarta(params, rotuloFuente + " · " + fechaLocalISO(inst.inicio) + " · " + figcap)}
+        <div class="ct-ley-card" data-rol="ley-card"></div>
       </figure>`;
     }).join("");
 
@@ -1591,8 +1602,7 @@
         </div>
         ${capasHTML()}
       </div>
-      <div class="ct-grid${fuentes4.length === 4 ? " n4" : ""}">${cartas}</div>
-      <div class="ct-leyenda-carta" data-rol="leyenda-carta"></div>
+      <div class="ct-grid">${cartas}</div>
       ${tipoId === "hidro" ? htmlValidacionHidro() : ""}`;
   }
 
@@ -1768,7 +1778,7 @@
     const p = v.periodos.find(x => x.horas === g.horas);
     const re = () => pintarCuerpo();
     // ◀ ▶ SALTAN los instantes deshabilitados (sin dato de ninguna fuente mostrada).
-    const conteo = conteoInst(p, fuentesVista(p, 4));
+    const conteo = conteoInst(p, fuentesVista(p, MAX_FUENTES_GRID));
     const salta = (dir) => {
       let i = g.inst + dir;
       while (i >= 0 && i < p.instantes.length && conteo[i] === 0) i += dir;
@@ -2210,10 +2220,12 @@
         params.cantonalFecha = fechaLocalISO(inst.inicio);
         params.cantonalRecord = descriptor.record;
       }
-      // Leyenda COMPARTIDA bajo la grilla (misma escala de niveles en todas las fuentes).
+      // Leyenda POR CARTA (orden del dueño, 2026-09-03): cada tarjeta lleva la suya en
+      // su propio hueco, bajo el mapa. pintarMapaCarta la rellena con leyendaCarta().
       return `<figure class="ct-carta">
         <div class="ct-carta-cab"><span class="titulo">${esc(rotulo)}${badge}</span><span class="meta">${meta}</span></div>
         ${lienzoCarta(params, "Alerta " + rotulo + " · " + fechaLocalISO(inst.inicio))}
+        <div class="ct-ley-card" data-rol="ley-card"></div>
       </figure>`;
     }).join("");
 
@@ -2260,8 +2272,7 @@
         ${capasHTML(true, true)}
       </div>
       ${sinArbol}
-      <div class="ct-grid${_hayDato && _lista.length === 4 ? " n4" : ""}">${cartas}</div>
-      <div class="ct-leyenda-carta" data-rol="leyenda-carta"></div>
+      <div class="ct-grid">${cartas}</div>
       ${notaFFR}
       ${notaCantonal}
       <div class="ct-panel" id="ct-desempeno">
@@ -3141,5 +3152,13 @@
     filasVerificacion,
     leadsVerificacion,
     tablaVerificacionHTML,
+    // Semilla de estado + cuerpos de las pestañas: SOLO para las pruebas Node
+    // (hidromet/tests/js/prueba_cartas_disposicion.js), que comprueban la
+    // disposición de la grilla y la leyenda por tarjeta sin navegador ni backend.
+    // La app nunca las llama: su estado lo construye asegurarEstado().
+    MAX_FUENTES_GRID,
+    _sembrarEstado(estado) { E = estado; },
+    cuerpoAlertas,
+    cuerpoGrid,
   });
 })();

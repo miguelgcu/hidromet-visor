@@ -1,16 +1,20 @@
 {
   "esquema": "hidromet.degradado.v1",
   "etiqueta": "DEGRADADO — se publicó igual, sin acreditar; el dato va etiquetado",
-  "generado_utc": "2026-09-04T00:52:00+00:00",
-  "total": 2,
+  "generado_utc": "2026-09-04T03:05:52+00:00",
+  "total": 3,
   "degradado": [
     {
-      "area": "cartas:F2",
-      "motivo": "cartas:F2: familia calibrada pctl/Tmin pierde skill HSS frente al mejor NWP (0.389 vs 0.459)"
+      "area": "cartas:F1",
+      "motivo": "cartas:F1: FFGS lote obsoleto: ultimo archivo hace 7.8 h (maximo 6 h)"
     },
     {
       "area": "cartas:F2",
-      "motivo": "cartas:F2: calibradores con pérdida grave de HSS: pctl/Tmin:CAT ΔHSS=-0.145"
+      "motivo": "cartas:F2: familia calibrada pctl/Tmin pierde skill HSS frente al mejor NWP (0.407 vs 0.470)"
+    },
+    {
+      "area": "cartas:F2",
+      "motivo": "cartas:F2: calibradores con pérdida grave de HSS: pctl/Tmin:CAT ΔHSS=-0.136"
     }
   ]
 }
