@@ -1,24 +1,20 @@
 {
   "esquema": "hidromet.degradado.v1",
   "etiqueta": "DEGRADADO — se publicó igual, sin acreditar; el dato va etiquetado",
-  "generado_utc": "2026-09-05T16:33:26+00:00",
-  "total": 12,
+  "generado_utc": "2026-09-06T01:08:32+00:00",
+  "total": 11,
   "degradado": [
     {
       "area": "sla",
-      "motivo": "motor operativo: el plazo daba 14368s y la tarea pide 21600s; se le da el tope pedido — el plazo mide, no recorta"
+      "motivo": "motor operativo: el plazo daba 14367s y la tarea pide 21600s; se le da el tope pedido — el plazo mide, no recorta"
     },
     {
-      "area": "Cartas (descarga)",
-      "motivo": "Calibrados + consenso (código 124)"
-    },
-    {
-      "area": "cartas:F1",
-      "motivo": "Cartas y alertas falló: Calibrados + consenso (código 124)"
+      "area": "Cartas (cómputo)",
+      "motivo": "Desempeño hidroestimadores tras cohorte final (código 1)"
     },
     {
       "area": "cartas:F2",
-      "motivo": "Cartas y alertas · cómputo omitida por dependencias fallidas: cartas:F1"
+      "motivo": "Cartas y alertas · cómputo falló: Desempeño hidroestimadores tras cohorte final (código 1)"
     },
     {
       "area": "cartas:F2",
@@ -42,15 +38,15 @@
     },
     {
       "area": "cartas:F2",
-      "motivo": "cartas:F2: cohorte de extremos/anomalías inválida (los extremos no corresponden a la cohorte de alertas vigente)"
-    },
-    {
-      "area": "cartas:F2",
       "motivo": "cartas:F2: familia calibrada pctl/Tmin pierde skill HSS frente al mejor NWP (0.405 vs 0.466)"
     },
     {
       "area": "cartas:F2",
       "motivo": "cartas:F2: calibradores con pérdida grave de HSS: pctl/Tmin:CAT ΔHSS=-0.130"
+    },
+    {
+      "area": "export",
+      "motivo": "1 producto(s) no regenerado(s): conservan su versión anterior, etiquetada con su propia fecha (fuentes-cartas-mutaron-durante-export)"
     }
   ]
 }

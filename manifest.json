@@ -1,9 +1,9 @@
 {
-  "generado": "2026-09-05 11:33",
+  "generado": "2026-09-05 20:08",
   "fuente": "Actualización operativa",
-  "ok": true,
-  "parcial": false,
-  "productos_con_fallback": 0,
+  "ok": false,
+  "parcial": true,
+  "productos_con_fallback": 1,
   "fallos": [],
   "areas_degradadas": [
     "mlnwp:F2"
