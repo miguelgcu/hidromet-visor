@@ -1,12 +1,7 @@
 {
   "esquema": "hidromet.degradado.v1",
   "etiqueta": "DEGRADADO — se publicó igual, sin acreditar; el dato va etiquetado",
-  "generado_utc": "2026-09-06T10:30:28+00:00",
-  "total": 1,
-  "degradado": [
-    {
-      "area": "sla",
-      "motivo": "motor operativo: el plazo daba 14369s y la tarea pide 21600s; se le da el tope pedido — el plazo mide, no recorta"
-    }
-  ]
+  "generado_utc": "2026-09-06T11:47:54+00:00",
+  "total": 0,
+  "degradado": []
 }
