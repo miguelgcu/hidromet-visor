@@ -6,7 +6,10 @@
   "productos_con_fallback": 1,
   "fallos": [],
   "areas_degradadas": [
-    "mlnwp:F2"
+    "mlnwp:F2",
+    "cartas:F1",
+    "cartas:F2",
+    "export"
   ],
   "productos_retenidos_qc_fisico": [],
   "aviso_degradacion": "DEGRADADO POR ORDEN DEL DUEÑO — respaldo físico etiquetado, no acreditado"
