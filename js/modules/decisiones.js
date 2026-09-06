@@ -15,7 +15,7 @@
         al corte del 50 %; los provisionales quedan neutrales;
         tooltip rico;
         pinch-zoom vía App.pinchZoomMapa).
-     3) EVIDENCIA strict-as-issued del MISMO producto, cuando existe,
+     3) EVIDENCIA medida del MISMO producto, cuando existe,
         como contexto secundario COLAPSABLE.
 
    Datos: reúsa los productos congelados del visor — /mlnwp/veredicto
@@ -36,9 +36,11 @@
 (() => {
   const esc = v => String(v ?? "").replace(/[&<>"']/g,
     c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const num = (v, nd = 1) => (v === null || v === undefined || Number.isNaN(v)) ? "—" : Number(v).toFixed(nd);
-  const sgn = v => (v === null || v === undefined || Number.isNaN(v)) ? "—"
-    : (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(Number(v)).toFixed(1);
+  // Los números de esta pantalla se escriben en el núcleo, como en el resto del
+  // visor: coma decimal y menos tipográfico. Con `toFixed` la tarjeta del
+  // veredicto decía «23.4 °C» al lado de la tabla de series que dice «23,4».
+  const num = (v, nd = 1) => App.fmtNum(v, nd);
+  const sgn = v => App.fmtSigno(v, 1);
   const normTxt = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
   // Redes fijas (mismo contrato que mlnwp.js). En el visor el slug de mlnwp/*
@@ -336,17 +338,17 @@
 
       const red = redEst(e);
       let h = `<b>${esc(e.nombre)}</b> · ${esc(cod)}<br><span style="color:#5A6678">${esc(App.redEtiqueta(e.region) || "—")}${red ? ` · ${esc(red)}` : ""}</span>`;
-      if (v === undefined) h += `<br>Cargando veredicto…`;
-      else if (!v || v.sin_datos) h += `<br>Sin veredicto publicado`;
+      if (v === undefined) h += `<br>Cargando pronóstico…`;
+      else if (!v || v.sin_datos) h += `<br>Sin pronóstico publicado`;
       else {
         if (ll) {
           h += operativa
             ? `<br>Lluvia ${fTxt}: <b>${esc(ll.texto || "—")}</b>${ll.prob != null ? ` · ${ll.prob} %` : ""}`
             : respaldo
               ? `<br>Lluvia ${fTxt} (aviso de respaldo, sin calibrar): <b>${esc(ll.texto || "—")}</b>${ll.prob != null ? ` · ${ll.prob} %` : ""}`
-              : `<br>Probabilidad sin calibrar: ${ll.prob != null ? `${ll.prob} %` : "—"} · sin veredicto`;
+              : `<br>Probabilidad sin calibrar: ${ll.prob != null ? `${ll.prob} %` : "—"}`;
           if (operativa && distanciaPp != null)
-            h += ` · a ${distanciaPp.toFixed(0)} pp del corte`;
+            h += ` · a ${num(distanciaPp, 0)} puntos del umbral`;
           const extra = [];
           if (ll.prob_fuerte != null) extra.push(`≥10 mm: ${ll.prob_fuerte} %`);
           if (extra.length) h += `<br>${extra.join(" · ")}`;
@@ -355,7 +357,7 @@
           h += `<br>Tmax ${num(v.tmax.valor)} °C${(v.tmin && v.tmin.valor != null) ? ` · Tmin ${num(v.tmin.valor)} °C` : ""}`;
         if (v.tendencia) h += `<br>Tendencia: ${esc(v.tendencia.texto)} (${sgn(v.tendencia.delta)} °C)`;
       }
-      h += `<br><span style="color:#8794A5">clic → veredicto completo</span>`;
+      h += `<br><span style="color:#8794A5">clic para ver el detalle</span>`;
       hover.push(h);
     }
     return { color, size, lineColor, lineWidth, hover };
@@ -364,7 +366,8 @@
   function dibujarMapa() {
     const el = document.getElementById("dec-mapa");
     if (!el) return;
-    if (!window.Plotly) { el.innerHTML = `<div class="vacio">Plotly no disponible</div>`; return; }
+    // El nombre de la librería de gráficos no le dice nada a quien pronostica.
+    if (!window.Plotly) { el.innerHTML = vacio("El mapa no se pudo dibujar en este navegador."); return; }
     const traces = [];
     const land = landTrace();
     if (land) traces.push(land);
@@ -443,7 +446,7 @@
     const partes = [];
     if (si || no) partes.push(`SÍ en ${si} · NO en ${no}`);
     if (rsi || rno) partes.push(`aviso de respaldo: lluvia en ${rsi} · sin lluvia en ${rno}`);
-    if (sinAcreditar) partes.push(`sin veredicto en ${sinAcreditar}`);
+    if (sinAcreditar) partes.push(`sin decisión en ${sinAcreditar}`);
     if (sin) partes.push(`sin dato ${sin}`);
     el.textContent = partes.join(" · ") || "sin datos";
     el.title = (rsi || rno)
@@ -704,7 +707,7 @@
             return `<div class="mini"${titulo}><span class="k">Lluvia fuerte ≥ 10 mm</span><span class="v"${estilo}>${pf != null ? `${pf} %` : "—"}</span></div>`;
           })()}
           ${operativa
-            ? `<div class="mini" title="${esc(distanciaTxt)}; no representa confianza ni acierto comprobado"><span class="k">Margen sobre el 50 %</span><span class="v">${distanciaPp == null ? "—" : `${distanciaPp.toFixed(0)} pp`}</span></div>`
+            ? `<div class="mini" title="${esc(distanciaTxt)}; no representa confianza ni acierto comprobado"><span class="k">Margen sobre el 50 %</span><span class="v">${num(distanciaPp, 0)} pp</span></div>`
             : `<div class="mini" title="Cuántos modelos del promedio dan lluvia; sin corrección estadística"><span class="k">En qué se apoya</span><span class="v">${esc(baseTxt)}</span></div>`}
         </div>
       </div>`;
@@ -729,7 +732,7 @@
 
     return `<div class="ml-card dec-verd">
       ${cab}
-      ${viejo ? `<div class="dec-stale">⚠ Veredicto emitido para el ${ddmm(v.fecha)} — los productos publicados envejecen hasta la próxima actualización.</div>` : ""}
+      ${viejo ? `<div class="dec-stale">⚠ Pronóstico emitido para el ${ddmm(v.fecha)}</div>` : ""}
       ${hero}
       <div class="dec-kpis">
         ${kpiTemp("T. máxima", tx)}
@@ -748,30 +751,49 @@
       <span class="suave" style="font-size:12px">${esc(motivo)}</span></div>`;
   }
 
+  /* El cruce con la tabla de validación se hacía por DOS cosas que el producto
+     publicado no tiene:
+       · el centinela `A_AS_ISSUED`, que era el nombre del estándar del motor
+         anterior — hoy la verificación publicada se llama de otra manera, así
+         que el filtro no dejaba pasar NINGUNA fila; y
+       · el nombre del modelo, comparado contra la clave interna de la tabla.
+     Con las dos, la tarjeta decía siempre «Aún no hay comparación publicada»
+     encima de un producto que sí la trae medida. Ahora se cruza por el nombre
+     publicado o por la clave, y basta con que la fila tenga días medidos: el
+     estándar no se toca ni se reescribe, solo se deja de exigir uno que ya
+     no se emite. */
+  const mismoModelo = (m, referencia) => !!m && referencia != null && referencia !== ""
+    && (String(m.alias || "") === String(referencia)
+        || String(m.modelo || "") === String(referencia));
+  const nombreFila = m => esc(String(m.alias || "").trim() || etModelo(m.modelo));
+  const conDiasMedidos = m => Number(m.n) > 0;
+  const delPlazo = (m, dia) => m.lead == null || Number(m.lead) === Number(dia);
+
   function filaMismoProducto(etiqueta, d, t, dia) {
     const modeloPref = t && t.modelo;
     if (!modeloPref)
       return filaSinEvidencia(
-        etiqueta, "El veredicto no identifica un modelo emisor verificable.");
-    const fila = d && (d.modelos || []).find(m =>
-      m.modelo === modeloPref && m.estandar === "A_AS_ISSUED"
-      && Number(m.n) > 0);
+        etiqueta, "Sin un modelo al que atribuir este pronóstico.");
+    const candidatas = (d && (d.modelos || []).filter(m =>
+      mismoModelo(m, modeloPref) && conDiasMedidos(m))) || [];
+    // Del plazo que se está viendo si existe; si no, la primera que haya.
+    const fila = candidatas.find(m => delPlazo(m, dia)) || candidatas[0];
     if (fila)
       return `<div class="dec-val-fila">
         <span class="var">${etiqueta}</span>
-        <span class="mod"><span class="ml-mod-punto" style="background:${esc(fila.color || "#888")}"></span>${esc(etModelo(fila.modelo))}</span>
+        <span class="mod"><span class="ml-mod-punto" style="background:${esc(fila.color || "#888")}"></span>${nombreFila(fila)}</span>
         <span class="met">se equivoca de media en ${num(fila.mae)} °C</span>
         ${calBadge(fila.rating)}
         ${pillConf(fila.confianza)}
-        <span class="n">${fila.n} fechas</span>
+        <span class="n">${num(fila.n, 0)} días medidos</span>
       </div>`;
     // El emisor es el promedio de modelos: la lista publicada trae los modelos
     // SUELTOS que lo componen — se resume su desempeño en vez de buscar un
     // nombre que no existe (antes esta fila salía siempre vacía).
     const miembros = (t && t.miembros) || [];
     const filas = miembros.length ? ((d && d.modelos) || []).filter(m =>
-      miembros.includes(m.modelo) && m.estandar === "A_AS_ISSUED"
-      && Number(m.n) > 0 && (m.lead == null || Number(m.lead) === dia)) : [];
+      miembros.some(x => mismoModelo(m, x))
+      && conDiasMedidos(m) && delPlazo(m, dia)) : [];
     const maes = filas.map(m => Number(m.mae)).filter(x => !Number.isNaN(x));
     if (!maes.length)
       return filaSinEvidencia(
@@ -779,7 +801,7 @@
     const nMod = new Set(filas.map(m => m.modelo)).size;
     const nTot = filas.reduce((s, m) => s + (Number(m.n) || 0), 0);
     return `<div class="dec-val-fila"><span class="var">${etiqueta}</span>
-      <span class="suave" style="font-size:12px">Los ${nMod} modelos del promedio con datos se equivocan de media entre ${num(Math.min(...maes))} y ${num(Math.max(...maes))} °C frente a lo medido (${nTot} comparaciones).</span></div>`;
+      <span class="suave" style="font-size:12px">Los ${num(nMod, 0)} modelos del promedio con datos se equivocan de media entre ${num(Math.min(...maes))} y ${num(Math.max(...maes))} °C frente a lo medido (${num(nTot, 0)} días medidos).</span></div>`;
   }
 
   // Fila de lluvia: en vez de un "sin evidencia" perpetuo, lo que el fichero
@@ -823,7 +845,7 @@
         <div class="dec-stale" id="dec-aviso-fecha" role="alert" hidden
           style="font-size:14px;font-weight:600;padding:10px 14px;margin-bottom:10px"></div>
         <div class="dec-top">
-          <div class="dec-fecha-nav" role="group" aria-label="Día del veredicto">
+          <div class="dec-fecha-nav" role="group" aria-label="Día del pronóstico">
             <button type="button" class="dec-nav-btn" id="dec-nav-prev" title="Día anterior" aria-label="Día anterior">${FLECHA_I}</button>
             <div class="dec-fecha-caja" aria-live="polite">
               <span class="dec-fecha-txt" id="dec-fecha"></span>
@@ -910,7 +932,7 @@
   // Superficie pura para las pruebas Node del contrato de acreditación (mismo
   // patrón que cartas.js y clima.js). En navegador no se expone ningún global.
   if (typeof module === "object" && module.exports) module.exports = Object.freeze({
-    avisoAcreditado, veredictoDe,
+    avisoAcreditado, veredictoDe, filaMismoProducto, mismoModelo,
   });
 
   // Tras CUALQUIER actualización de datos: los caches quedan viejos → se vacían;

@@ -823,7 +823,7 @@
           <div class="gg-det-meta">
             <span class="gg-tag">COMID <b>${esc(r.river_id)}</b></span>
             ${(typeof r.lat === "number" && typeof r.lon === "number")
-              ? `<span class="gg-tag">${r.lat.toFixed(3)}°, ${r.lon.toFixed(3)}°</span>` : ""}
+              ? `<span class="gg-tag">${App.fmtNum(r.lat, 3, { minimos: 3 })}°, ${App.fmtNum(r.lon, 3, { minimos: 3 })}°</span>` : ""}
             <span class="gg-tag">${esc(r.fuente || "GEOGLOWS ECMWF v2")}</span>
             ${(r.inicio_pronostico || r.emitido)
               ? `<span class="gg-tag">inicio <b>${esc(String(r.inicio_pronostico || r.emitido).slice(0, 10))}</b></span>`

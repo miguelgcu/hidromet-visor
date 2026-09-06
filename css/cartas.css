@@ -38,6 +38,13 @@
 .ct-nav[data-rol="dprev"], .ct-nav[data-rol="dnext"] { font-size: 10px; letter-spacing: -1px; }
 .ct-instante { font: 500 12.5px var(--mono); color: var(--ink); }
 
+/* ---------- selector de umbrales: los TRES criterios, siempre los tres ----------
+   El criterio que ahora no se puede servir (ZPH fuera de precipitación, o uno sin
+   cartas publicadas) NO desaparece: se queda en su sitio, apagado y con el borde
+   punteado, y la razón vive en su tooltip. Ni un párrafo bajo la barra. */
+.ct-umbral-seg button[disabled] { opacity: .45; cursor: not-allowed; border-style: dashed; }
+.ct-umbral-seg button[disabled]:hover { border-color: var(--ctrl-bd); }
+
 /* ---------- toggles de capa (activo = relleno slate) ---------- */
 .ct-toggles { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
 .ct-toggle { font: 600 11px var(--fuente); color: var(--muted); background: var(--surface-3);

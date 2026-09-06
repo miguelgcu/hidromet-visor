@@ -9,8 +9,7 @@
 (() => {
   const esc = v => String(v ?? "").replace(/[&<>"']/g,
     c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const num = (v, d = 0) => (v == null || isNaN(v) ? "—" : Number(v).toLocaleString("es-EC",
-    { minimumFractionDigits: d, maximumFractionDigits: d }));
+  const num = (v, d = 0) => App.fmtNum(v, d);
   // Estados con voz propia: icono + texto centrado (usa .cl-vacio de clima.css).
   const vacio = (ic, txt) => `<div class="cl-vacio"><span class="ic">${ic}</span><span>${txt}</span></div>`;
   const cargando = txt => vacio("⏳", txt || "Cargando…");
@@ -48,7 +47,9 @@
           shortDays: ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"],
           months: ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"],
           shortMonths: ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"],
-          date: "%d/%m/%Y" } });
+          date: "%d/%m/%Y",
+          // Los números de los globos y de los ejes también son castellano.
+          decimal: ",", thousands: ".", grouping: [3], currency: ["", " $"] } });
       } catch (e) { /* sin registro: los ejes quedan en inglés, nada se rompe */ }
       _locEs = true;
     }
@@ -163,7 +164,7 @@
       niv.forEach((v, i) => {
         if (i % salto !== 0 && i !== niv.length - 1) return;
         const pos = Math.max(0, Math.min(100, ((v - d.vmin) / rango) * 100));
-        tk += `<span class="t" style="left:${pos.toFixed(2)}%">${esc(String(+v.toFixed(dec)))}</span>`;
+        tk += `<span class="t" style="left:${pos.toFixed(2)}%">${esc(num(v, dec))}</span>`;
       });
     } else {
       // Respaldo (mapas generados en el navegador, sin "niveles"): ticks "bonitos"
@@ -172,7 +173,7 @@
       const paso = [1, 2, 2.5, 5, 10].map(m => m * pot).find(s => rango / s <= 7) || crudo;
       for (let v = Math.ceil(d.vmin / paso) * paso; v <= d.vmax + 1e-9; v += paso) {
         const pos = ((v - d.vmin) / rango) * 100;
-        tk += `<span class="t" style="left:${pos.toFixed(2)}%">${esc(String(+v.toFixed(dec)))}</span>`;
+        tk += `<span class="t" style="left:${pos.toFixed(2)}%">${esc(num(v, dec))}</span>`;
       }
     }
     return `<div class="ct-leyenda-cab"><span class="ct-leyenda-unidad mono">${esc(d.unidad || "")}</span>` +
@@ -308,12 +309,12 @@
     const bp = banda(R.precip, 0), bx = banda(R.tmax, 1), bn = banda(R.tmin, 1);
     return `<table class="cl-tabla"><thead><tr><th>Variable</th>${meses.map(m => `<th>${esc(m)}</th>`).join("")}</tr></thead>
       <tbody>
-        ${V.precip ? fila("Precip (mm)", V.precip.valores) : ""}
-        ${bp ? fila("Precip P10–P90 obs.", bp, "cl-pct") : ""}
+        ${V.precip ? fila("Lluvia (mm)", V.precip.valores) : ""}
+        ${bp ? fila("Lluvia P10–P90 medida", bp, "cl-pct") : ""}
         ${V.tmax ? fila("Tmáx (°C)", V.tmax.valores) : ""}
-        ${bx ? fila("Tmáx P10–P90 obs.", bx, "cl-pct") : ""}
+        ${bx ? fila("Tmáx P10–P90 medida", bx, "cl-pct") : ""}
         ${V.tmin ? fila("Tmín (°C)", V.tmin.valores) : ""}
-        ${bn ? fila("Tmín P10–P90 obs.", bn, "cl-pct") : ""}
+        ${bn ? fila("Tmín P10–P90 medida", bn, "cl-pct") : ""}
         ${V.pet ? fila("PET (mm)", V.pet.valores) : ""}
       </tbody></table>`;
   }
@@ -326,7 +327,7 @@
         const o = r[k];
         const rec = x => x ? `${num(x.valor, 1)} <small>${esc(u)}</small> <span class="cl-fecha">${esc(x.fecha)}</span>` : "—";
         return `<tr><td>${esc(et)}</td><td>${o.n_anios != null ? num(o.n_anios) : "—"} <small>${o.desde}–${o.hasta}</small></td>
-          <td>${num(o.completitud, 0)}%</td><td>${rec(o.record_max)}</td><td>${k === "precip" ? "—" : rec(o.record_min)}</td></tr>`;
+          <td>${num(o.completitud, 0)} %</td><td>${rec(o.record_max)}</td><td>${k === "precip" ? "—" : rec(o.record_min)}</td></tr>`;
       }).join("");
     if (!filas) return "";
     return `<div class="cl-tabla-scroll"><table class="cl-tabla cl-tabla-obs">
@@ -350,7 +351,7 @@
     const fuera = p.fuera_dominio || !(p.vars && p.vars.precip && p.vars.precip.anual != null);
     if (fuera) return `<div class="cl-card">${titulo ? `<p class="cl-maptit">${esc(titulo)}</p>` : ""}
       <div class="cl-aviso"><span class="ic">🌐</span><p><b>Fuera del dominio continental.</b> La climatología grillada
-      cubre Ecuador continental (0.05°); Galápagos y el océano quedan fuera. Si es una estación insular,
+      cubre Ecuador continental (0,05°); Galápagos y el océano quedan fuera. Si es una estación insular,
       abajo tienes su serie observada.</p></div>
       ${resumenObs(p.resumen_obs)}</div>`;
     const V = p.vars;
@@ -376,7 +377,7 @@
     const V = p.vars || {};
     const kpi = (e, v, u, d, c) => `<div class="cl-kpi" style="--kc:${c}"><div class="v">${num(v, d)} <small>${esc(u)}</small></div><div class="e">${esc(e)}</div></div>`;
     const cobertura = ["precip", "tmax", "tmin", "pet"].filter(k => V[k]).map(k =>
-      `${V[k].etiqueta}: ${num(V[k].cobertura_pct, 1)}% (${num(V[k].pixeles_validos)} píxeles)`).join(" · ");
+      `${V[k].etiqueta}: ${num(V[k].cobertura_pct, 1)} % (${num(V[k].pixeles_validos)} píxeles)`).join(" · ");
     return `<div class="cl-card">
       <p class="cl-maptit">${esc(p.nombre)}${p.region ? ` · ${esc(App.redEtiqueta(p.region))}` : ""}</p>
       <div class="cl-kpis">
@@ -665,12 +666,12 @@
     async function consultar() {
       const la = parseFloat(lat.value), lo = parseFloat(lon.value);
       if (isNaN(la) || isNaN(lo)) { App.aviso("Ingresa latitud y longitud válidas.", "error"); return; }
-      tit.textContent = `Climograma — ${la.toFixed(2)}, ${lo.toFixed(2)}`;
+      tit.textContent = `Climograma — ${num(la, 2)}, ${num(lo, 2)}`;
       limpiarPlot(climo); climo.innerHTML = cargando(); ficha.innerHTML = ""; ultimo = null;
       let p;
       try { p = await App.api(`/clima/punto?lat=${la}&lon=${lo}`); }
       catch (e) { climo.innerHTML = vacio("⚠️", esc(e.message)); return; }
-      ficha.innerHTML = tarjetaPunto(p, `Punto ${la.toFixed(3)}, ${lo.toFixed(3)}`);
+      ficha.innerHTML = tarjetaPunto(p, `Punto ${num(la, 3)}, ${num(lo, 3)}`);
       if (p.error || p.fuera_dominio || !(p.vars && p.vars.precip && p.vars.precip.anual != null)) {
         climo.innerHTML = vacio("🌐", "Fuera del dominio continental.");
       } else { climo.innerHTML = ""; pintarClimograma(climo, p); ultimo = p; }
@@ -730,7 +731,7 @@
     const k = (e, v, c) => `<div class="cl-kpi" style="--kc:${c}"><div class="v">${v}</div><div class="e">${e}</div></div>`;
     return `<div class="cl-kpis" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
       ${k("Récords máx " + d.anio, `<span style="color:#c43c28">${d.resumen.n_record_max}</span>`, "#c43c28")}
-      ${k("Récords mín " + d.anio, d.es_precip ? "<small>n/a precip</small>" : `<span style="color:#1b6fae">${d.resumen.n_record_min}</span>`, "#1b6fae")}
+      ${k("Récords mín " + d.anio, d.es_precip ? "<small>no aplica a la lluvia</small>" : `<span style="color:#1b6fae">${d.resumen.n_record_min}</span>`, "#1b6fae")}
       ${k("Máx del año", ext ? `${num(ext.valor, 1)} <small>${u}</small>` : "—", d.es_precip ? COL.precip : COL.tmax)}
       ${k("Años de referencia", `${d.periodo.desde}–${d.periodo.hasta}`, "var(--cyan)")}
     </div>`;
@@ -991,7 +992,7 @@
     c.innerHTML = `<div class="cl-wrap cl-enso">
       <div class="cl-glo-intro cl-enso-intro">
         <h3>El Niño histórico · impacto local observado</h3>
-        <p>Los episodios se clasifican con <b>RONI de NOAA CPC</b> (≥ +0.5 °C durante al menos cinco temporadas solapadas).
+        <p>Los episodios se clasifican con <b>RONI de NOAA CPC</b> (≥ +0,5 °C durante al menos cinco temporadas solapadas).
         Cada estación se compara mes a mes contra su normal observada 1991–2020. RONI describe el Pacífico; el gráfico mide
         el impacto local y no presupone que todas las regiones respondan igual.</p>
       </div>
@@ -1062,7 +1063,7 @@
     async function loadStation() {
       if (!station.value) return;
       limpiarPlot(rain); limpiarPlot(temperature);
-      status.innerHTML = cargando("Agregando meses desde la observación canónica…");
+      status.innerHTML = cargando("Agrupando los meses medidos…");
       kpis.innerHTML = ""; months.innerHTML = ""; events.innerHTML = "";
       try { payload = await App.api(`/clima/enso?codigo=${encodeURIComponent(station.value)}`); }
       catch (e) { status.innerHTML = vacio("⚠️", esc(e.message)); payload = null; return; }
@@ -1079,9 +1080,11 @@
       const best = available.slice().sort((a, b) =>
         ((b.resumen || {}).precip_cobertura_pct || 0) - ((a.resumen || {}).precip_cobertura_pct || 0)
         || Math.abs(Number(b.pico_c || 0)) - Math.abs(Number(a.pico_c || 0)))[0] || selectable[0];
-      method.innerHTML = `<b>Cobertura honesta.</b> ${esc(payload.nota || "")}
-        Fuente ENSO: <a href="${esc((payload.fuente_roni || {}).url || "#")}" target="_blank" rel="noopener">NOAA CPC RONI</a>,
-        caché SHA-256 <code>${esc(String((payload.fuente_roni || {}).sha256 || "").slice(0, 12))}…</code>.
+      // La huella del fichero descargado (SHA-256) es un registro de ejecución:
+      // le decía a un meteorólogo doce caracteres que no significan nada para él.
+      // Queda la procedencia, que sí es información: quién publica el índice.
+      method.innerHTML = `<b>Cobertura honesta.</b> ${esc(App.textoServidor(payload.nota))}
+        Fuente del índice de El Niño: <a href="${esc((payload.fuente_roni || {}).url || "#")}" target="_blank" rel="noopener">NOAA · Centro de Predicción del Clima</a>.
         La temperatura se muestra únicamente donde también existe normal formal observada.`;
       renderEvent(best && best.id);
     }
@@ -1108,6 +1111,14 @@
   }
 
   // PESTAÑA — SERIES, RELLENO Y MAPA POR RANGO ------------------------------
+  // De dónde sale cada punto de la serie completada, dicho como se dice en la
+  // leyenda del gráfico. La clave del producto no se toca.
+  const PROCEDENCIA_SERIE = {
+    observado: "Dato medido en la estación",
+    estimado_grillado: "Estimación de la grilla",
+    vacio: "Sin dato",
+  };
+
   function pintarSerieRelleno(host, d) {
     if (!window.Plotly || !host) return;
     if (!d || d.error) { limpiarPlot(host); host.innerHTML = vacio("⚠️", esc(d && d.error || "Sin datos")); return; }
@@ -1116,9 +1127,12 @@
       { type: "scatter", mode: "lines", x: fechas, y: d.estimado_grillado, name: "Grilla corregida",
         line: { color: "#2f7fc1", width: 1.5 }, opacity: .75,
         hovertemplate: `%{x}<br>%{y:.1f} ${u}<extra>Estimación grillada</extra>` },
+      // El globo enseñaba la procedencia con la palabra del código
+      // («estimado_grillado», «vacio»). El dato no cambia: solo se dice en
+      // castellano de dónde sale ese punto.
       { type: "scatter", mode: "lines", x: fechas, y: d.completado, name: "Serie completada",
         line: { color: "#26a69a", width: 2.2 },
-        customdata: d.procedencia || [],
+        customdata: (d.procedencia || []).map(p => PROCEDENCIA_SERIE[p] || "De dónde sale: sin declarar"),
         hovertemplate: `%{x}<br><b>%{y:.1f} ${u}</b><br>%{customdata}<extra>Completada</extra>` },
       // "Dato medido" en llano (antes "Observación QC"); color por TEMA: el azul
       // marino fijo desaparecía sobre la tarjeta oscura.
@@ -1154,13 +1168,14 @@
       ${met("Días medidos", c.observados, `de ${c.dias || 0} días del rango`)}
       ${met("Días rellenados", c.rellenados, "estimación trazable")}
       ${met("Días vacíos", c.vacios, "sin estimación compatible")}
-      ${met(`Error medio${u ? ` (${u})` : ""}`, fm.mae, fm.n ? `sobre ${fm.n} comparaciones` : "no disponible en el rango")}
+      ${met(`Error medio${u ? ` (${u})` : ""}`, fm.mae, fm.n ? `sobre ${num(fm.n)} comparaciones` : "no disponible en el rango")}
       ${met(`Error típico${u ? ` (${u})` : ""}`, fm.rmse, fm.n ? "pesa más los fallos grandes" : "comparado con estaciones no usadas")}
-      ${met("Parecido con lo medido", fm.correlacion, fm.n ? "1 = coincidencia perfecta" : "comparado con estaciones no usadas")}
+      ${met("Parecido con lo medido", fm.correlacion, fm.n ? "en esas mismas comparaciones" : "comparado con estaciones no usadas")}
     </div>
     <details class="cl-metricas-det"><summary>Detalle técnico de la comparación de la grilla</summary>
-      <p>n=${num(dg.n)} · MAE=${num(dg.mae, 2)} · RMSE=${num(dg.rmse, 2)} · sesgo=${num(dg.bias, 2)} · r=${num(dg.correlacion, 2)}.</p>
-      <p>${esc(dg.nota || "")}</p></details>`;
+      <p>Comparaciones ${num(dg.n)} · error medio ${num(dg.mae, 2)} ${esc(u)} · error típico ${num(dg.rmse, 2)} ${esc(u)}
+        · sesgo ${App.fmtSigno(dg.bias, 2)} ${esc(u)} · parecido con lo medido ${num(dg.correlacion, 2)}.</p>
+      <p>${esc(App.textoServidor(dg.nota))}</p></details>`;
   }
 
   const _dailyChunks = new Map();
@@ -1421,10 +1436,12 @@
         lastSeries = d; pintarSerieRelleno(seriesHost, d); metricsHost.innerHTML = metricasRelleno(d);
         // Si la metodología llega como identificador interno de algoritmo (un slug con
         // guiones, sin espacios), traducirla a una frase y dejar el código como apunte.
-        const metTxt = /^[a-z0-9_-]+$/i.test(String(d.metodologia || "")) && String(d.metodologia).includes("-")
-          ? `Relleno con la grilla corregida por las estaciones vecinas (método técnico: ${d.metodologia}).`
-          : d.metodologia;
-        method.textContent = `${metTxt} Contrato: ${d.contrato_grilla}.`;
+        // Si la metodología llega como identificador interno de algoritmo (un slug
+        // con guiones, sin espacios), se dice la frase y NO se enseña el slug.
+        method.textContent = /^[a-z0-9_-]+$/i.test(String(d.metodologia || ""))
+          && String(d.metodologia).includes("-")
+          ? "Relleno con la grilla corregida por las estaciones vecinas."
+          : String(d.metodologia || "");
       } catch (e) { limpiarPlot(seriesHost); seriesHost.innerHTML = vacio("⚠️", esc(e.message)); }
     }
     async function updateAll() { await Promise.all([loadMap(), loadSeries()]); }
@@ -1461,7 +1478,7 @@
     { id: "cams", et: "CAMS crudo", corto: "CAMS crudo",
       t: "Índice UV máximo diario de CAMS Global en la celda de 0,4° (~44 km) más cercana a la estación, sin interpolar." },
     { id: "corr", et: "Corregido Jipijapa (experimental)", corto: "corregido Jipijapa",
-      t: "CAMS crudo más el residual observado en Jipijapa, atenuado con la distancia: exp(−d/75 km). Una sola estación, coordenadas aproximadas: no acreditado." },
+      t: "CAMS ajustado con la medición de Jipijapa; el ajuste pierde fuerza con la distancia. Una sola estación, de coordenadas aproximadas: no acreditado." },
     { id: "cs", et: "CAMS cielo despejado", corto: "cielo despejado",
       t: "Índice UV máximo diario que CAMS daría sin nubes: el tope físico del día." },
   ]);
@@ -1630,8 +1647,10 @@
     try { p = await App.api("/clima/iuv_estaciones"); }
     catch (e) { c.innerHTML = vacio("⚠", esc(e.message)); return; }
     if (!p || p.error || !p.available) {
+      const motivo = App.textosServidor([p && p.diagnostic, p && p.error])[0]
+        || "Todavía no hay índice UV publicado.";
       c.innerHTML = `<div class="cl-wrap"><div class="cl-glo-intro cl-iuv-intro"><h3>IUV por estación</h3>
-        <p>${esc((p && (p.diagnostic || p.error)) || "Sin base de índice UV: no se muestra un campo anterior ni se infieren valores.")}</p></div></div>`;
+        <p>${esc(motivo)}</p></div></div>`;
       return;
     }
     const escala = escalaIuv(p);
@@ -1643,8 +1662,8 @@
     const estJip = jip.valores ? jip : ests.find(e => e && String(e.codigo) === String(jip.codigo || "IUVJIP")) || null;
     // D-B3: por defecto solo las estaciones activas; el toggle enseña todas las que tienen coordenadas.
     const st = { lead: String(leads[0].lead), campo: "cams", activas: nAct > 0 };
-    const etiquetas = Array.isArray(p.etiquetas) ? p.etiquetas.map(String)
-      : (p.etiquetas && typeof p.etiquetas === "object" ? Object.entries(p.etiquetas).map(([k, v]) => `${k}: ${v}`) : []);
+    const etiquetas = App.textosServidor(Array.isArray(p.etiquetas) ? p.etiquetas
+      : (p.etiquetas && typeof p.etiquetas === "object" ? Object.values(p.etiquetas) : []));
     const captura = String(p.captura_utc || "").replace("T", " ").slice(0, 16);
     c.innerHTML = `<div class="cl-wrap cl-iuv-wrap">
       <div class="cl-glo-intro cl-iuv-intro"><h3>IUV por estación · emisión ${esc(p.fecha_emision || "")}</h3>
@@ -1672,20 +1691,20 @@
           <span class="cl-iuv-banda sin"><i></i>sin valor: sin punto</span></div>
         <p class="cl-nota" data-rol="iuv-conteo"></p>
         <p class="cl-nota" data-rol="iuv-campo"></p></div>
-        <div class="cl-card cl-iuv-local"><h3 class="cl-maptit">Jipijapa · control observacional</h3>
+        <div class="cl-card cl-iuv-local"><h3 class="cl-maptit">Jipijapa · medición de control</h3>
           <div class="cl-kpis">
             ${kpi(obs ? `Observado · ${rotuloFechaCorta(obs.fecha) || obs.fecha}` : "Observado", obs && obs.valor, "IUV", 1, "#10243f")}
             ${kpi("CAMS crudo D0", valorIuv(estJip, "cams", 0), "IUV", 1, "#e89a28")}
             ${kpi("Corregido D0", valorIuv(estJip, "corr", 0), "IUV", 1, "#2f9e8f")}
-            ${kpi(`Residual obs − CAMS · ${num(jip.n_pares, 0)} pares`, jip.residual, "IUV", 2, "#7b61a8")}
+            ${kpi(`Diferencia medido − CAMS · ${num(jip.n_pares, 0)} días`, jip.residual, "IUV", 2, "#7b61a8")}
           </div>
           <div class="cl-aviso"><span class="ic">ⓘ</span><p><b>${esc(jip.codigo || "IUVJIP")}</b> ·
             coordenadas ${jip.coords_aproximadas === false ? "verificadas" : "aproximadas"} ·
-            acreditado: <b>${jip.acreditado === true ? "sí" : "no"}</b>${jip.shrink != null ? ` · factor de encogimiento ${num(jip.shrink, 2)}` : ""}.<br>
-            ${esc(jip.nota || "La corrección se atenúa con la distancia, exp(−d/75 km): a más de ~200 km es prácticamente CAMS crudo.")}</p></div>
+            acreditado: <b>${jip.acreditado === true ? "sí" : "no"}</b>.<br>
+            ${esc(App.textoServidor(jip.nota) || "La corrección pierde fuerza con la distancia: más allá de unos 200 km el valor es prácticamente el de CAMS sin corregir.")}</p></div>
           ${tablaObsJipijapa(jip, escala)}
-          <p class="cl-nota">Observado = máximo diario del sensor UV de Jipijapa (base 1). El residual es la media de
-            observado − CAMS en los últimos pares, encogida según el número de pares.</p></div></div>
+          <p class="cl-nota">Lo observado es el máximo diario del sensor de índice UV de Jipijapa. La diferencia
+            es el promedio de lo medido menos CAMS en los días con ambos datos, atenuada cuando hay pocos.</p></div></div>
     </div>`;
     const map = c.querySelector('[data-rol="iuv-map"]'), tit = c.querySelector('[data-rol="iuv-tit"]'),
       conteo = c.querySelector('[data-rol="iuv-conteo"]'), notaCampo = c.querySelector('[data-rol="iuv-campo"]'),
@@ -1698,7 +1717,7 @@
       const pts = pintarIuv(map, p, st.campo, st.lead, st.activas);
       conteo.textContent = !pts ? "" :
         `${num(pts.x.length)} puntos con valor de ${num(pts.total)} estaciones ${st.activas ? "activas" : "con pronóstico UV"}` +
-        (pts.omitidas ? ` · ${num(pts.omitidas)} sin valor en D${st.lead} (no se dibujan)` : "") + ".";
+        (pts.omitidas ? ` · ${num(pts.omitidas)} sin valor en D${st.lead}` : "") + ".";
     };
     leadsEl.querySelectorAll(".cl-mes").forEach(b => { b.onclick = () => {
       st.lead = String(b.dataset.lead);
@@ -1723,7 +1742,7 @@
       vista.dataset.screenLabel = "Climatología";
       vista.classList.add("vista-clima");
       E.tabs = App.vistaPestanas(vista, {
-        kicker: "Normales 1991–2020 · grilla 0.05° de Ecuador",
+        kicker: "Normales 1991–2020 · grilla 0,05° de Ecuador",
         titulo: "Climatología",
         sub: "Mallas climáticas calibradas (~5 km) · Ecuador",
         acento: "var(--cyan)",

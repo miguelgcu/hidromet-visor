@@ -306,7 +306,7 @@ const App = (() => {
       chip.className = "tarea-chip";
       const progreso = seg._ultimoProgreso;
       const puedeAbrir = restauradores.has(id);
-      const pct = progreso == null ? "" : ` ${Math.round(progreso)}%`;
+      const pct = progreso == null ? "" : ` ${fmtNum(progreso, 0)} %`;
       chip.innerHTML = `<div>${seg.nombre || "Tarea"}…${pct}${puedeAbrir ? ' <span class="tarea-chip-abrir">⤢ abrir</span>' : ""}</div>
         <div class="barra ${progreso == null ? "indeterminada" : ""}"><div style="width:${progreso ?? 40}%"></div></div>`;
       if (puedeAbrir) {
@@ -919,6 +919,13 @@ const App = (() => {
           shortMonths: ["ene", "feb", "mar", "abr", "may", "jun",
                         "jul", "ago", "sep", "oct", "nov", "dic"],
           date: "%d/%m/%Y",
+          // Los números DENTRO del gráfico (globos de datos, rótulos de eje)
+          // los escribe la propia librería: sin esto salían con el punto
+          // decimal del inglés («2.3») en toda la aplicación.
+          decimal: ",",
+          thousands: ".",
+          grouping: [3],
+          currency: ["", " $"],
         },
       });
       Plotly.setPlotConfig({ locale: "es" });
@@ -1050,6 +1057,118 @@ const App = (() => {
   function fmtFecha(iso) {
     if (!iso) return "—";
     return new Date(iso).toLocaleDateString("es-EC", { year: "numeric", month: "short", day: "numeric" });
+  }
+
+  /* ---------------- números en castellano ----------------
+     En castellano la COMA separa los decimales y el PUNTO los millares; las
+     cifras de cuatro dígitos —un año, una altitud— se escriben de corrido, sin
+     separador (2026, 2800 m). El punto del código («2.3») era el de la máquina.
+
+     Este es el ÚNICO sitio donde la aplicación convierte un número en texto de
+     PANTALLA. Todo lo que no se lee —una posición en CSS, un parámetro de la
+     API, una clave de caché, un valor que viaja a otro sitio— sigue usando el
+     punto decimal del lenguaje y NO debe pasar por aquí.
+
+     opciones: {minimos} decimales que se conservan aunque sean ceros (por
+     defecto, todos); {agrupar:false} nunca agrupa millares; {signo:true}
+     escribe también el «+»; {vacio} qué devolver sin número (por defecto «—»). */
+  function fmtNum(valor, decimales = 0, opciones = {}) {
+    const n = typeof valor === "number" ? valor : Number(valor);
+    if (valor === null || valor === undefined || valor === "" || !Number.isFinite(n))
+      return opciones.vacio === undefined ? "—" : opciones.vacio;
+    const max = Math.max(0, Math.min(20, Math.trunc(Number(decimales) || 0)));
+    const min = opciones.minimos === undefined ? max
+      : Math.max(0, Math.min(max, Math.trunc(Number(opciones.minimos) || 0)));
+    let cuerpo = Math.abs(n).toFixed(max);
+    if (min < max && cuerpo.indexOf(".") >= 0)
+      cuerpo = cuerpo.replace(/0+$/, "").replace(/\.$/, "");
+    const partes = cuerpo.split(".");
+    let entero = partes[0];
+    let decimal = partes[1] || "";
+    while (decimal.length < min) decimal += "0";
+    // Millares solo a partir de CINCO cifras: así un año nunca sale «2.026».
+    if (opciones.agrupar !== false && entero.length > 4)
+      entero = entero.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    const cero = Number(cuerpo) === 0;
+    const signo = (n < 0 && !cero) ? "−" : (opciones.signo === true && !cero ? "+" : "");
+    return signo + entero + (decimal ? "," + decimal : "");
+  }
+
+  // Mismo formato con el signo SIEMPRE delante (+ / −): un sesgo se lee sabiendo
+  // hacia qué lado se desvía, sin ir a buscarlo a la leyenda. El cero no lleva signo.
+  function fmtSigno(valor, decimales = 1, opciones = {}) {
+    return fmtNum(valor, decimales, Object.assign({}, opciones, { signo: true }));
+  }
+
+  /* ---------------- texto que ESCRIBE EL SERVIDOR ----------------
+     Algunos productos traen un campo de texto libre —un diagnóstico, un aviso—
+     que la pantalla imprimía tal cual. Hoy llegan limpios, pero por ese mismo
+     campo viajan mensajes internos: códigos en mayúsculas, nombres de módulo,
+     rutas de fichero, el texto de una excepción. Nada de eso significa nada
+     para quien mira el tiempo.
+
+     La puerta se cierra en dos tiempos: lo CONOCIDO se traduce a una frase del
+     usuario; lo desconocido pasa solo si está escrito en castellano llano y se
+     descarta si trae rastro técnico. Ningún dato se retiene por esto: se
+     descarta una FRASE, nunca una fila ni un modelo. */
+  const TRADUCCION_SERVIDOR = [
+    [/NO_CAMS_AUTHORITY|no existe una partici[oó]n CAMS/i,
+      "Todavía no hay campos de índice UV para esta emisión."],
+    [/base \d+ vac[ií]a/i, "Todavía no hay índice UV publicado."],
+    [/sin pron[oó]stico UV para/i,
+      "No hay pronóstico de índice UV para la fecha pedida."],
+    [/modelos no reconocidos/i,
+      "Se omitieron campos que esta versión no reconoce."],
+    [/fuera del cat[aá]logo/i,
+      "Hay estaciones con pronóstico que todavía no están en el catálogo: se omiten."],
+    [/estado del puente UV/i,
+      "Sin el parte del día: no hay hora de captura ni medición de control de Jipijapa."],
+    [/shapefile|sin regiones/i, "Las estaciones se muestran sin su región."],
+    [/residual medio obs|walk-?forward/i,
+      "Corrección local experimental y no acreditada: sale de los últimos pares medidos "
+      + "en Jipijapa y pierde fuerza con la distancia."],
+    [/PARTIAL_PENDING|esperan referencia corregida/i,
+      "Faltan por comprobar los días más recientes: su referencia todavía no está corregida."],
+    [/pendientes en otros\s+productos|no tiene pendientes\s+atribuidos/i,
+      "Otras variables tienen días por comprobar; esta no."],
+    [/no desglosa el [aá]mbito/i,
+      "Quedan días por comprobar, sin poder atribuirlos a esta variable."],
+    [/El resumen (estricto )?declara|discrepan en filas|no se puede leer el Parquet/i,
+      "La comprobación publicada no se pudo leer entera."],
+    [/No se puede agregar la evidencia/i,
+      "No se pudo resumir la comprobación de estas advertencias."],
+  ];
+  // Rastro de máquina: si aparece, la frase no se enseña.
+  const RASTRO_TECNICO = [
+    /[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]+/,                 // clave_interna, NO_CAMS_AUTHORITY
+    /\b[\w.]+\.(py|js|json|parquet|csv|yaml|yml|log|txt|zip|db|sqlite|shp|shx|dbf|nc|tif|tiff|npz|pkl|grib2?)\b/i,
+    /\b(exp|log|ln|sqrt|abs|round)\s*\(|\b\w\s*\/\s*\(\s*\w/i,  // una fórmula suelta
+    /\b(walk[- ]?forward|out[- ]?of[- ]?sample|cross[- ]?validation|shrink|smearing|lookback|backfill|shapefile|rolling|threshold)\b/i,
+    /\b(hidromet|app|ui|scripts|modulos|nucleo|rutas|motores)\.[a-z]/i,
+    /[\\/][\w.-]+[\\/]/,                                   // una ruta de fichero
+    /\b(traceback|exception|stacktrace|stderr|stdout|parquet|dataframe|schema|payload|endpoint|sha256|commit|nan|null|none|true|false)\b/i,
+    /\b(PASS|FAIL|WARN|WARNING|ERROR|PENDING|SKIP|TODO|DEBUG|INFO|TRACE)\b/,
+    /\bbase \d\b/i,                                        // numeración interna de las bases
+    /[{}<>[\]]|=\s*\S/,                                    // plantillas y asignaciones
+  ];
+  function textoServidor(bruto) {
+    const s = String(bruto === null || bruto === undefined ? "" : bruto)
+      .replace(/\s+/g, " ").trim();
+    if (!s) return "";
+    for (const [re, texto] of TRADUCCION_SERVIDOR) if (re.test(s)) return texto;
+    for (const re of RASTRO_TECNICO) if (re.test(s)) return "";
+    return s;
+  }
+  // Varias frases a la vez: traduce, descarta las técnicas y quita repetidas.
+  function textosServidor(lista) {
+    const arr = Array.isArray(lista) ? lista : (lista === null || lista === undefined ? [] : [lista]);
+    const vistos = new Set();
+    const salida = [];
+    for (const item of arr) {
+      const t = textoServidor(item);
+      if (t && !vistos.has(t)) { vistos.add(t); salida.push(t); }
+    }
+    return salida;
   }
 
   function plotlyLayoutBase(extra = {}) {
@@ -1201,15 +1320,26 @@ const App = (() => {
 
   return { api, aviso, tarea, seguirTarea, modalTarea, tema, registrar, navegar, iniciar, el, fmtFecha, plotlyLayoutBase,
            plotlyLayoutSerie, plotlyConfig, pinchZoomMapa, hayTareaActiva, cancelarTarea, cancelarTodas, panel, vistaPestanas, restaurador,
-           rutaAProducto, leerJsonGzip, zipDesdeManifest, hoyEC, redEtiqueta, nombreEstacion };
+           rutaAProducto, leerJsonGzip, zipDesdeManifest, hoyEC, redEtiqueta, nombreEstacion,
+           fmtNum, fmtSigno, textoServidor, textosServidor };
 })();
+
+/* Superficie pura para las pruebas en Node (formateo de números en castellano y
+   filtro del texto que escribe el servidor). En el navegador no se expone
+   ningún global adicional: `module` no existe. */
+if (typeof module === "object" && module.exports) module.exports = Object.freeze({
+  fmtNum: App.fmtNum, fmtSigno: App.fmtSigno,
+  textoServidor: App.textoServidor, textosServidor: App.textosServidor,
+});
 
 /* ---------------- MODO VISOR: SOLO EXPLORACIÓN ----------------
    En el visor en línea (window.HIDROMET_VISOR) NADIE puede cambiar nada: se OCULTAN (no se
    borran, para no romper el wiring de los módulos) todos los controles de operación —
    Actualizar, APIs, exportaciones, edición de umbrales, agregar/ingresar estaciones, etc.
    (El backend público además ya rechaza cualquier escritura). */
-if (window.HIDROMET_VISOR) {
+if (window.HIDROMET_VISOR && typeof document !== "undefined"
+    && typeof document.createElement === "function"
+    && typeof MutationObserver === "function") {
   (function () {
     const st = document.createElement("style");
     st.textContent = ".visor-oculto{display:none !important}";

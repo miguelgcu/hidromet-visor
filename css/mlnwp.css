@@ -103,8 +103,33 @@
 .ml-horizonte-control select { min-width: 142px; padding: 6px 28px 6px 9px;
   border: 1px solid var(--line-2); border-radius: 8px; background: var(--surface);
   color: var(--ink); font: 600 12px var(--mono); text-transform: none; cursor: pointer; }
-.ml-clasif-alcance { margin: 0 0 10px; color: var(--muted-2);
-  font: 500 11.5px var(--mono); line-height: 1.45; }
+/* Cabecera honesta de la tabla: contra qué se compara, cuántos días exige y
+   cuántos modelos lo consiguen. Tres datos, sin frases de lectura. */
+.ml-val-cab { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0 0 8px;
+  padding-bottom: 7px; border-bottom: 1px solid var(--line-3); }
+.ml-val-dato { display: inline-flex; align-items: baseline; gap: 6px; }
+.ml-val-dato > span { font: 600 9.5px var(--mono); letter-spacing: .07em;
+  text-transform: uppercase; color: var(--faint); }
+.ml-val-dato > b { font: 600 12px var(--mono); color: var(--ink-2);
+  font-variant-numeric: tabular-nums; }
+
+/* PODIO: la respuesta primero y grande. Solo se puebla con modelos comparables;
+   si no hay ninguno, queda la línea sobria y nada más. */
+.ml-podio { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; }
+.ml-podio-it { display: flex; align-items: center; gap: 9px; flex: 1 1 260px;
+  padding: 8px 12px; border: 1px solid var(--line-2); border-radius: 10px;
+  background: var(--surface-2); }
+.ml-podio-lab { flex: 0 0 100%; font: 600 9.5px var(--mono); letter-spacing: .07em;
+  text-transform: uppercase; color: var(--faint); }
+.ml-podio-mod { font: 700 14px var(--fuente); color: var(--ink); line-height: 1.2;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ml-podio-mod + .ml-lead { color: var(--ml-purple); font: 700 11px var(--mono); }
+.ml-podio-it .ml-calif-badge { margin-left: auto; font-size: 13px; padding: 3px 11px; }
+.ml-podio-n { font: 500 11px var(--mono); color: var(--muted-2); white-space: nowrap;
+  font-variant-numeric: tabular-nums; }
+.ml-podio-hueco { background: transparent; border-style: dashed; }
+.ml-podio-nada { font: 500 12px var(--fuente); color: var(--muted-2); }
+.ml-podio-vacio { margin: 0 0 10px; font-size: 12.5px; color: var(--muted-2); }
 
 /* (v12: mapa ganador, panel lateral, detalle de estación y barras de
    calificación se retiraron con la vista Nacional — estilos eliminados) */
@@ -123,16 +148,27 @@ html[data-tema="oscuro"] .ml-tabla-modelos tbody tr { border-bottom-color: var(-
 .ml-tabla-modelos td.idx { font-family: var(--mono); color: var(--muted-2); }
 .ml-tabla-modelos .ml-lead { white-space: nowrap; color: var(--ml-purple);
   font: 700 11px var(--mono); }
-.ml-tabla-modelos tr.sin-calif { opacity: .62; font-style: italic; }
+.ml-tabla-modelos tr.sin-calif { font-style: italic; }
+.ml-tabla-modelos td.ml-dias { color: var(--ink-2); font-weight: 600; }
+.ml-tabla-modelos .ml-sin-nota { color: var(--muted-2); }
 /* fila GANADORA del bloque: fondo verde tenue + nombre en verde (paralelo a rm-best en cartas) */
 .ml-tabla-modelos tr.ml-best td { background: var(--ok-bg); }
 .ml-tabla-modelos tr.ml-best td:nth-child(2) { color: var(--ok); font-weight: 700; }
-/* banner "Mejor en …": veredicto inmediato con su n para no coronar muestras diminutas */
-.ml-mejor-banner { display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
-  font-size: 12px; color: var(--ink-2); background: var(--ok-bg); border: 1px solid var(--ok-bd);
-  border-radius: 9px; padding: 8px 11px; margin: 0 0 9px; line-height: 1.4; }
-.ml-mejor-banner b { color: var(--ink); }
-.ml-mejor-estrella { color: var(--ok); font-size: 14px; }
+.ml-best-mrk { color: var(--ok); }
+/* CORTE: quienes aún no tienen días para comparar. Se dice UNA vez, aquí, y las
+   filas de abajo quedan atenuadas y sin puesto — ninguna desaparece. */
+.ml-val-corte td { padding: 9px 9px 5px !important; border-top: 1px solid var(--line-2);
+  background: transparent; }
+.ml-val-corte span { display: inline-block; font: 600 9.5px var(--mono);
+  letter-spacing: .07em; text-transform: uppercase; color: var(--faint); }
+.ml-tabla-modelos tr.ml-fuera td { opacity: .58; }
+.ml-tabla-modelos tr.ml-fuera td.ml-dias { opacity: 1; color: var(--muted-2); font-weight: 600; }
+/* Procedencia y método: un desplegable discreto bajo la tabla, nunca al lado del dato. */
+.ml-tabla-pie { margin-top: 9px; }
+.ml-tabla-pie > summary { color: var(--muted-2); font-weight: 500; }
+.ml-tabla-pie > div { font-size: 11.5px; color: var(--muted-2); line-height: 1.55;
+  margin-top: 6px; max-width: 78ch; }
+.ml-tabla-pie > div b { color: var(--ink-2); }
 .ml-mod-punto { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; vertical-align: middle; }
 .ml-mod-tipo { color: var(--faint); font-size: 11px; }
 .ml-calif-badge { font: 700 11px var(--mono); padding: 2px 9px; border-radius: 999px; }
@@ -147,42 +183,51 @@ html[data-tema="oscuro"] .ml-tabla-modelos tbody tr { border-bottom-color: var(-
   color: var(--muted-2); }
 
 /* SERIES ---------------------------------------------------------------- */
-#ml-serie-card { position: relative; padding-top: 52px; }
-.ml-serie-cabecera { display: flex; flex-direction: column; align-items: center;
-  gap: 7px; margin: 0 0 8px; text-align: center; }
-.ml-serie-cabecera h2 { margin: 0; color: var(--ink); font-size: clamp(18px, 2.2vw, 24px);
-  line-height: 1.15; font-weight: 750; letter-spacing: -.015em; }
-.ml-serie-chips { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px; }
-.ml-serie-chip { display: inline-flex; align-items: center; min-height: 24px; padding: 3px 9px;
-  border: 1px solid var(--line-2); border-radius: 999px; background: var(--surface-2);
-  color: var(--muted); font: 600 10.5px var(--mono); font-variant-numeric: tabular-nums; }
-.ml-serie-subtitulo { color: var(--ml-purple); font: 700 12px var(--mono);
-  letter-spacing: .025em; }
-/* fecha de emisión del pronóstico (campo "hoy" del fichero) y su antigüedad;
-   en ámbar cuando el dato lleva más de un día congelado. */
-.ml-serie-emision { margin-top: 4px; font: 600 11px var(--mono); color: var(--muted); }
-.ml-serie-emision.vieja { color: var(--warn); }
-.ml-serie-acciones { position: absolute; z-index: 4; top: 11px; right: 11px;
-  display: flex; align-items: center; gap: 6px; }
-.ml-serie-acciones .ml-descarga-png { position: relative; display: inline-grid;
-  place-items: center; width: 34px; height: 34px; padding: 0; border: 1px solid var(--line-2);
-  border-radius: 8px; color: var(--muted); background: color-mix(in srgb, var(--surface) 92%, transparent);
-  box-shadow: var(--sombra-xs); cursor: pointer; transition: border-color .16s, color .16s, transform .16s; }
+#ml-serie-card { position: relative; }
+/* CABECERA — una sola jerarquía descendente: nombre de la estación, qué se
+   está viendo, identidad de referencia y procedencia. Ninguna línea compite
+   con la de encima. */
+.ml-serie-cabecera { margin: 0 0 10px; text-align: center; }
+.ml-serie-cabecera h2 { margin: 0; color: var(--ink); font-size: clamp(19px, 2.3vw, 25px);
+  line-height: 1.12; font-weight: 750; letter-spacing: -.015em; }
+/* Subtítulo: variable y ventana de agregación. Segundo peso, no un badge. */
+.ml-serie-cabecera .ml-serie-que { margin: 3px 0 0; color: var(--ink-2);
+  font: 600 clamp(13px, 1.3vw, 15px)/1.3 var(--fuente); letter-spacing: -.005em; }
+/* Identidad: referencia, cuarto de peso. Sin pastillas ni bordes. */
+.ml-serie-cabecera .ml-serie-identidad { margin: 6px 0 0; color: var(--muted);
+  font: 500 11px/1.5 var(--mono); font-variant-numeric: tabular-nums; }
+.ml-serie-identidad .ml-serie-sep { color: var(--faint); opacity: .65; }
+/* Procedencia: fecha de emisión del dato y su antigüedad; en ámbar cuando el
+   pronóstico lleva más de un día congelado. */
+.ml-serie-cabecera .ml-serie-emision { margin: 4px 0 0; font: 500 11px var(--mono);
+  color: var(--faint); }
+.ml-serie-cabecera .ml-serie-emision.vieja { color: var(--warn); font-weight: 650; }
+/* PIE — accesorio: a la izquierda la nota de observación (método), a la derecha
+   las descargas. Nada de esto compite con el gráfico. */
+.ml-serie-pie { display: flex; flex-wrap: wrap; align-items: center;
+  justify-content: space-between; gap: 6px 14px; margin: 8px 0 0;
+  padding-top: 7px; border-top: 1px solid var(--line-2); }
+.ml-obs-estado { display: inline-flex; align-items: center; gap: 6px; margin: 0;
+  min-width: 0; color: var(--muted); font: 500 11.5px/1.4 var(--mono);
+  font-variant-numeric: tabular-nums; }
+.ml-obs-punto { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--ink); }
+.ml-obs-estado.sin-datos { color: var(--warn); }
+.ml-obs-estado.sin-datos .ml-obs-punto { background: none;
+  box-shadow: inset 0 0 0 1.5px currentColor; }
+.ml-serie-acciones { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.ml-serie-acciones .ml-descarga-png { display: inline-flex; align-items: center;
+  gap: 6px; height: 28px; padding: 0 10px; border: 1px solid var(--line-2);
+  border-radius: 999px; color: var(--muted); background: transparent;
+  font: 600 11px var(--fuente); cursor: pointer;
+  transition: border-color .16s, color .16s; }
 .ml-serie-acciones .ml-descarga-png:hover:not(:disabled) { color: var(--ml-purple);
-  border-color: color-mix(in srgb, var(--ml-purple) 55%, var(--line-2)); transform: translateY(-1px); }
+  border-color: color-mix(in srgb, var(--ml-purple) 55%, var(--line-2)); }
 .ml-serie-acciones .ml-descarga-png:focus-visible { outline: 2px solid var(--ml-purple);
   outline-offset: 2px; }
 .ml-serie-acciones .ml-descarga-png:disabled { opacity: .38; cursor: not-allowed; }
 .ml-serie-acciones .ml-descarga-png.cargando svg { animation: ml-spin .8s linear infinite; }
-.ml-descarga-tipo { position: absolute; right: 2px; bottom: 1px; font: 800 7px var(--mono);
-  line-height: 1; color: var(--ml-purple); }
 @keyframes ml-spin { to { transform: rotate(360deg); } }
-.ml-obs-estado { width: fit-content; max-width: min(100%, 760px); margin: 3px auto 8px;
-  padding: 5px 9px; border-radius: 999px; border: 1px solid var(--ok-bd);
-  color: var(--ok); background: var(--ok-bg); font: 600 11.5px var(--mono);
-  line-height: 1.35; text-align: center; }
-.ml-obs-estado.sin-datos { border-color: var(--warn-bd); color: var(--warn);
-  background: var(--warn-bg); }
 .ml-serie-vacia { min-height: 210px; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 6px; padding: 24px;
   border: 1px dashed var(--line-2); border-radius: 10px; color: var(--muted);
@@ -237,10 +282,13 @@ html[data-tema="oscuro"] .ml-serie-plot .annotation-text {
 .ml-serie-leyenda .ml-leyenda-nombre { display: inline-block; flex: 0 1 auto;
   min-width: 0; max-width: none;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
-.ml-serie-leyenda .ml-leyenda-nota { flex: 0 0 auto; color: var(--faint);
-  font: 650 10.5px var(--mono); }
-.ml-serie-leyenda .ml-leyenda-mas { color: var(--faint); font-size: 11px;
-  font-style: italic; white-space: normal; }
+/* La curva que el sistema emite se distingue por FORMA (nombre en negrita y un
+   rol de una palabra), nunca por una nota: la nota vive en la clasificación. */
+.ml-serie-leyenda span.it.es-operativa .ml-leyenda-nombre { color: var(--ink); font-weight: 700; }
+.ml-serie-leyenda span.it.es-observado .ml-leyenda-nombre { color: var(--ink); font-weight: 700; }
+.ml-serie-leyenda .ml-leyenda-rol { flex: 0 0 auto; margin-left: 5px; padding: 1px 5px;
+  border-radius: 999px; background: var(--surface-2); color: var(--muted);
+  font: 600 9.5px var(--mono); letter-spacing: .02em; }
 .ml-serie-leyenda .sw-linea { flex: 0 0 auto; width: 14px; height: 0; border-top: 2px dashed var(--ink); }
 .ml-serie-leyenda .sw-caja { flex: 0 0 auto; width: 12px; height: 10px; border-radius: 2px; }
 .ml-serie-leyenda .sw-banda { width: 14px; height: 10px;
@@ -266,6 +314,11 @@ html[data-tema="oscuro"] .ml-serie-plot .annotation-text {
 /* Tabla de probabilidades por umbral (serie ML-NWP): TRANSPUESTA y a todo el ancho de la serie
    (una columna por fecha de pronóstico, una fila por umbral). Tokens → modo oscuro correcto. */
 .ml-pb-tit { margin: 12px 0 5px; font-weight: 600; font-size: 12px; color: var(--ink); }
+/* El cómo se calibró la probabilidad es método: acompaña al título, no lo
+   comparte. */
+.ml-pb-tit-nota { margin-left: 7px; color: var(--faint);
+  font: 500 10.5px var(--mono); }
+.ml-pb-tit-nota::before { content: "· "; }
 .ml-pb-wrap { width: 100%; overflow: visible; }
 .ml-pb-tabla { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; }
 .ml-pb-tabla th, .ml-pb-tabla td { padding: 4px 2px; text-align: center; border-bottom: 1px solid var(--line-3); }
@@ -332,9 +385,8 @@ html[data-tema="oscuro"] .ml-serie-plot .annotation-text {
   .ml-time-track { width: var(--ml-time-track-width, 720px);
     min-width: var(--ml-time-track-width, 720px); }
   .ml-serie-plot { width: 100%; min-width: 0; height: 320px; }
-  #ml-serie-card { padding-top: 50px; }
-  .ml-serie-acciones { top: 9px; right: 9px; }
-  .ml-obs-estado { width: auto; border-radius: 8px; }
+  .ml-serie-pie { flex-direction: column; align-items: flex-start; }
+  .ml-serie-acciones { margin-left: 0; }
   /* la leyenda envuelve también en el teléfono (mismo flex-wrap de escritorio) */
   .ml-pb-wrap { overflow: visible; }
   .ml-pb-tabla th.ml-pb-u, .ml-pb-tabla th.ml-pb-esq {
@@ -358,12 +410,12 @@ html[data-tema="oscuro"] .ml-serie-plot .annotation-text {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ml-tabla-modelos.ml-uni thead th { background: var(--surface); }
 .ml-uni-grp { text-align: center; font: 650 10px var(--mono); letter-spacing: .06em;
-  text-transform: uppercase; color: var(--muted); border-left: 1px solid var(--line-3); }
-.ml-tabla-modelos.ml-uni td:nth-child(3), .ml-tabla-modelos.ml-uni td:nth-child(7),
-.ml-tabla-modelos.ml-uni td:nth-child(12),
-.ml-tabla-modelos.ml-uni thead tr:last-child th:nth-child(1),
-.ml-tabla-modelos.ml-uni thead tr:last-child th:nth-child(5),
-.ml-tabla-modelos.ml-uni thead tr:last-child th:nth-child(10) { border-left: 1px solid var(--line-3); }
+  text-transform: uppercase; color: var(--muted); }
+/* El rótulo del corte acompaña al dedo cuando la tabla ancha se desliza en X. */
+.ml-tabla-modelos.ml-uni .ml-val-corte span { position: sticky; left: 0; }
+/* Separación entre grupos por CLASE, no por posición: la columna Plazo aparece y
+   desaparece con el horizonte y un nth-child se descolocaba con ella. */
+.ml-tabla-modelos.ml-uni .ml-uni-sep { border-left: 1px solid var(--line-3); }
 .ml-uni-idx { display: inline-block; min-width: 17px; color: var(--muted-2); font: 600 10.5px var(--mono); }
 
 /* Las fechas conservan una línea y, en móvil, el carril exterior proporciona el

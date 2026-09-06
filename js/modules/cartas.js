@@ -92,9 +92,14 @@
   // crudo al final de la grilla (AIFS, IFS-ENS, MONAN, ML_MALLA).
   const ALERTA_FUENTES = ["CONSENSO", "GFS", "ICON", "IFS", "AIFS", "IFS-ENS", "MONAN",
     "BIAS", "ML_MALLA", "RF", "GB", "CAT", "LSTM"];
+  // Los mismos modelos se llaman IGUAL aquí y en la clasificación de modelos
+  // (ML RandomForest, ML CatBoost, Sesgo causal…). Las siglas sueltas —BIAS, RF,
+  // GB, CAT— eran la abreviatura del código, no el nombre del modelo.
   const ALERTA_FUENTE_ROTULO = { CONSENSO: "Consenso", GFS: "GFS", ICON: "ICON", IFS: "IFS HRES",
-    AIFS: "AIFS", "IFS-ENS": "IFS ENS", MONAN: "MONAN (INPE)", ML_MALLA: "ML · malla",
-    BIAS: "Calibrado · BIAS", RF: "Calibrado · RF", GB: "Calibrado · GB", CAT: "Calibrado · CAT", LSTM: "Calibrado · LSTM" };
+    AIFS: "AIFS", "IFS-ENS": "IFS ENS", MONAN: "MONAN (INPE)", ML_MALLA: "ML en malla",
+    BIAS: "Calibrado · sesgo causal", RF: "Calibrado · RandomForest",
+    GB: "Calibrado · GradientBoosting", CAT: "Calibrado · CatBoost",
+    LSTM: "Calibrado · LSTM" };
   const ALERTA_FUENTE_OCULTA = new Set(["Confianza", "Modelo de referencia", "Cobertura (n.º modelos)"]);
   // Nombre CORTO de una fuente del ledger/verificación nuevos (NWP_GFS → GFS, CAL_BIAS →
   // BIAS, CONSENSO → CONSENSO). Pura: el backend ya la acorta, esto es la red de seguridad.
@@ -104,29 +109,24 @@
   }
   const rotuloFuente = s => ALERTA_FUENTE_ROTULO[fuenteCorta(s)] || fuenteCorta(s);
 
-  // MÉTODO DE UMBRAL POR ALERTA (2026-08-20). Con el tercer método encendido, en
-  // el MISMO archivo conviven alertas suyas (lluvia, helada) y del método vigente
-  // (calor, frío inusual, que no acreditaron). Cada variable del netcdf lleva su
-  // sello `metodo_umbral` y el visor TIENE que decir cuál es: servir una alerta
-  // sin confesar con qué criterio nació sería servir un producto distinto sin
-  // avisar. El dato llega en productos.alertas_meta.metodo_por_capa.
-  // La LETRA es la taxonomía del dueño (especificación 2026-08-20): tres TIPOS
-  // conviven — (a) fijo, (b) ZPH, (c) climatológico — y cada alerta confiesa con
-  // cuál nació. Los modos pctl e irf son las dos encarnaciones medidas del tipo
-  // (c); la decisión está en Salidas/especificacion_20260820/TRES_UMBRALES.md.
-  const METODO_UMBRAL_ROTULO = {
-    fija: "Tipo (a) · Umbral fijo regional",
-    zph: "Tipo (b) · ZPH (zonas homogéneas de precipitación)",
-    pctl: "Tipo (c) · Climatológico — percentil local",
-    irf: "Tipo (c) · Climatológico — índice regional + física (tercer método)",
-    // Sellos del subsistema nuevo (hidromet/alertas): el archivo confiesa su generador.
-    fijo: "Tipo (a) · Umbral fijo regional (hidromet)",
-    propio: "Tipo (c) · Climatológico — percentil propio del día del año (hidromet)",
-  };
-  // Etiquetas cortas del selector de umbral (solo los modos con variante real). Las
-  // CLAVES son los modos legado del visor (fija/zph/pctl): el archivo nuevo escribe
-  // umbrales_alertas/alertas_diarias_{fija,zph,pctl}.nc con ese mismo vocabulario.
-  const MODO_UMBRAL_BOTON = { fija: "Fijos", zph: "ZPH", pctl: "Percentil", irf: "Climatológico" };
+  // SELECTOR DE UMBRALES. La pantalla nombra los tres criterios como los nombra el
+  // dueño; las claves internas (fija/zph/pctl) NO salen nunca a la interfaz. `metodo`
+  // es la explicación breve para el tooltip del propio botón: una frase de meteorólogo,
+  // sin letras de tipología ni nombres de subsistema.
+  const UMBRAL_SELECTOR = [
+    { modo: "fija", etiqueta: "Umbrales regionales",
+      metodo: "Los mismos tres cortes de intensidad para toda la región." },
+    { modo: "pctl", etiqueta: "Umbrales zonificados",
+      metodo: "Cortes propios de cada estación, tomados de su climatología del mismo día del año." },
+    { modo: "zph", etiqueta: "ZPH",
+      metodo: "Cortes por zona de peligro hidrológico." },
+  ];
+  // Claves de umbral que el visor sabe servir (vocabulario legado del archivo:
+  // umbrales_alertas/alertas_diarias_{fija,zph,pctl}.nc). 'irf' es otra encarnación
+  // medida del criterio zonificado y comparte botón con 'pctl'.
+  const MODO_UMBRAL_BOTON = { fija: "Umbrales regionales", zph: "ZPH",
+    pctl: "Umbrales zonificados", irf: "Umbrales zonificados" };
+  const MODO_UMBRAL_ALIAS = { irf: "pctl" };
   // Modo del visor → generador del subsistema nuevo (claves del cantonal y de la
   // verificación publicada: `${generador}|${fuente}|${variable}`).
   const GENERADOR_DE_MODO = { fija: "fijo", zph: "zph", pctl: "propio", irf: "propio" };
@@ -173,23 +173,39 @@
   // archivo activo (sin parámetro) y zph solo tiene variante en lluvia.
   const modoParaCarta = (modo, varId) =>
     (modo && modo !== "fija" && (modo !== "zph" || varId === "alerta_lluvia")) ? modo : null;
+  // Pura: modo al que se REPLIEGA el panel cuando el actual deja de valer para la
+  // variable elegida (ZPH solo existe en lluvia). No puede ser la constante 'fija':
+  // el exportador congela SOLO los modos ofrecidos y el 2026-09-05 esos eran zph y
+  // pctl —nunca fija—, así que al pasar de ZPH a temperatura el repliegue pedía
+  // alertas_programa y alertas_verificacion con modo=fija y los dos paneles morían
+  // con «Este dato aún no está publicado en el visor». Se repliega a un modo SERVIDO.
+  const modoDeRepliegue = (productos, varId, esVisor) => {
+    const ofrecidos = variantesParaVariable(variantesUmbral(productos, esVisor), varId);
+    return ofrecidos.includes("fija") ? "fija" : (ofrecidos[0] || "fija");
+  };
 
-  // Pura (probada en Node): {texto, titulo} del sello de método de una alerta,
-  // o null si el archivo aún no trae sello (cartas generadas antes del sellado).
-  function rotuloMetodoUmbral(alertasMeta, varId) {
-    const porCapa = (alertasMeta || {}).metodo_por_capa || {};
-    const sello = porCapa[varId]
-      || porCapa[varId + "_CONSENSO"]
-      || porCapa[Object.keys(porCapa).find(k => k === varId || k.startsWith(varId + "_"))];
-    if (!sello || !sello.metodo) return null;
-    const nombre = METODO_UMBRAL_ROTULO[sello.metodo] || sello.metodo;
-    const niveles = String(sello.niveles || "");
-    const parcial = niveles && niveles !== "1,2,3";
-    return {
-      texto: nombre + (parcial ? ` · niveles ${niveles}` : ""),
-      titulo: "Método que generó los umbrales de esta alerta (sello leído del archivo)."
-        + (parcial ? ` Acreditado SOLO en los niveles ${niveles}: por encima, el aviso se emite con la etiqueta del nivel más alto acreditado.` : ""),
-    };
+  // Pura (probada en Node): los TRES botones del selector, siempre los tres y siempre
+  // en el mismo orden. Cada uno dice si se puede pulsar y por qué no, en una línea:
+  //   · ZPH fuera de precipitación → no aplica a la variable en pantalla.
+  //   · modo sin cartas publicadas → se ve, pero no lleva a una pantalla vacía.
+  // El modo que se está viendo siempre se puede pulsar (es el que sirve el archivo).
+  function botonesUmbral(productos, varId, esVisor, modoActivo) {
+    const servibles = new Set(variantesParaVariable(variantesUmbral(productos, esVisor), varId)
+      .map(m => MODO_UMBRAL_ALIAS[m] || m));
+    const activo = MODO_UMBRAL_ALIAS[modoActivo] || modoActivo;
+    return UMBRAL_SELECTOR.map(b => {
+      const aplica = b.modo !== "zph" || varId === "alerta_lluvia";
+      const publicado = servibles.has(b.modo) || b.modo === activo;
+      const motivo = !aplica ? "Solo para precipitación."
+        : !publicado ? "Sin cartas publicadas con estos umbrales." : "";
+      return {
+        modo: b.modo,
+        etiqueta: b.etiqueta,
+        activo: aplica && publicado && b.modo === activo,
+        habilitado: aplica && publicado,
+        titulo: motivo || b.metodo,
+      };
+    });
   }
 
   /* ---------- SUBSISTEMA NUEVO (hidromet/alertas): cantonal y verificación ----------
@@ -279,8 +295,8 @@
   // Texto de hover (HTML de Plotly) de una fila cantonal; `unidad` = mm / °C del valor.
   function textoCantonal(fila, unidad) {
     const niv = v => (v == null ? "—" : (NIVEL_ROTULO[Math.round(+v)] || String(v)));
-    const pct = v => (v == null ? "—" : Math.round(+v * 100) + " %");
-    const num = v => (v == null ? "—" : (Math.abs(+v) < 10 ? (+v).toFixed(1) : (+v).toFixed(0)));
+    const pct = v => (v == null ? "—" : App.fmtNum(+v * 100, 0) + " %");
+    const num = v => (v == null ? "—" : App.fmtNum(v, Math.abs(+v) < 10 ? 1 : 0));
     const partes = [
       `<b>${esc(fila.canton || fila.codcan || "")}</b>${fila.provincia ? " · " + esc(fila.provincia) : ""}`,
       `Nivel cantonal: <b>${esc(niv(fila.nivel_canton))}</b> · área ${esc(niv(fila.nivel_area))} · estación máx. ${esc(niv(fila.nivel_estacion_max))}${fila.station_id_max ? " (" + esc(fila.station_id_max) + ")" : ""}`,
@@ -325,8 +341,10 @@
     { id: "estaciones", et: "Estaciones", on: 1 },
   ];
 
-  const fmtNum = (n) => (n == null ? "—" : Number(n).toLocaleString("es-EC"));
-  const fmtPct = (n) => (n == null ? "—" : Number(n).toLocaleString("es-EC", { maximumFractionDigits: 1 }));
+  // Números en castellano: el formato vive en el núcleo (App.fmtNum) para que la
+  // leyenda, las tablas y los globos de todos los módulos escriban igual.
+  const fmtNum = (n) => App.fmtNum(n, 3, { minimos: 0 });
+  const fmtPct = (n) => App.fmtNum(n, 1, { minimos: 0 });
 
   /* ============================================================
      ESTADO del módulo (vive mientras la vista está montada)
@@ -643,6 +661,25 @@
     const ca = _hexRgb(a[1]), cb = _hexRgb(b[1]);
     return `rgb(${ca.map((c, k) => Math.round(c + (cb[k] - c) * t)).join(",")})`;
   }
+  // Gris "con dato, pero sin amenaza": el MISMO en el relleno vectorial por cuenca y
+  // en el raster de respaldo, para que las dos vistas digan lo mismo.
+  const GRIS_SIN_AMENAZA = "rgba(176,186,201,.55)";
+  // Pura: escala del RASTER cuando el FFGS publica un campo de amenaza en CERO.
+  // El campo cero es dato ("sin amenaza en el dominio"), pero con zmin = primer umbral
+  // Plotly lo recortaría al color MÁS BAJO de la escala oficial → amenaza falsa. Aquí
+  // la escala se extiende hasta 0 y todo lo que no llega al umbral sale del gris "sin
+  // amenaza", igual que el relleno por cuenca. Devuelve null si no aplica.
+  function escalaSinAmenazaFFGS(d) {
+    const cs = (d || {}).colorscale, niv = (d || {}).niveles || [];
+    if (!d || !d.malla || !Array.isArray(cs) || !cs.length || niv.length < 2) return null;
+    const vmin = +d.vmin, vmax = +d.vmax, u0 = +niv[0];
+    if (!isFinite(vmin) || !isFinite(vmax) || !isFinite(u0)) return null;
+    if (!(u0 > 0) || Math.abs(vmin - u0) > 1e-9 || !(vmax > u0)) return null;
+    const t = u0 / vmax;                       // posición del umbral en la escala nueva
+    const out = [[0, GRIS_SIN_AMENAZA], [Math.max(0, t - 1e-6), GRIS_SIN_AMENAZA]];
+    for (const par of cs) out.push([t + (+par[0]) * (1 - t), par[1]]);
+    return { colorscale: out, zmin: 0, zmax: vmax };
+  }
   // RELLENO VECTORIAL FFGS: agrupa las microcuencas por BANDA de la escala (niveles)
   // y devuelve una traza de relleno por banda (fill:"toself", subpolígonos separados
   // por null). Cuencas por debajo del primer umbral quedan SIN pintar (transparentes,
@@ -675,7 +712,7 @@
     // Sin amenaza pero CON dato → relleno GRIS (contraste con el fondo; antes salían transparentes).
     if (grisX.length) {
       traces.push({ type: "scatter", mode: "lines", x: grisX, y: grisY, fill: "toself",
-        fillcolor: "rgba(176,186,201,.55)",
+        fillcolor: GRIS_SIN_AMENAZA,
         line: { width: 0 }, hoverinfo: "skip", showlegend: false });
     }
     for (let k = 0; k < nb; k++) {
@@ -696,7 +733,7 @@
     const ids = d.cuencas.ids, vals = d.cuencas.valores;
     for (let i = 0; i < ids.length; i++) val.set(ids[i], vals[i]);
     const unidad = d.unidad || "";
-    const fmt = v => (Math.abs(v) < 10 ? v.toFixed(2) : v.toFixed(1));
+    const fmt = v => App.fmtNum(v, Math.abs(v) < 10 ? 2 : 1);
     const centroide = ring => {
       let sx = 0, sy = 0, n = 0;
       for (const [lo, la] of ring) { sx += lo; sy += la; n++; }
@@ -874,7 +911,7 @@
     const tlabels = d.tick_labels || [];
     const rango = (d.vmax - d.vmin) || 1;
     // máx. 2 decimales en las etiquetas numéricas de la leyenda (respeta etiquetas tipo "≥30").
-    const fmt2 = v => { if (v == null) return ""; const s = String(v).trim(); return /^-?\d+(\.\d+)?$/.test(s) ? String(parseFloat(Number(s).toFixed(2))) : s; };
+    const fmt2 = v => { if (v == null) return ""; const s = String(v).trim(); return /^-?\d+(\.\d+)?$/.test(s) ? App.fmtNum(s, 2, { minimos: 0 }) : s; };
     // Decima las etiquetas para que no se solapen: calcula cuántas caben de verdad
     // según el ancho en píxeles de la barra (~44 px por etiqueta mono de 11 px);
     // sin ancho conocido conserva el mínimo histórico de 6. Siempre la primera y la última.
@@ -1121,7 +1158,7 @@
     const etiq = etiquetasCarta(d);
     const _fmtVal = v => etiq
       ? (etiq(v) || "")
-      : `${Math.abs(v) < 10 ? (+v).toFixed(2) : (+v).toFixed(1)} ${d.unidad || ""}`.trim();
+      : `${App.fmtNum(v, Math.abs(v) < 10 ? 2 : 1)} ${d.unidad || ""}`.trim();
     // Recorte al polígono de Ecuador SOLO en cartas TEMATIZADAS (heladas/alertas): sin esto
     // el ráster 0.1° sobresale del contorno en bloques cuadrados feos sobre el fondo oscuro.
     // Se calcula AQUÍ (no dentro del raster) para que las ISOLÍNEAS usen el MISMO campo
@@ -1144,9 +1181,13 @@
         ? { text: PR.campo.map(row => (row || []).map(v => etiq(v) || "")),
             hovertemplate: `%{y:.2f}°, %{x:.2f}°<br><b>%{text}</b><extra></extra>` }
         : { hovertemplate: `%{y:.2f}°, %{x:.2f}°<br><b>%{z:.2f} ${esc(d.unidad || "")}</b><extra></extra>` };
+      // FFGS con el dominio ENTERO en cero: el cero se pinta gris "sin amenaza", nunca
+      // recortado al color más bajo de la escala oficial (eso sería amenaza inventada).
+      const escSA = d.vacio === "sin_amenaza" ? escalaSinAmenazaFFGS(d) : null;
       traces.push(Object.assign({
         type: "heatmap", x: PR.lon, y: PR.lat, z: _zCampo,
-        colorscale: d.colorscale, zmin: d.vmin, zmax: d.vmax,
+        colorscale: escSA ? escSA.colorscale : d.colorscale,
+        zmin: escSA ? escSA.zmin : d.vmin, zmax: escSA ? escSA.zmax : d.vmax,
         zsmooth: suavizar, hoverongaps: false, showscale: false,
       }, hov));
     }
@@ -1206,11 +1247,12 @@
       if (zc) {
         traces.push(...zc.traces);
         if (resC) resC.textContent =
-          ` · emisión ${zc.resumen.fecha_emision || "—"} · lead D+${zc.resumen.lead} · ${zc.resumen.nAlerta} de ${zc.resumen.n} cantones ≥ Medio (${zc.resumen.nPoligonos} polígonos)`;
+          ` · ${zc.resumen.nAlerta} de ${zc.resumen.n} cantones en nivel Medio o mayor`
+          + ` · D+${zc.resumen.lead} · emitido ${_fechaCorta(zc.resumen.fecha_emision) || "—"}`;
       } else if (resC) {
         resC.textContent = _cantonal
-          ? " · el cantonal publicado no cubre la fecha de esta carta: no se dibuja"
-          : " · cantonal no publicado aún";
+          ? " · sin cantones para esta fecha"
+          : " · cantones no publicados";
       }
     }
 
@@ -1278,12 +1320,15 @@
     }
     // Panel VACÍO: rótulo claro en vez de un mapa en blanco. "sin_datos" = el modelo
     // no llega a esta fecha (su corrida no la cubre); "sin_alerta" = sí hay pronóstico
-    // pero ninguna celda alcanza nivel Medio.
+    // pero ninguna celda alcanza nivel Medio; "sin_amenaza" = el FFGS midió TODO el
+    // dominio y dio cero — hay dato, y el dato es que no hay amenaza.
     if (d.vacio) {
       layout.annotations = (layout.annotations || []).concat([{
         xref: "paper", yref: "paper", x: 0.5, y: 0.5, xanchor: "center", yanchor: "middle",
         text: d.vacio === "sin_datos"
           ? "Fuera del horizonte de este modelo:<br>su corrida aún no cubre esta ventana.<br><i>Se completará con la próxima actualización.</i>"
+          : d.vacio === "sin_amenaza"
+          ? "Sin amenaza en el dominio:<br>el producto se calculó y dio cero en todas las microcuencas.<br><i>Hay dato; no hay amenaza.</i>"
           : "Con pronóstico, pero sin alertas:<br>ningún punto alcanza el nivel Medio.",
         showarrow: false, align: "center", font: { size: 13, color: oscuro ? "#9DAABF" : "#64748b" },
         bgcolor: oscuro ? "rgba(20,28,45,.78)" : "rgba(255,255,255,.82)", borderpad: 8,
@@ -1488,7 +1533,7 @@
     const c = (E && E.capas) || {};
     const b = (id, et, tit) => `<button class="ct-toggle ${c[id] ? "activo" : ""}" data-capa="${id}"
       aria-pressed="${c[id] ? "true" : "false"}" title="${esc(tit || ("Mostrar u ocultar la capa " + et))}">${et}</button>`;
-    return `<div class="ct-capas">${b("grilla", "Grilla")}${sinIsolineas ? "" : b("isolineas", "Isolíneas")}${b("galapagos", "Galápagos")}${b("estaciones", "Estaciones")}${conCantones ? b("cantones", "Cantones", "Nivel por cantón (hidromet/alertas) del generador activo, dibujado sobre la carta Consenso") : ""}</div>`;
+    return `<div class="ct-capas">${b("grilla", "Grilla")}${sinIsolineas ? "" : b("isolineas", "Isolíneas")}${b("galapagos", "Galápagos")}${b("estaciones", "Estaciones")}${conCantones ? b("cantones", "Cantones", "Nivel por cantón con los umbrales activos, dibujado sobre la carta Consenso") : ""}</div>`;
   }
 
   // §P1: la serie temporal que vivía BAJO la grilla de cartas (pintarSeriePron) se
@@ -1499,7 +1544,7 @@
     const t = tipoNodo(tipoId);
     if (!t || !(t.variables || []).length) {
       return `<div class="vacio"><div class="icono">🗺️</div>
-        <strong>Sin productos en disco para este tipo</strong>
+        <strong>Sin productos publicados de este tipo</strong>
         <span>El motor todavía no ha generado cartas de "${esc((TIPOS.find(x=>x.id===tipoId)||{}).etiqueta || tipoId)}".</span></div>`;
     }
     const g = gridState(tipoId);
@@ -1521,11 +1566,11 @@
 
     const optsVar = t.variables.map(x => {
       const nInst = (x.periodos || []).reduce((s, pp) => s + ((pp.instantes || []).length), 0);
-      const des = nInst === 0 ? ' disabled title="Sin cartas en disco para esta variable"' : "";
+      const des = nInst === 0 ? ' disabled title="Sin cartas publicadas para esta variable"' : "";
       return `<option value="${esc(x.id)}" ${x.id === g.varId ? "selected" : ""}${des}>${esc(etiquetaVar(x.id, x.etiqueta))}</option>`;
     }).join("");
     const optsPer = v.periodos.map(x => {
-      const des = !(x.instantes || []).length ? ' disabled title="Sin cartas en disco para este período"' : "";
+      const des = !(x.instantes || []).length ? ' disabled title="Sin cartas publicadas para este período"' : "";
       return `<option value="${x.horas}" ${x.horas === g.horas ? "selected" : ""}${des}>${esc(x.etiqueta)}</option>`;
     }).join("");
     // Desplegable AGRUPADO POR DÍA (optgroup): con 80-115 pasos, la lista plana era
@@ -1620,7 +1665,7 @@
     return `
       <div class="ct-panel ct-hv">
         <div class="ct-panel-cab">
-          <h3>Historial y validación de hidroestimadores <span class="suave">· estimado grillado vs observación canónica 7-7</span></h3>
+          <h3>Historial y validación de hidroestimadores <span class="suave">· estimado en malla frente a lo medido, 07:00–07:00</span></h3>
           <div class="ct-hv-controles">
             <label><span>Estación</span><select data-rol="hv-estacion"><option value="">Promedio de la red 7-7</option></select></label>
             <label><span>Ventana</span><select data-rol="hv-ventana">
@@ -1636,7 +1681,7 @@
           30 fechas comunes, 100 pares y 10 estaciones. GMAP no aparece porque es lluvia media areal por cuenca.</p>
       </div>`;
   }
-  const _hvFmt = (v, suf = "") => (v == null ? "—" : (+v).toLocaleString("es-EC", { maximumFractionDigits: 2 }) + suf);
+  const _hvFmt = (v, suf = "") => (v == null ? "—" : App.fmtNum(v, 2, { minimos: 0 }) + suf);
   async function cargarValidacionHidro(cont) {
     const host = cont.querySelector('[data-rol="hv-grid"]');
     if (!host) return;
@@ -1755,7 +1800,7 @@
         x: s.fechas, y: s.estimado, connectgaps: false,
         line: { color: col, width: 2.2, dash: p.fuente === "CCS" ? "dot" : "solid" },
         marker: { size: 5, color: col }, customdata: detalle,
-        hovertemplate: "%{x} · " + rotulo + " <b>%{y:.2f} mm</b> · %{customdata[0]} valores · %{customdata[1]} pares obs.<extra></extra>" });
+        hovertemplate: "%{x} · " + rotulo + " <b>%{y:.2f} mm</b> · %{customdata[0]} valores · %{customdata[1]} días comparados<extra></extra>" });
     });
     Plotly.newPlot(div, trazas, {
       height: 325, margin: { l: 42, r: 10, t: 40, b: 48 },
@@ -1929,7 +1974,7 @@
     const t = tipoNodo("ffgs");
     if (!t || !(t.variables || []).length) {
       return `<div class="vacio"><div class="icono">🗺️</div>
-        <strong>Sin productos FFGS en disco</strong>
+        <strong>Sin productos FFGS publicados</strong>
         <span>El motor todavía no ha generado cartas FFGS.</span></div>`;
     }
     const g = ffgsState();
@@ -2052,7 +2097,7 @@
     const t = tipoNodo("heladas");
     if (!t || !(t.variables || []).length) {
       return `<div class="vacio"><div class="icono">🗺️</div>
-        <strong>Sin productos de heladas/calor en disco</strong>
+        <strong>Sin productos de heladas o calor publicados</strong>
         <span>El motor todavía no ha generado estas cartas.</span></div>`;
     }
     const g = heladasState();
@@ -2151,15 +2196,12 @@
       `<option value="${i}" ${i === a.inst ? "selected" : ""}>${esc(x.etiqueta)}</option>`).join("")
       : `<option>Sin instantes</option>`;
 
-    // Selector de TIPO de umbral: en la app se ofrecen los modos con variante
-    // pre-calculada en disco (productos.umbrales_variantes) — así el tercer tipo
-    // (Climatológico) aparece solo cuando de verdad se puede servir sin recalcular.
-    // En el visor, SOLO las variantes que el exportador congeló (claves de
-    // fuentes_alerta_por_modo). ZPH solo existe para lluvia; Fijos/Percentil valen
-    // para las tres variables (variantesUmbral / variantesParaVariable, puras).
-    const _variantes = variantesParaVariable(variantesUmbral(E.productos, !!window.HIDROMET_VISOR), a.varId);
-    const segBotones = _variantes.map(m =>
-      `<button class="${a.modo === m ? "activo" : ""}" data-modo="${m}">${MODO_UMBRAL_BOTON[m]}</button>`).join("");
+    // Selector de umbrales: los TRES criterios, siempre visibles y en el mismo sitio.
+    // El que no se puede servir (ZPH fuera de lluvia, o un criterio sin cartas
+    // publicadas) se ve apagado y dice su razón en el tooltip, no bajo la barra.
+    const segBotones = botonesUmbral(E.productos, a.varId, !!window.HIDROMET_VISOR, a.modo).map(b =>
+      `<button class="${b.activo ? "activo" : ""}" data-modo="${b.modo}" title="${esc(b.titulo)}"${
+        b.habilitado ? "" : " disabled aria-disabled=\"true\""}>${esc(b.etiqueta)}</button>`).join("");
 
     // Grilla: una carta por fuente PRESENTE (Consenso + pronóstico + CALIBRADOS),
     // ordenada según ALERTA_FUENTES; oculta las capas meta (Confianza/Referencia).
@@ -2230,39 +2272,31 @@
     }).join("");
 
     const sinArbol = tieneArbol ? "" :
-      `<div class="vacio" style="padding:24px"><span class="suave">No hay alertas vigentes en disco; el panel muestra el desempeño causal de emisiones realmente realizadas.</span></div>`;
+      `<div class="vacio" style="padding:24px"><span class="suave">No hay advertencias vigentes. Abajo sigue el desempeño de las que ya se emitieron.</span></div>`;
 
     // §P18a: la nota del overlay FFR SOLO aplica a precipitación.
     const esLluvia = a.varId === "alerta_lluvia";
     const notaFFR = esLluvia
-      ? `<p class="ct-nota" style="margin:-4px 0 14px">El <b>indicador FFR de susceptibilidad a crecida</b> se dibuja
-           <span style="color:#009AF2;font-weight:700">punteado</span> SOBRE las cartas cuando F1FFR24 cubre esa fecha.
-           Los cortes 0.10/0.30/0.50 son <b>operativos provisionales y no calibrados</b>: no predicen por sí solos un
-           desbordamiento. Si F1FFR24 falta, el estado es «Sin dato», nunca «Sin riesgo».</p>`
+      ? `<p class="ct-nota" style="margin:-4px 0 14px"
+             title="Cortes operativos provisionales, todavía sin calibrar contra desbordamientos observados.">
+           <b>Susceptibilidad a crecida</b>: trama <span style="color:#009AF2;font-weight:700">punteada</span>
+           sobre las cartas de lluvia. Donde no hay trama puede faltar el dato, no el riesgo.</p>`
       : "";
 
-    // Sello del método que generó ESTA alerta (leído del netcdf vía productos).
-    const _sello = rotuloMetodoUmbral((E.productos || {}).alertas_meta, a.varId);
-    const selloMetodoHTML = _sello
-      ? `<span class="ct-fuente-estado" data-rol="metodo-umbral" title="${esc(_sello.titulo)}">${esc(_sello.texto)}</span>`
-      : "";
     // Nota del overlay cantonal (el resumen real lo rellena pintarMapaCarta al cargarlo).
     const notaCantonal = E.capas.cantones
       ? `<p class="ct-nota ct-nota-cantonal" data-rol="nota-cantonal" style="margin:-4px 0 14px">
-           <b>Cantones</b>: nivel por cantón del subsistema hidromet/alertas — generador
-           <b>${esc(GENERADOR_DE_MODO[a.modo] || "fijo")}</b> · fuente CONSENSO (malla) — dibujado sobre la carta Consenso;
-           nivel cantonal = máximo entre el nivel del área (fracción de celdas ≥ nivel, φ) y el de sus estaciones.
-           Cantón sin relleno = sin alerta; el popup trae fracción del área por nivel, valor máximo y nota.<span data-rol="cant-resumen"> · cargando…</span></p>`
+           <b>Cantones</b>: nivel por cantón con <b>${esc(MODO_UMBRAL_BOTON[a.modo] || MODO_UMBRAL_BOTON.fija)}</b>,
+           el mayor entre el de su área y el de sus estaciones. Sin relleno, sin
+           alerta.<span data-rol="cant-resumen"> · cargando…</span></p>`
       : "";
 
     return `
       <div class="ct-barra compacta">
         <label><span class="et">Variable</span><select data-rol="avar">${optsVar}</select></label>
-        ${selloMetodoHTML}
         <span class="ct-div"></span>
-        ${_variantes.length ? `
-        <span class="et" title="Tipo de umbral de la alerta: (a) fijo regional, (b) ZPH (zonas homogéneas de precipitación, solo lluvia), (c) climatológico (percentil). Solo se ofrecen los tipos con variante realmente servible.">Umbrales</span>
-        <div class="segmentado" data-rol="umbral" style="--seg-color:var(--blue)">${segBotones}</div>` : ""}
+        <div class="segmentado ct-umbral-seg" data-rol="umbral" role="group"
+          aria-label="Umbrales de la advertencia" style="--seg-color:var(--blue)">${segBotones}</div>
         <button class="boton azulclaro chico" data-rol="editar">✎ Editar umbrales</button>
         <div class="ct-inst-nav">
           <button class="ct-nav" data-rol="aprev" title="Paso anterior" aria-label="Paso anterior" ${a.inst <= 0 ? "disabled" : ""}>◀</button>
@@ -2277,9 +2311,9 @@
       ${notaCantonal}
       <div class="ct-panel" id="ct-desempeno">
         <div class="ct-panel-cab">
-          <h3>Desempeño causal de las advertencias <span class="suave" data-rol="dsub">· cargando…</span></h3>
+          <h3>Dónde y cuánto acertaron las advertencias <span class="suave" data-rol="dsub">· cargando…</span></h3>
         </div>
-        <p class="ct-nota ct-evidencia-causal" data-rol="evidencia-causal">Verificando emisiones previas contra observaciones de la misma ventana…</p>
+        <p class="ct-nota ct-evidencia-causal" data-rol="evidencia-causal">Comparando las advertencias emitidas con lo que se midió…</p>
         <div class="ct-serie ct-desempeno-comparativo" data-rol="comparativa" role="img"
           aria-label="Gráfico de barras: desempeño espacial de las advertencias por fuente y nivel"></div>
         <div class="ct-serie ct-desempeno-temporal" data-rol="serie" role="img"
@@ -2288,8 +2322,8 @@
       </div>
       <div class="ct-panel ct-ver" id="ct-verificacion">
         <div class="ct-panel-cab">
-          <h3>Verificación por generador <span class="suave" data-rol="vsub">· cargando…</span></h3>
-          <label class="ct-ver-lead"><span class="et">Lead</span><select data-rol="vlead" aria-label="Día de pronóstico verificado"></select></label>
+          <h3>Acierto por fuente y nivel <span class="suave" data-rol="vsub">· cargando…</span></h3>
+          <label class="ct-ver-lead"><span class="et">Plazo</span><select data-rol="vlead" aria-label="Día de pronóstico verificado"></select></label>
         </div>
         <div class="ct-ver-tabla-wrap" data-rol="vtabla"><span class="suave">Leyendo la verificación publicada…</span></div>
         <p class="ct-nota" data-rol="vnota"></p>
@@ -2318,11 +2352,12 @@
       // ZPH solo existe para precipitación: al pasar a temperatura se vuelve a Fijos
       // (con el POST en la app, para que el archivo servido sea de verdad el fijo).
       // Fijos y Percentil se conservan: valen para las tres variables.
-      if (a.modo === "zph" && a.varId !== "alerta_lluvia") await fijarModo("fija");
+      if (a.modo === "zph" && a.varId !== "alerta_lluvia")
+        await fijarModo(modoDeRepliegue(E.productos, a.varId, !!window.HIDROMET_VISOR));
       a.inst = null;
       re();
     };
-    cont.querySelectorAll('[data-rol="umbral"] button').forEach(b =>
+    cont.querySelectorAll('[data-rol="umbral"] button:not([disabled])').forEach(b =>
       b.onclick = async () => { await fijarModo(b.dataset.modo); re(); });
     cont.querySelector('[data-rol="editar"]').onclick = abrirEditorUmbrales;
 
@@ -2367,16 +2402,15 @@
     a._verClave = clave; a._verDatos = r;
     return r;
   }
-  const _fmtMetrica = v => (v == null || v === "" || !Number.isFinite(+v)) ? "—" : (+v).toFixed(2);
-  const _etiquetasPayload = r => {
-    const P = r || {};
-    const lista = Array.isArray(P.etiquetas) ? P.etiquetas : (P.etiqueta ? [P.etiqueta] : []);
-    return lista.map(x => (typeof x === "string" ? x : JSON.stringify(x)));
-  };
+  // Mismo formato de fecha que el panel de series: dd/mm/aaaa, no la cadena ISO.
+  const _fechaCorta = iso => /^\d{4}-\d{2}-\d{2}/.test(String(iso || ""))
+    ? `${String(iso).slice(8, 10)}/${String(iso).slice(5, 7)}/${String(iso).slice(0, 4)}`
+    : String(iso || "");
+  const _fmtMetrica = v => App.fmtNum(v, 2);
   // Tabla HTML de las filas (ya filtradas/ordenadas por filasVerificacion).
   function tablaVerificacionHTML(filas) {
     if (!filas.length) return "";
-    const cab = ["Fuente", "Nivel", "Lead", "n", "Eventos", "Avisos", "POD", "FAR", "CSI", "HSS", "Sesgo", "Acreditada"];
+    const cab = ["Fuente", "Nivel", "Plazo", "Casos", "Eventos", "Avisos", "POD", "FAR", "CSI", "HSS", "Sesgo", "Acreditada"];
     const th = cab.map((c, i) => `<th${i >= 3 ? ' class="num"' : ""}>${esc(c)}</th>`).join("");
     const tr = filas.map(f => {
       const acred = f.acreditado === true || f.acreditado === 1 || f.acreditado === "true";
@@ -2402,16 +2436,15 @@
     const sel = panel.querySelector('[data-rol="vlead"]');
     const host = panel.querySelector('[data-rol="vtabla"]');
     const nota = panel.querySelector('[data-rol="vnota"]');
-    const generador = GENERADOR_DE_MODO[a.modo] || "fijo";
     let r;
     try { r = await datosVerificacion(); }
     catch (e) {
       if (!panel.isConnected) return;
-      sub.textContent = `· generador ${generador} · sin verificación publicada`;
+      sub.textContent = "· sin verificación publicada";
       sel.innerHTML = "";
-      host.innerHTML = `<div class="ct-ver-vacio"><b>Verificación no publicada</b> · ${esc(window.HIDROMET_VISOR
-        ? "el visor aún no trae la verificación del subsistema nuevo para esta variable y este generador."
-        : "no se pudo leer la verificación publicada: " + (e && e.message ? e.message : e))}</div>`;
+      const motivo = window.HIDROMET_VISOR ? "" : App.textoServidor(e && e.message ? e.message : e);
+      host.innerHTML = `<div class="ct-ver-vacio"><b>Verificación no publicada</b>${
+        motivo ? esc(" · " + motivo) : ""}</div>`;
       nota.textContent = "";
       return;
     }
@@ -2420,23 +2453,21 @@
     if (a._verLead == null || !leads.includes(+a._verLead))
       a._verLead = leads.includes(-1) ? -1 : (leads.length ? leads[0] : -1);
     sel.innerHTML = (leads.length ? leads : [-1]).map(l =>
-      `<option value="${l}" ${+a._verLead === l ? "selected" : ""}>${l < 0 ? "Todos los leads" : "D+" + l}</option>`).join("");
+      `<option value="${l}" ${+a._verLead === l ? "selected" : ""}>${l < 0 ? "Todos los plazos" : "D+" + l}</option>`).join("");
     const ventana = r.ventana_dias || r.ventana || null;
-    const etiquetas = _etiquetasPayload(r);
     const pintar = () => {
       const filas = filasVerificacion(r, a._verLead);
-      sub.textContent = `· generador ${generador}${ventana ? " · ventana " + ventana + " d" : ""}${r.fecha_corte ? " · corte " + r.fecha_corte : ""} · ${fmtNum(filas.length)} filas`;
+      sub.textContent = `· ${(MODO_UMBRAL_BOTON[a.modo] || MODO_UMBRAL_BOTON.fija).toLowerCase()}`
+        + `${ventana ? " · últimos " + ventana + " días" : ""}`
+        + `${r.fecha_corte ? " · hasta " + _fechaCorta(r.fecha_corte) : ""}`;
       host.innerHTML = filas.length ? tablaVerificacionHTML(filas)
-        : `<div class="ct-ver-vacio"><b>Ledger nuevo sin casos verificables aún</b> · el subsistema hidromet/alertas verifica
-             sus propias emisiones contra observaciones cerradas; para ${esc(generador)}${+a._verLead < 0 ? "" : " y D+" + esc(a._verLead)}
-             todavía no hay filas${etiquetas.length ? " (" + esc(etiquetas.join("; ")) + ")" : ""}. No se muestran métricas sustitutas.</div>`;
+        : `<div class="ct-ver-vacio"><b>Todavía sin advertencias verificables</b>${
+             +a._verLead < 0 ? "" : " en D+" + esc(a._verLead)}.</div>`;
     };
     sel.onchange = () => { a._verLead = +sel.value; pintar(); };
     pintar();
-    nota.innerHTML = `Fuente: verificación publicada del subsistema <b>hidromet/alertas</b> (ámbito estación, región nacional,
-      ventana móvil). <b>Acreditada</b> = la fuente pesa en el consenso por desempeño medido; sin pesos medidos toda fuente
-      figura «sin acreditar» (peso 1,0). Es evidencia de otro motor que el panel «Desempeño causal» de arriba (ledger del launcher).${
-      etiquetas.length ? " Etiquetas del producto: " + esc(etiquetas.join("; ")) + "." : ""}`;
+    nota.innerHTML = `Cada advertencia emitida se contrasta con lo que después midieron las estaciones.
+      <b>Acreditada</b>: la fuente pesa en el consenso por su desempeño medido.`;
   }
 
   /* ============================================================
@@ -2465,7 +2496,7 @@
     }).join("");
 
     fondo.innerHTML = `<div class="modal">
-      <header><span>Editar umbrales de alerta (Fijos)${data.hay_edicion ? " · previsualizando" : ""}</span>
+      <header><span>Editar umbrales regionales${data.hay_edicion ? " · previsualizando" : ""}</span>
         <button class="boton chico" data-rol="cerrar">Cerrar</button></header>
       <div class="cuerpo">
         <div class="suave" style="font-size:12.5px;margin-bottom:6px">Umbrales regionales que disparan cada nivel.
@@ -2864,7 +2895,7 @@
      ============================================================ */
   async function panelMLNWP(cont) {
     if (!window.MLNWP || typeof window.MLNWP.render !== "function") {
-      cont.innerHTML = `<div class="vacio"><div class="icono">⚠️</div>No se pudo cargar el módulo de validación (mlnwp.js).</div>`;
+      cont.innerHTML = `<div class="vacio"><div class="icono">⚠️</div>No se pudo abrir la validación de modelos. Vuelve a cargar la página.</div>`;
       return;
     }
     await window.MLNWP.render(cont);
@@ -2883,7 +2914,7 @@
      ============================================================ */
   async function panelDecisiones(cont) {
     if (!window.DECISIONES || typeof window.DECISIONES.render !== "function") {
-      cont.innerHTML = `<div class="vacio"><div class="icono">⚠️</div>No se pudo cargar el módulo de decisiones operativas (decisiones.js).</div>`;
+      cont.innerHTML = `<div class="vacio"><div class="icono">⚠️</div>No se pudieron abrir las decisiones operativas. Vuelve a cargar la página.</div>`;
       return;
     }
     await window.DECISIONES.render(cont);
@@ -3005,20 +3036,17 @@
         && ((estricta.espacial || []).length > 0 || (estricta.intensidad || []).length > 0);
       const pendienteReciente = estricta.estado === "disponible_con_referencia_pendiente";
       const pendienteGlobal = estricta.estado === "disponible_con_pendientes_globales";
-      const avisos = (estricta.advertencias || []).map(esc).join(" ");
+      const avisos = App.textosServidor(estricta.advertencias).map(esc).join(" ");
       evidenciaHost.className = "ct-nota ct-evidencia-causal " + (disponible ? "suficiente" : "insuficiente");
+      // El DATO va en negrita y delante; lo que aún falta por comprobar es una
+      // coletilla corta al final, no un titular que borre la cifra.
+      const pendiente = pendienteReciente ? " · faltan los días más recientes"
+        : (pendienteGlobal ? " · quedan días por comprobar" : "");
       evidenciaHost.innerHTML = disponible
-        ? `<b>Validación causal espacial cerrada</b> · ${fmtNum(muestra.emisiones_cerradas || 0)} emisiones · ` +
-          `${fmtNum(muestra.fechas || 0)} fechas · ${fmtNum(muestra.fuentes || 0)} fuentes. ${avisos}`
-        : `<b>Esperando ventanas causales cerradas</b> · ${avisos || "El visor no mostrará métricas sustitutas."}`;
-
-      if (disponible && pendienteReciente && evidenciaHost.querySelector("b")) {
-        evidenciaHost.querySelector("b").textContent =
-          "Evidencia cerrada disponible; fechas recientes pendientes";
-      } else if (disponible && pendienteGlobal && evidenciaHost.querySelector("b")) {
-        evidenciaHost.querySelector("b").textContent =
-          "Evidencia cerrada disponible; el motor global conserva pendientes";
-      }
+        ? `<b>${fmtNum(muestra.emisiones_cerradas || 0)} advertencias comprobadas</b> · `
+          + `${fmtNum(muestra.fechas || 0)} días · ${fmtNum(muestra.fuentes || 0)} fuentes`
+          + `${pendiente}${avisos ? " · " + avisos : ""}`
+        : `<b>Todavía sin días comprobados</b>${avisos ? " · " + avisos : ""}`;
 
       const oscuro = !!(App.tema && App.tema() === "oscuro");
       const tinta = oscuro ? "#9DAABF" : "#58667A";
@@ -3028,10 +3056,10 @@
           try { Plotly.purge(comparativa); } catch (_) { /* host aún sin gráfico */ }
           try { Plotly.purge(temporal); } catch (_) { /* host aún sin gráfico */ }
         }
-        if (comparativa) comparativa.innerHTML = `<span class="suave">Sin ventanas cerradas: no se publica desempeño areal.</span>`;
-        if (temporal) temporal.innerHTML = `<span class="suave">Sin pares cerrados: no se publica cuantificación de intensidad.</span>`;
-        panel.querySelector('[data-rol="dsub"]').textContent = "· esperando verdad diaria cerrada";
-        nota.innerHTML = `La validación es <b>fail-closed</b>: no usa pronósticos como verdad, reconstrucciones retrospectivas ni gráficos sustitutos.`;
+        if (comparativa) comparativa.innerHTML = `<span class="suave">Sin días comprobados todavía.</span>`;
+        if (temporal) temporal.innerHTML = `<span class="suave">Sin días comprobados todavía.</span>`;
+        panel.querySelector('[data-rol="dsub"]').textContent = "· esperando observaciones";
+        nota.textContent = "";
         return;
       }
 
@@ -3049,7 +3077,7 @@
             y: filas.map(f => f[metrica] == null ? null : +f[metrica]),
             xaxis: `x${ni + 1}`, yaxis: `y${ni + 1}`,
             marker: { color: colores[metrica] },
-            text: filas.map(f => f[metrica] == null ? "" : (+f[metrica]).toFixed(2)),
+            text: filas.map(f => f[metrica] == null ? "" : App.fmtNum(f[metrica], 2)),
             textposition: "outside", cliponaxis: false,
             hovertemplate: `%{x}<br>Nivel ≥${nivel} · ${rotulos[metrica]} %{y:.3f}<extra></extra>`,
           }));
@@ -3057,7 +3085,7 @@
         Plotly.react(comparativa, traces, {
           height: 720, barmode: "group", margin: { l: 48, r: 14, t: 58, b: 82 },
           paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
-          title: { text: "Desempeño espacial por área · umbrales congelados", font: { size: 13, color: tinta } },
+          title: { text: "Acierto por área", font: { size: 13, color: tinta } },
           grid: { rows: 3, columns: 1, pattern: "independent" },
           legend: { orientation: "h", y: 1.08, font: { size: 10, color: tinta } },
           xaxis: { showticklabels: false, showgrid: false },
@@ -3069,7 +3097,7 @@
           font: { color: tinta },
         }, { displayModeBar: false, responsive: true });
       } else if (comparativa) {
-        comparativa.innerHTML = `<span class="suave">La evidencia cerrada no contiene métricas espaciales comparables.</span>`;
+        comparativa.innerHTML = `<span class="suave">Sin acierto por área en estos días.</span>`;
       }
 
       const intensidad = (estricta.intensidad || []).filter(f => +f.n_pares_estacion_dia > 0);
@@ -3083,7 +3111,7 @@
           type: "bar", name: rotulo, x: fuentes,
           y: intensidad.map(f => f[clave] == null ? null : +f[clave]),
           marker: { color },
-          text: intensidad.map(f => f[clave] == null ? "" : (+f[clave]).toFixed(2)),
+          text: intensidad.map(f => f[clave] == null ? "" : App.fmtNum(f[clave], 2)),
           textposition: "outside", cliponaxis: false,
           customdata: intensidad.map(f => +f.n_pares_estacion_dia || 0),
           hovertemplate: `%{x}<br>${rotulo}: %{y:.3f}<br>Pares estación×día: %{customdata}<extra></extra>`,
@@ -3092,27 +3120,27 @@
         Plotly.react(temporal, traces, {
           height: 410, barmode: "group", margin: { l: 52, r: 14, t: 56, b: 82 },
           paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
-          title: { text: "Cuantificación de intensidad vs observaciones diarias", font: { size: 13, color: tinta } },
+          title: { text: "Error de intensidad frente a lo medido", font: { size: 13, color: tinta } },
           legend: { orientation: "h", y: 1.12, font: { size: 10, color: tinta } },
           xaxis: { tickfont: { size: 9, color: tinta }, showgrid: false },
           yaxis: { title: unidad, gridcolor: rejilla, zeroline: true },
           font: { color: tinta },
         }, { displayModeBar: false, responsive: true });
       } else if (temporal) {
-        temporal.innerHTML = `<span class="suave">La contingencia areal ya cerró; la intensidad espera pares continuos con observación diaria.</span>`;
+        temporal.innerHTML = `<span class="suave">Sin error de intensidad todavía: faltan días con observación diaria.</span>`;
       }
 
       const varEt = (VAR_ALERTA.find(x => x.id === a.varId) || VAR_ALERTA[0]).etiqueta.toLowerCase();
       panel.querySelector('[data-rol="dsub"]').textContent =
-        `· ${varEt} · ${fmtNum(muestra.emisiones_cerradas || 0)} emisiones cerradas`;
-      nota.innerHTML = `Espacio: <b>contingencia por área</b> contra la capa diaria corregida comprometida ` +
-        `(o un hidroestimador previamente promovido). Intensidad: <b>pronóstico continuo vs observaciones diarias canónicas con QC</b>. ` +
-        `Las ventanas y los umbrales son los congelados al emitir; no se publican mapas de cruce.`;
+        `· ${varEt} · ${fmtNum(muestra.emisiones_cerradas || 0)} advertencias comprobadas`;
+      nota.innerHTML = `<b>Acierto por área</b>: qué fracción del área advertida llovió de verdad. ` +
+        `<b>Error de intensidad</b>: cuánto se desvió el valor advertido del que midieron las estaciones. ` +
+        `Con los umbrales vigentes en el momento de emitir.`;
     } catch (e) {
-      panel.querySelector('[data-rol="dsub"]').textContent = "· sin evidencia causal verificable";
+      panel.querySelector('[data-rol="dsub"]').textContent = "· sin advertencias comprobables";
       if (comparativa) comparativa.innerHTML = "";
       if (temporal) temporal.innerHTML = "";
-      evidenciaHost.textContent = "No fue posible leer las emisiones causales verificadas.";
+      evidenciaHost.textContent = "No se pudo leer el desempeño publicado.";
       nota.textContent = "";
     }
   }
@@ -3129,9 +3157,9 @@
     coberturaCicloFFGS,
     referenciaDefectoFFGS,
     ffgsUsaReferencia,
-    rotuloMetodoUmbral,
-    METODO_UMBRAL_ROTULO,
     MODO_UMBRAL_BOTON,
+    UMBRAL_SELECTOR,
+    botonesUmbral,
     // Subsistema nuevo (hidromet/alertas): puras probadas en Node.
     ALERTA_FUENTES,
     ALERTA_FUENTE_ROTULO,
@@ -3142,6 +3170,8 @@
     variantesUmbral,
     variantesParaVariable,
     modoParaCarta,
+    modoDeRepliegue,
+    escalaSinAmenazaFFGS,
     claveCantonal,
     leadDeRecord,
     leadPorFecha,

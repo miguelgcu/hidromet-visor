@@ -13,9 +13,10 @@
 (() => {
   const esc = v => String(v ?? "").replace(/[&<>"']/g,
     c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const num = (v, nd = 1) => (v === null || v === undefined || Number.isNaN(v)) ? "—" : Number(v).toFixed(nd);
-  const sgn = v => (v === null || v === undefined || Number.isNaN(v)) ? "—"
-    : (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(Number(v)).toFixed(1);
+  // Números en castellano (coma decimal). El formato vive en el núcleo para que
+  // la leyenda, el podio, las dos tablas y los globos escriban todos igual.
+  const num = (v, nd = 1) => App.fmtNum(v, nd);
+  const sgn = v => App.fmtSigno(v, 1);
   // La fecha ya se lee en el eje X y en el hover unificado. Repetirla en cada
   // punto convertía el gráfico en una nube de recuadros; la etiqueta estática
   // muestra únicamente el valor. La unidad permanece en el eje Y y el hover.
@@ -31,7 +32,7 @@
     const abreviado = sinSufijo
       .replace(/^CONSENSO_OP_TOP10$/i, "Consenso Top10")
       .replace(/^BEST_OP_CV$/i, "Selector operativo")
-      .replace(/^BC_CLASSIC_/i, "BC · ")
+      .replace(/^BC_CLASSIC_/i, "Ajustado · ")
       .replace(/^ML_LGBM_STATION$/i, "ML LGBM est.")
       .replace(/^ML_XGB_STATION$/i, "ML XGB est.")
       .replace(/^METEOBLUE$/i, "Meteoblue")
@@ -274,11 +275,10 @@
   const ALIAS_TABLA_MAX = 40;
   const aliasModeloCompleto = modelo => aliasModeloPNG(modelo, Number.POSITIVE_INFINITY);
   const aliasModeloTabla = modelo => aliasModeloPNG(modelo, ALIAS_TABLA_MAX);
-  const tituloModeloTabla = modelo => {
-    const completo = aliasModeloCompleto(modelo);
-    const clave = claveModeloPNG(modelo);
-    return completo && completo !== clave ? `${completo} · ${clave}` : clave;
-  };
+  // El title de la fila repite el NOMBRE PUBLICADO entero (la celda lo recorta a 40
+  // caracteres). La clave interna del generador no se enseña: no le dice nada a quien
+  // pronostica y ensucia una pantalla que debe hablar en su idioma.
+  const tituloModeloTabla = modelo => aliasModeloCompleto(modelo);
 
   function colorModeloPNG(modelo) {
     const clave = claveModeloPNG(modelo);
@@ -369,10 +369,10 @@
       identidad.push(`Complejo ${complejo}`);
     identidad.push([variableLabel, agregacionLabel].filter(Boolean).join(" · "));
     const geografia = [];
-    if (esFinito(meta.lat)) geografia.push(`Lat. ${Number(meta.lat).toFixed(4)}°`);
-    if (esFinito(meta.lon)) geografia.push(`Lon. ${Number(meta.lon).toFixed(4)}°`);
+    if (esFinito(meta.lat)) geografia.push(`Lat. ${num(meta.lat, 4)}°`);
+    if (esFinito(meta.lon)) geografia.push(`Lon. ${num(meta.lon, 4)}°`);
     if (esFinito(meta.altitud_m))
-      geografia.push(`Alt. ${Math.round(Number(meta.altitud_m))} m`);
+      geografia.push(`Alt. ${num(meta.altitud_m, 0)} m s. n. m.`);
     return {
       titulo: String(meta.nombre || meta.codigo || "Estación"),
       identidad: identidad.filter(Boolean).join("  ·  "),
@@ -460,7 +460,7 @@
         if (!esPrecip && rango < 3 && fecha >= hoy && valor !== null) {
           anotaciones.push({
             xref: "x", yref: "y", x: fecha, y: valor, showarrow: false,
-            text: `<b>${valor.toFixed(1)}</b>`, textangle: esPrecip ? 90 : 0,
+            text: `<b>${num(valor, 1)}</b>`, textangle: esPrecip ? 90 : 0,
             xanchor: "center", yanchor: "bottom",
             yshift: esPrecip
               ? [2, 4, 6].map(pxDesdePt)[rango]
@@ -475,7 +475,7 @@
       if (esPrecip) {
         const etiquetas = fechas.map((fecha, i) =>
           rango < 3 && fecha >= hoy && valores[i] !== null
-            ? `<b>${valores[i].toFixed(1)}</b>` : null);
+            ? `<b>${num(valores[i], 1)}</b>` : null);
         trazas.push({
           type: "bar", x: fechas, y: valores, name: aliasModeloPNG(modelo),
           width: 0.070 * DIA_MS,
@@ -524,7 +524,7 @@
           valoresY.push(valor);
           anotaciones.push({
             xref: "x", yref: "y", x: fecha, y: valor, showarrow: false,
-            text: `<b>${valor.toFixed(1)}</b>`, xanchor: "center", yanchor: "bottom",
+            text: `<b>${num(valor, 1)}</b>`, xanchor: "center", yanchor: "bottom",
             yshift: pxDesdePt(4), bgcolor: "rgba(0,0,0,0)",
             borderwidth: 0, borderpad: 0,
             font: { family: PNG_SERIE.font, size: pxDesdePt(7.2),
@@ -534,7 +534,7 @@
       });
       trazas.push({
         type: "scatter", mode: "lines+markers", x: fechas, y: valores,
-        name: "Obs", connectgaps: false, opacity: 1,
+        name: "Observado", connectgaps: false, opacity: 1,
         line: { color: PNG_SERIE.observation, width: pxDesdePt(1.05), dash: "dash" },
         marker: { color: PNG_SERIE.observation,
           size: pxDesdePt(esPrecip ? 2.7 : 2.8),
@@ -545,14 +545,14 @@
     }
 
     const entradasLeyenda = [];
-    if (hayObs) entradasLeyenda.push({ texto: "Obs", color: PNG_SERIE.observation,
+    if (hayObs) entradasLeyenda.push({ texto: "Observado", color: PNG_SERIE.observation,
       simbolo: "━" });
     const maximoAliasLeyenda = modelos.length + (hayObs ? 1 : 0) >= 8 ? 15 : 17;
     modelos.forEach(modelo => {
       const score = scoreModeloPNG(modelo);
       entradasLeyenda.push({
         texto: `${aliasModeloPNG(modelo, maximoAliasLeyenda)}`
-          + ` · ${score === null ? "s/d" : score.toFixed(1)}`,
+          + ` · ${score === null ? "sin nota" : num(score, 1)}`,
         color: colorModeloPNG(modelo), simbolo: esPrecip ? "■" : "━",
       });
     });
@@ -649,7 +649,7 @@
     else if (String(diag.validation_standard || "").startsWith("PHYSICAL_ENSEMBLE"))
       estado = { texto: "coincidencia de modelos físicos · sin corrección estadística", ok: false };
     else
-      estado = { texto: "provisional no calibrada · solo informativa", ok: false };
+      estado = { texto: "sin calibrar con la historia de la estación", ok: false };
     if (procedencia && procedencia.ml_probability_authorized === false)
       estado = { ...estado, texto: `${estado.texto} · sin aprendizaje automático` };
     return estado;
@@ -669,13 +669,15 @@
     const indicesFecha = new Map(
       (pu.fechas || []).map((fecha, i) => [fecha, i]));
     const umbrales = (pu.umbrales || []).map(Number);
+    // Los mismos rótulos que la tabla de la pantalla, con la unidad separada del
+    // número: «P≥1mm» pegaba la unidad a la cifra y no era la misma fila.
     const filasDef = [
       { valor: 0.1, label: "P(lluvia)" },
-      { valor: 1, label: "P≥1mm" },
-      { valor: 5, label: "P≥5mm" },
-      { valor: 10, label: "P≥10mm" },
-      { valor: 25, label: "P≥25mm" },
-      { valor: 50, label: "P≥50mm" },
+      { valor: 1, label: "≥1 mm" },
+      { valor: 5, label: "≥5 mm" },
+      { valor: 10, label: "≥10 mm" },
+      { valor: 25, label: "≥25 mm" },
+      { valor: 50, label: "≥50 mm" },
     ];
     const filas = filasDef.map(def => {
       const j = umbrales.findIndex(valor => Number.isFinite(valor)
@@ -715,7 +717,7 @@
       const visible = Math.max(0, Math.min(100, Number(valor)));
       anotaciones.push({
         xref: "x", yref: "y", x: fechas[i], y: fila.label,
-        showarrow: false, text: `<b>${visible.toFixed(0)}%</b>`,
+        showarrow: false, text: `<b>${num(visible, 0)} %</b>`,
         xanchor: "center", yanchor: "middle",
         font: { family: PNG_SERIE.font, size: pxDesdePt(7.875),
           color: visible >= 55 ? "#FFFFFF" : "#1B1B1B" },
@@ -1006,9 +1008,6 @@
     return [bg, fg];
   }
   const confClase = c => ({ Alta: "alta", Media: "media", Baja: "baja" }[c] || "sin");
-  function pillConf(c) {
-    return `<span class="ml-pill ${confClase(c)}">${esc(c || "Sin calificar")}</span>`;
-  }
 
   /* ---------------- estado del módulo ---------------- */
   // Cohorte científica completa. La dependencia no es un filtro visual, pero
@@ -1126,13 +1125,11 @@
         </div>
       </div>
       <details class="hm-mas ml-nota-det">
-        <summary>ℹ Cómo leer calificación y confianza</summary>
+        <summary>ℹ Cómo leer la calificación</summary>
         <div class="ml-nota">
-          <b>Calificación 1–10</b> = qué tan bueno es el modelo (skill). &nbsp;<b>Confianza</b> = cuántas <b>fechas</b> respaldan esa calificación:
-          <span class="ml-pill alta">Alta ≥30</span>
-          <span class="ml-pill media">Media 15–29</span>
-          <span class="ml-pill baja">Baja 5–14</span>
-          Elige una <b>estación</b> para ver su validación y su serie temporal.
+          <b>Calificación 1–10</b> = qué tan bueno es el modelo. &nbsp;<b>Días</b> = sobre cuántos días
+          con observación se midió esa calificación; es lo que la sostiene, y por eso va en la tabla
+          junto a ella. Elige una <b>estación</b> para ver su validación y su serie temporal.
         </div>
       </details>`;
   }
@@ -1294,21 +1291,79 @@
     };
   }
 
-  // Tipo legible de la familia de modelo (para la columna de la tabla).
-  function famTipo(familia) {
-    return { Convencionales: "convencional", "No convencionales": "no convencional",
-      ML: "ML", Postprocesamiento: "post. estadístico",
-      Referencia: "referencia" }[familia] || "crudo";
-  }
   // Tipo corto que acompaña al nombre en las tablas de clasificación. Las
   // referencias (CERO/PERSISTENCIA/CLIMATOLOGIA, familia 'Referencia') no son
   // modelos: se etiquetan como tales y nunca reciben la estrella de «mejor».
   const FAMILIA_REFERENCIA = "Referencia";
   const esReferencia = m => !!m && m.familia === FAMILIA_REFERENCIA;
+  const tieneNota = m => !!m && m.califica && m.rating != null;
   const tipoFamTabla = familia => ({ Convencionales: "grillado",
     "No convencionales": "grillado", ML: "modelo ML",
     Postprocesamiento: "combinación", [FAMILIA_REFERENCIA]: "referencia" })[familia] || "crudo";
-  const NOTA_REFERENCIAS = `<div class="ml-pb-nota">Referencias (no son modelos, sirven de vara de comparación): CERO = lluvia cero, siempre 0 mm · PERSISTENCIA = el valor de ayer · CLIMATOLOGÍA = media del día del año.</div>`;
+
+  /* ---------- COMPARACIÓN HONESTA ENTRE MODELOS ----------------------------
+     Dos modelos solo son comparables si se les midió sobre los MISMOS días y esos
+     días llegan al mínimo. El servidor ya lo dictamina fila a fila (estado_orden);
+     un producto anterior a ese veredicto no trae más vara que su propia muestra.
+     Consecuencia de producto: quien no es comparable NO recibe puesto y NO puede
+     ser coronado. Su fila sigue en la tabla, con su calificación y sus días. */
+  const MIN_COMPARAR = 30;
+  const minimoComparar = d => Number((d && d.orden && d.orden.n_minimo_orden) || MIN_COMPARAR);
+  const claveReferenciaOrden = d => String((d && d.orden && d.orden.referencia) || "");
+  function entraEnComparacion(m, minimo = MIN_COMPARAR) {
+    if (!tieneNota(m)) return false;
+    // La muestra que el lector VE en la columna «Días» tiene que sostener el
+    // puesto. El servidor dictamina sobre las celdas comunes de toda la ventana
+    // y puede declarar comparable una fila cuyo plazo solo tiene 15 días: la
+    // pantalla acabaría prometiendo 30 días de mínimo y coronando con 15. Las
+    // dos condiciones se exigen juntas; ninguna fila se retira por eso.
+    if (!(Number(m.n) >= Number(minimo))) return false;
+    if (m.estado_orden !== undefined && m.estado_orden !== null)
+      return m.estado_orden === "en_orden";
+    return true;
+  }
+  // Reparte las filas en DOS grupos por jerarquía: las comparables arriba con su
+  // puesto, el resto después. Ninguna fila se descarta. Devuelve
+  // [{ modelo, comparable, puesto }] en el orden en que se pinta la tabla.
+  function ordenarPorComparacion(modelos, opciones = {}) {
+    const minimo = Number(opciones.minimo ?? MIN_COMPARAR);
+    const dentro = opciones.entra || (m => entraEnComparacion(m, minimo));
+    const bruta = opciones.nota || (m => (tieneNota(m) ? Number(m.rating) : NaN));
+    const nota = m => { const v = Number(bruta(m)); return Number.isFinite(v) ? v : -Infinity; };
+    const filas = (modelos || []).map((m, i) => ({ m, i, comparable: !!dentro(m) }));
+    filas.sort((a, b) => (Number(b.comparable) - Number(a.comparable))
+      || (nota(b.m) - nota(a.m)) || (a.i - b.i));
+    let puesto = 0;
+    return filas.map(f => ({ modelo: f.m, comparable: f.comparable,
+      puesto: f.comparable ? ++puesto : null }));
+  }
+  // Fila cuya calificación se contradice con su propia correlación o su ajuste.
+  const AVISO_CONTRADICE = "Correlación o ajuste negativos en esta muestra: acompaña lo medido peor que el promedio.";
+  const contradiceNota = m => tieneNota(m) && ((esFinito(m.corr) && Number(m.corr) < 0)
+    || (esFinito(m.r2) && Number(m.r2) < 0));
+
+  // La mejor calificación ENTRE LAS COMPARABLES. Las referencias sirven de vara y
+  // reciben puesto, pero no son modelos y nunca se coronan. Tampoco se corona la
+  // fila que la propia tabla marca con ⚠ —correlación o ajuste negativos—: poner
+  // el laurel sobre un número que la misma pantalla desmiente dos columnas más
+  // allá es lo que hace increíble a la clasificación. La fila no se retira: sigue
+  // con su calificación, su aviso y sus días. Si nadie queda, devuelve null.
+  // `filaDe` dice de QUÉ fila sale la calificación que se está juzgando. En la
+  // tabla unificada de lluvia cada fila lleva dos bloques, y el ⚠ del bloque de
+  // cuantificación (R² negativo) no puede descalificar a un modelo en el podio
+  // de DETECCIÓN, que se mide con POD/FAR/CSI y no tiene correlación.
+  function coronar(filas, rating = null, filaDe = null) {
+    const fila = f => (filaDe ? filaDe(f.modelo) : f.modelo);
+    const nota = f => Number(rating ? rating(f.modelo)
+      : (tieneNota(f.modelo) ? f.modelo.rating : NaN));
+    let mejor = null;
+    (filas || []).forEach(f => {
+      if (!f.comparable || esReferencia(f.modelo) || contradiceNota(fila(f))
+        || !Number.isFinite(nota(f))) return;
+      if (mejor === null || nota(f) > nota(mejor)) mejor = f;
+    });
+    return mejor ? mejor.modelo : null;
+  }
 
   // Carga /validacion (datos del mapa nacional + lista para el selector) y
   // despacha la vista del ámbito activo (Nacional o una estación).
@@ -1410,166 +1465,272 @@
     pintarDetalle(document.getElementById("ml-detalle"), det, detDet);
   }
 
+  /* ============================================================
+     CLASIFICACIÓN DE MODELOS — tres piezas, en este orden:
+       1. quién gana (podio),
+       2. contra qué y con cuántos días se comparó (cabecera de la tabla),
+       3. la tabla entera: primero quienes compiten, con su puesto; después
+          quienes todavía no tienen días para hacerlo, atenuados.
+     Nada de coletillas: si una calificación no es comparable, no se corona y
+     no se explica en un párrafo — se ve en dónde cae la fila y en sus días.
+     ============================================================ */
+
+  // Nombre PUBLICADO de la referencia contra la que se comparó. Si el producto no
+  // trae esa fila, la cabecera calla: la clave interna no se enseña nunca.
+  function nombreReferenciaOrden(d, modelos) {
+    const clave = claveReferenciaOrden(d);
+    if (!clave) return "";
+    const fila = [...(modelos || []), ...((d && d.modelos) || [])]
+      .find(m => String((m && m.modelo) || "") === clave);
+    return fila ? aliasModeloTabla(fila) : "";
+  }
+
+  // Cabecera honesta: contra qué se compara, cuántos días exige y cuántos modelos
+  // lo consiguen. Tres datos medibles, ninguna instrucción de lectura.
+  function cabeceraComparacionHTML(d, filas, modelos) {
+    const ref = nombreReferenciaOrden(d, modelos);
+    const dato = (k, v) => `<span class="ml-val-dato"><span>${esc(k)}</span><b>${esc(v)}</b></span>`;
+    const comparables = filas.filter(f => f.comparable).length;
+    // Sin nadie comparable, «Mínimo 30 días» y «Comparables 0 de 19» repiten en
+    // dos chips lo que el podio acaba de decir en una línea. Queda solo contra
+    // qué se compara, que es el único dato que la tabla de abajo no trae.
+    const cuerpo = ref ? dato("Comparados con", ref) : "";
+    if (!comparables) return cuerpo ? `<div class="ml-val-cab">${cuerpo}</div>` : "";
+    return `<div class="ml-val-cab">${cuerpo}`
+      + dato("Mínimo", `${minimoComparar(d)} días`)
+      + dato("Comparables", `${comparables} de ${filas.length}`) + `</div>`;
+  }
+
+  // Podio. Sin ningún modelo comparable NO se corona a nadie y no se justifica el
+  // vacío: una línea sobria, y la tabla de abajo sigue enseñándolo todo.
+  // El podio vacío tiene DOS causas distintas y decir la que no es vuelve
+  // increíble la pantalla: con «no hay días suficientes» encima de una tabla que
+  // enseña 84 días, el lector deja de creerse el resto. `hayComparables` decide
+  // cuál se dice; ninguna de las dos explica el mecanismo, ambas son el hecho.
+  function podioHTML(items, hayComparables = false) {
+    if (!items.some(x => x.modelo))
+      return `<p class="ml-podio-vacio">${hayComparables
+        ? "Ningún modelo acompaña lo medido mejor que su propio promedio en esta ventana."
+        : "Aún no hay días suficientes para elegir un mejor modelo."}</p>`;
+    return `<div class="ml-podio">${items.map(x => {
+      if (!x.modelo) return `<div class="ml-podio-it ml-podio-hueco">
+        <span class="ml-podio-lab">${esc(x.etiqueta)}</span>
+        <span class="ml-podio-nada">sin días suficientes</span></div>`;
+      const m = x.modelo;
+      const [bg, fg] = calColor(m.rating);
+      return `<div class="ml-podio-it">
+        <span class="ml-podio-lab">${esc(x.etiqueta)}</span>
+        <span class="ml-podio-mod" title="${esc(tituloModeloTabla(m))}">${esc(aliasModeloTabla(m))}</span>
+        ${x.plazo ? `<span class="ml-lead">D+${Number(m.lead)}</span>` : ""}
+        <span class="ml-calif-badge" style="background:${bg};color:${fg}">${num(m.rating, 1)}</span>
+        <span class="ml-podio-n">${Number(m.n)} días</span>
+      </div>`;
+    }).join("")}</div>`;
+  }
+
+  // Estación sin ninguna métrica publicada en el plazo elegido.
+  const sinModelosHTML = () => {
+    const h = normalizarHorizonteValidacion(S.horizonteValidacion);
+    return `<p class="ml-podio-vacio">Todavía no hay modelos validados para esta estación`
+      + `${h === "todos" ? "" : ` en D+${h}`}.</p>`;
+  };
+
+  // Corte entre los dos grupos de la tabla. Dice UNA vez lo que antes se repetía
+  // en cada fila y en una nota al pie.
+  const corteGrupoHTML = (n, cols) => `<tr class="ml-val-corte"><td colspan="${cols}">`
+    + `<span>Aún sin días suficientes para comparar · ${n} ${n === 1 ? "modelo" : "modelos"}</span></td></tr>`;
+
+  // Procedencia y método: en un desplegable, fuera del camino del dato.
+  function pieTablaHTML(d, modelos, tipo) {
+    const partes = [];
+    if (tipo === "det" || tipo === "ambos")
+      partes.push("<b>Detección</b> — POD: días con lluvia acertados · FAR: falsas alarmas · CSI: acierto global (0–1).");
+    if (tipo === "cua" || tipo === "ambos")
+      partes.push("<b>Cuantificación</b> — MAE y RMSE: error medio en mm (menos es mejor) · Sesgo: + pronostica de más, − de menos · Corr y R²: cuánto acompaña las subidas y bajadas de lo medido.");
+    if (tipo === "temp")
+      partes.push("<b>Métricas</b> — MAE y RMSE: error medio en °C (menos es mejor) · Sesgo: + pronostica de más, − de menos · Corr y R²: cuánto acompaña las subidas y bajadas de lo medido · ΔT: el cambio de un día al siguiente (su error, la fracción de días con la dirección correcta y los días en que el modelo dijo «sin cambio» y sí lo hubo).");
+    if ((modelos || []).some(esReferencia))
+      partes.push("<b>Referencias</b> — no son modelos, son la vara: lluvia cero, el valor de ayer y la media del día del año.");
+    partes.push(`<b>Comparables</b> — un modelo entra en el puesto cuando se le midió sobre los mismos días que a la referencia y esos días llegan a ${minimoComparar(d)}.`);
+    return `<details class="hm-mas ml-tabla-pie"><summary>Cómo se mide</summary>`
+      + `<div>${partes.join(" ")}</div></details>`;
+  }
+
   // UNA tabla de clasificación (un bloque de métricas: detección o cuantificación).
-  // La usa pintarDetalle — para precip se pintan DOS (detección + cuantificación).
+  // La usa pintarDetalle — en precip la sustituye la tabla unificada.
   function tablaClasifHTML(d) {
     // Familia + horizonte se resuelven client-side sobre el artefacto estático.
     // Para D+n queda exactamente una fila por modelo; "Todos" conserva una fila
-    // por modelo×plazo y muestra el plazo como dimensión explícita.
+    // por modelo×plazo, y solo entonces la columna Plazo aporta algo.
     const modelos = filtrarModelosHorizonteValidacion(
       d.modelos, S.familia, S.horizonteValidacion);
     const esDet = d.modo === "detection";
     const esTemp = d.bloque === "tmax" || d.bloque === "tmin";
+    const verPlazo = normalizarHorizonteValidacion(S.horizonteValidacion) === "todos";
 
-    // Cabeceras de métricas según el modo (detección vs continuo/cuantificación).
-    const metHead = esDet
+    // Una columna sin UN SOLO número en toda la tabla no se pinta. Las cuatro de
+    // cambio diario (MAE ΔT, Corr ΔT, Acierto ΔT, Fallo plano) las publica el
+    // producto siempre vacías —el motor de hoy no las mide—, así que la tabla de
+    // temperatura enseñaba cuatro cabeceras que nadie reconoce sobre 62.678 filas
+    // de guiones. No se retira ningún dato: si alguna vuelve a traer número,
+    // vuelve a salir sola.
+    const conAlgunNumero = k => modelos.some(m => esFinito(m && m[k]));
+    const metHead = (esDet
       ? [["pod", "POD"], ["far", "FAR"], ["csi", "CSI"]]
       : [["mae", "MAE"], ["rmse", "RMSE"], ["bias", "Sesgo"], ["corr", "Corr"], ["r2", "R²"],
          ...(esTemp ? [["mae_delta", "MAE ΔT"], ["corr_delta", "Corr ΔT"],
-           ["sign_hit_active", "Acierto ΔT"], ["flat_miss_rate", "Fallo plano"]] : [])];
+           ["sign_hit_active", "Acierto ΔT"], ["flat_miss_rate", "Fallo plano"]] : [])]
+      ).filter(([k]) => conAlgunNumero(k));
     const metHeadHTML = metHead.map(([, t]) => `<th class="der">${t}</th>`).join("");
-    const nCols = 6 + metHead.length;
+    const nCols = 3 + (verPlazo ? 1 : 0) + metHead.length;   // + «#» si alguien compite
 
     const fmtMet = (m, k) => {
       const v = m[k];
       if (v === null || v === undefined || Number.isNaN(v)) return "—";
       if (k === "bias") return sgn(v);
       if (["corr", "r2", "corr_delta", "sign_hit_active", "flat_miss_rate",
-        "pod", "far", "csi"].includes(k)) return Number(v).toFixed(2);
-      return Number(v).toFixed(1);
+        "pod", "far", "csi"].includes(k)) return num(v, 2);
+      return num(v, 1);
     };
 
-    // GANADOR del bloque = mayor calificación entre los que califican (con muestra suficiente).
-    // El mejor DETECTOR (POD/FAR/CSI) puede no ser el mejor CUANTIFICADOR (MAE) → por eso el
-    // ganador y el banner son POR BLOQUE, no uno global: es más honesto.
-    let mejorIdx = -1, mejorRating = -Infinity;
-    modelos.forEach((m, i) => {
-      if (esReferencia(m)) return;   // una referencia publica su nota, pero no compite
-      if (m.califica && m.rating != null && m.rating > mejorRating) { mejorRating = m.rating; mejorIdx = i; }
-    });
+    // Comparables arriba con su puesto; el resto después. El ganador del bloque sale
+    // SOLO de los comparables: una calificación medida sobre otros días no se corona.
+    const filas = ordenarPorComparacion(modelos, { minimo: minimoComparar(d) });
+    // Estación sin métricas publicadas: una sola frase. Ni podio que decir que no hay
+    // muestra, ni cabecera de una comparación que no existe, ni tabla en blanco.
+    if (!filas.length) return sinModelosHTML();
+    const mejor = coronar(filas);
+    const corte = filas.findIndex(f => !f.comparable);
+    // Sin nadie comparable no hay puesto que dar: la columna «#» se retira entera
+    // en vez de dejar una fila de guiones explicando lo que ya dijo la cabecera.
+    const verPuesto = filas.some(f => f.comparable);
 
-    const filas = modelos.map((m, i) => {
-      const sinCal = !m.califica || m.rating == null;
-      // Una nota alta NO se pinta de verde si la propia fila la contradice
-      // (correlación o R² negativos = acierta menos que quedarse en el
-      // promedio): pastilla neutra con aviso, para no vender calidad falsa.
-      const contradice = !sinCal && ((esFinito(m.corr) && Number(m.corr) < 0)
-        || (esFinito(m.r2) && Number(m.r2) < 0));
+    const cuerpo = filas.map((f, i) => {
+      const m = f.modelo;
+      const sinCal = !tieneNota(m);
+      const contradice = contradiceNota(m);
       const [bg, fg] = contradice ? calColor(null) : calColor(m.rating);
-      const tipoFam = tipoFamTabla(m.familia);
+      const esMejor = m === mejor;
       const metTds = metHead.map(([k]) =>
         `<td class="num">${sinCal ? "—" : fmtMet(m, k)}</td>`).join("");
-      const esMejor = i === mejorIdx;
-      return `<tr class="${sinCal ? "sin-calif" : ""}${esMejor ? " ml-best" : ""}">
-        <td class="idx">${sinCal ? "—" : i + 1}</td>
-        <td title="${esc(tituloModeloTabla(m))}"><span class="ml-mod-punto" style="background:${esc(m.color)}"></span>${esc(aliasModeloTabla(m))}${esMejor ? " ★" : ""}<span class="ml-mod-tipo"> · ${tipoFam}</span></td>
-        <td class="ml-lead">D+${Number(m.lead)}</td>
-        <td>${sinCal ? `<span style="color:var(--muted-2)">sin calif.</span>`
-          : `<span class="ml-calif-badge" style="background:${bg};color:${fg}"${contradice ? ` title="Nota con correlación o ajuste negativos en esta muestra: acompaña lo real peor que usar el promedio. Tómala con cautela."` : ""}>${num(m.rating, 1)}${contradice ? " ⚠" : ""}</span>`}</td>
-        <td class="num">${m.n}</td>
-        <td>${pillConf(m.confianza)}</td>
+      // Atenuar solo tiene sentido cuando HAY un grupo comparable arriba con el que
+      // contrastar; si no compite nadie, la tabla se lee entera y sin penumbra.
+      const clases = [sinCal ? "sin-calif" : "",
+        (!f.comparable && verPuesto) ? "ml-fuera" : "",
+        esMejor ? "ml-best" : ""].filter(Boolean).join(" ");
+      const sep = (i === corte && corte > 0)
+        ? corteGrupoHTML(filas.length - corte, nCols + (verPuesto ? 1 : 0)) : "";
+      return sep + `<tr class="${clases}">
+        ${verPuesto ? `<td class="idx">${f.puesto === null ? "" : f.puesto}</td>` : ""}
+        <td title="${esc(tituloModeloTabla(m))}"><span class="ml-mod-punto" style="background:${esc(m.color)}"></span>${esc(aliasModeloTabla(m))}${esMejor ? ` <span class="ml-best-mrk">★</span>` : ""}<span class="ml-mod-tipo"> · ${tipoFamTabla(m.familia)}</span></td>
+        ${verPlazo ? `<td class="ml-lead">D+${Number(m.lead)}</td>` : ""}
+        <td>${sinCal ? `<span class="ml-sin-nota">—</span>`
+          : `<span class="ml-calif-badge" style="background:${bg};color:${fg}"${contradice ? ` title="${AVISO_CONTRADICE}"` : ""}>${num(m.rating, 1)}${contradice ? " ⚠" : ""}</span>`}</td>
+        <td class="num ml-dias">${Number.isFinite(Number(m.n)) ? Number(m.n) : "—"}</td>
         ${metTds}
       </tr>`;
     }).join("");
 
-    // Banner del ganador con su n (evita coronar a un modelo con muestra diminuta).
-    const mg = mejorIdx >= 0 ? modelos[mejorIdx] : null;
-    const cautelaMg = mg && String(mg.confianza || "") === "Baja"
-      ? ` · <b>medido sobre pocas fechas: tómalo como indicio, no como veredicto</b>` : "";
-    const banner = mg
-      ? `<div class="ml-mejor-banner"><span class="ml-mejor-estrella">★</span> Mejor en ${esDet ? "detección de eventos" : "cuantificación"}:
-         <b>${esc(aliasModeloCompleto(mg))} · D+${Number(mg.lead)}</b> — calif. ${num(mg.rating, 1)}/10 · confianza ${esc(String(mg.confianza || "—")).toLowerCase()} · <b>${mg.n}</b> fechas${cautelaMg}</div>`
-      : "";
-
-    // Nota al pie en TODAS las variables (antes solo la tabla de lluvia la
-    // tenía): qué mide cada columna, en palabras y con su unidad.
-    const notaMetricas = esDet
-      ? `<div class="ml-pb-nota">POD acierto de los días con lluvia · FAR falsas alarmas · CSI acierto global (0–1; mejor cerca de 1).</div>`
-      : esTemp
-        ? `<div class="ml-pb-nota">MAE/RMSE error medio en °C (menor es mejor) · Sesgo: + pronostica de más, − de menos · Corr/R² qué tanto acompaña las subidas y bajadas de lo medido · ΔT = cambio de un día al siguiente: MAE ΔT su error, Acierto ΔT la fracción de días con la dirección correcta y Fallo plano los días en que el modelo dijo «sin cambio» y sí lo hubo.</div>`
-        : `<div class="ml-pb-nota">MAE/RMSE error medio en mm (menor es mejor) · Sesgo: + pronostica de más, − de menos · Corr/R² qué tanto acompaña las subidas y bajadas de lo medido.</div>`;
-    const notaReferencias = modelos.some(esReferencia) ? NOTA_REFERENCIAS : "";
-
-    return `${banner}
+    return podioHTML([{
+      etiqueta: esDet ? "Mejor detectando eventos"
+        : (esTemp ? "Mejor modelo" : "Mejor cuantificando"),
+      modelo: mejor, plazo: verPlazo,
+    }], verPuesto) + cabeceraComparacionHTML(d, filas, modelos) + `
       <table class="ml-tabla-modelos">
         <thead><tr>
-          <th>#</th><th>Modelo</th><th>Plazo</th><th>Calif.</th><th class="der">Fechas</th><th>Confianza</th>
+          ${verPuesto ? `<th class="der">#</th>` : ""}<th>Modelo</th>${verPlazo ? "<th>Plazo</th>" : ""}
+          <th>Calif.</th><th class="der" title="Días con observación sobre los que se midió">Días</th>
           ${metHeadHTML}
         </tr></thead>
-        <tbody>${filas || `<tr><td colspan="${nCols}" class="suave" style="padding:14px">Sin modelos para esta estación.</td></tr>`}</tbody>
-      </table>${notaMetricas}${notaReferencias}`;
+        <tbody>${cuerpo || `<tr><td colspan="${nCols}" class="suave" style="padding:14px">Sin modelos para esta estación.</td></tr>`}</tbody>
+      </table>${pieTablaHTML(d, modelos, esDet ? "det" : (esTemp ? "temp" : "cua"))}`;
   }
 
-  // UNA SOLA tabla para precip (pedido del dueño 2026-07-09): detección Y cuantificación
-  // en la misma fila por modelo — la columna del MODELO queda FIJA (sticky) y las
-  // métricas se deslizan en X. Aplica a escritorio y móvil.
+  // UNA SOLA tabla para precip (pedido del dueño 2026-07-09): detección Y
+  // cuantificación en la misma fila por modelo. La columna del MODELO queda FIJA
+  // (sticky) y las métricas se deslizan en X; los DÍAS viajan pegados al modelo —
+  // son lo que sostiene la calificación y no pueden quedarse fuera de pantalla.
   function tablaUnificadaHTML(dCua, dDet) {
     const fil = ms => filtrarModelosHorizonteValidacion(
       ms, S.familia, S.horizonteValidacion);
     const cua = fil(dCua.modelos), det = fil(dDet.modelos);
     const clave = claveModeloHorizonteValidacion;
     const dmap = new Map(det.map(m => [clave(m), m]));
-    // Orden = el del bloque base (cuantificación, ya viene por calificación); los
-    // modelos solo-detección se anexan al final.
-    const orden = [...cua];
+    const verPlazo = normalizarHorizonteValidacion(S.horizonteValidacion) === "todos";
+    const minimo = minimoComparar(dCua);
+    // Base = las filas de cuantificación; los modelos que solo tienen detección se
+    // añaden y se ordenan al final de su grupo.
+    const base = [...cua];
     const clavesCua = new Set(cua.map(clave));
-    det.forEach(m => { if (!clavesCua.has(clave(m))) orden.push({ ...m, _soloDet: true }); });
-    // Una referencia publica su nota, pero nunca compite por la estrella.
-    const mejorDe = ms => { let bn = null, br = -Infinity;
-      ms.forEach(m => { if (!esReferencia(m) && m.califica && m.rating != null && m.rating > br) { br = m.rating; bn = clave(m); } }); return bn; };
-    const bestCua = mejorDe(cua), bestDet = mejorDe(det);
-    const sinC = m => !m || !m.califica || m.rating == null;
-    const f2 = v => (v == null || Number.isNaN(v)) ? "—" : Number(v).toFixed(2);
-    const f1 = v => (v == null || Number.isNaN(v)) ? "—" : Number(v).toFixed(1);
-    // Igual que en tablaClasifHTML: correlación o R² negativos anulan el verde.
-    const contradiceUni = m => !sinC(m) && ((esFinito(m.corr) && Number(m.corr) < 0)
-      || (esFinito(m.r2) && Number(m.r2) < 0));
-    const badge = (m, best) => sinC(m)
-      ? `<span style="color:var(--muted-2)">—</span>`
-      : (([bg, fg]) => `<span class="ml-calif-badge" style="background:${bg};color:${fg}"${contradiceUni(m) ? ` title="Nota con correlación o ajuste negativos en esta muestra: acompaña lo real peor que usar el promedio. Tómala con cautela."` : ""}>${num(m.rating, 1)}${contradiceUni(m) ? " ⚠" : ""}</span>${clave(m) === best ? " ★" : ""}`)(contradiceUni(m) ? calColor(null) : calColor(m.rating));
-    const filas = orden.map((base, i) => {
-      const mc = base._soloDet ? null : base;
-      const md = dmap.get(clave(base)) || (base._soloDet ? base : null);
-      const tipoFam = tipoFamTabla(base.familia);
-      return `<tr>
-        <td class="ml-uni-mod" title="${esc(tituloModeloTabla(base))}"><span class="ml-uni-idx">${i + 1}</span><span class="ml-mod-punto" style="background:${esc(base.color)}"></span>${esc(aliasModeloTabla(base))}<span class="ml-mod-tipo"> · ${tipoFam}</span></td>
-        <td class="ml-lead">D+${Number(base.lead)}</td>
-        <td>${badge(md, bestDet)}</td>
+    det.forEach(m => { if (!clavesCua.has(clave(m))) base.push({ ...m, _soloDet: true }); });
+    const filaDet = b => (b && b._soloDet) ? b : dmap.get(clave(b));
+    const filaCua = b => (b && b._soloDet) ? null : b;
+    const notaCua = b => (tieneNota(filaCua(b)) ? Number(b.rating) : NaN);
+    const notaDet = b => { const x = filaDet(b); return tieneNota(x) ? Number(x.rating) : NaN; };
+    // Una fila compite si alguno de sus dos bloques se midió sobre los mismos días
+    // que la referencia: el que se corona por detección nunca cae al grupo de abajo.
+    const filas = ordenarPorComparacion(base, {
+      minimo,
+      entra: b => entraEnComparacion(filaCua(b), minimo) || entraEnComparacion(filaDet(b), minimo),
+      nota: notaCua,
+    });
+    if (!filas.length) return sinModelosHTML();
+    const mejorCua = coronar(filas, notaCua, filaCua);
+    const mejorDet = coronar(filas, notaDet, filaDet);
+    const corte = filas.findIndex(f => !f.comparable);
+    const verPuesto = filas.some(f => f.comparable);
+    // Modelo + [Plazo] + Días + 4 de detección + 6 de cuantificación.
+    const nCols = 12 + (verPlazo ? 1 : 0);
+
+    const f2 = v => num(v, 2);
+    const f1 = v => num(v, 1);
+    const sinC = m => !tieneNota(m);
+    const badge = (m, esMejor) => sinC(m)
+      ? `<span class="ml-sin-nota">—</span>`
+      : (([bg, fg]) => `<span class="ml-calif-badge" style="background:${bg};color:${fg}"${contradiceNota(m) ? ` title="${AVISO_CONTRADICE}"` : ""}>${num(m.rating, 1)}${contradiceNota(m) ? " ⚠" : ""}</span>${esMejor ? ` <span class="ml-best-mrk">★</span>` : ""}`)(
+        contradiceNota(m) ? calColor(null) : calColor(m.rating));
+
+    const cuerpo = filas.map((f, i) => {
+      const b = f.modelo;
+      const mc = filaCua(b), md = filaDet(b) || null;
+      const dias = (mc && mc.n) ?? (md && md.n) ?? null;
+      const sep = (i === corte && corte > 0) ? corteGrupoHTML(filas.length - corte, nCols) : "";
+      return sep + `<tr class="${(!f.comparable && verPuesto) ? "ml-fuera" : ""}">
+        <td class="ml-uni-mod" title="${esc(tituloModeloTabla(b))}">${verPuesto ? `<span class="ml-uni-idx">${f.puesto === null ? "" : f.puesto}</span>` : ""}<span class="ml-mod-punto" style="background:${esc(b.color)}"></span>${esc(aliasModeloTabla(b))}<span class="ml-mod-tipo"> · ${tipoFamTabla(b.familia)}</span></td>
+        ${verPlazo ? `<td class="ml-lead">D+${Number(b.lead)}</td>` : ""}
+        <td class="num ml-dias">${dias === null ? "—" : Number(dias)}</td>
+        <td class="ml-uni-sep">${badge(md, b === mejorDet)}</td>
         <td class="num">${sinC(md) ? "—" : f2(md.pod)}</td>
         <td class="num">${sinC(md) ? "—" : f2(md.far)}</td>
         <td class="num">${sinC(md) ? "—" : f2(md.csi)}</td>
-        <td>${badge(mc, bestCua)}</td>
+        <td class="ml-uni-sep">${badge(mc, b === mejorCua)}</td>
         <td class="num">${sinC(mc) ? "—" : f1(mc.mae)}</td>
         <td class="num">${sinC(mc) ? "—" : f1(mc.rmse)}</td>
         <td class="num">${sinC(mc) ? "—" : sgn(mc.bias)}</td>
         <td class="num">${sinC(mc) ? "—" : f2(mc.corr)}</td>
         <td class="num">${sinC(mc) ? "—" : f2(mc.r2)}</td>
-        <td class="num">${(mc && mc.n) ?? (md && md.n) ?? "—"}</td>
-        <td>${pillConf((mc || md || {}).confianza)}</td>
       </tr>`;
     }).join("");
-    const ban = (ms, best, etq) => {
-      const mg = ms.find(m => clave(m) === best);
-      const cautela = mg && String(mg.confianza || "") === "Baja"
-        ? ` · <b>medido sobre pocas fechas: tómalo como indicio, no como veredicto</b>` : "";
-      return mg ? `<div class="ml-mejor-banner"><span class="ml-mejor-estrella">★</span> Mejor en ${etq}:
-        <b>${esc(aliasModeloCompleto(mg))} · D+${Number(mg.lead)}</b> — calif. ${num(mg.rating, 1)}/10 · <b>${mg.n}</b> fechas${cautela}</div>` : "";
-    };
-    return `${ban(det, bestDet, "detección de eventos")}${ban(cua, bestCua, "cuantificación")}
+
+    const podio = podioHTML([
+      { etiqueta: "Mejor detectando eventos", modelo: filaDet(mejorDet) || null, plazo: verPlazo },
+      { etiqueta: "Mejor cuantificando", modelo: mejorCua, plazo: verPlazo },
+    ], verPuesto);
+    return podio + cabeceraComparacionHTML(dCua, filas, cua) + `
       <div class="ml-uni-wrap">
       <table class="ml-tabla-modelos ml-uni">
         <thead>
-          <tr><th class="ml-uni-mod" rowspan="2">Modelo</th><th rowspan="2">Plazo</th>
-              <th colspan="4" class="ml-uni-grp">Detección · ¿llueve sí/no?</th>
-              <th colspan="6" class="ml-uni-grp">Cuantificación · ¿cuánto?</th>
-              <th colspan="2" class="ml-uni-grp">Muestra</th></tr>
-          <tr><th>Calif.</th><th class="der">POD</th><th class="der">FAR</th><th class="der">CSI</th>
-              <th>Calif.</th><th class="der">MAE</th><th class="der">RMSE</th><th class="der">Sesgo</th>
-              <th class="der">Corr</th><th class="der">R²</th><th class="der">Fechas</th><th>Conf.</th></tr>
+          <tr><th class="ml-uni-mod" rowspan="2">Modelo</th>
+              ${verPlazo ? `<th rowspan="2">Plazo</th>` : ""}
+              <th rowspan="2" class="der" title="Días con observación sobre los que se midió">Días</th>
+              <th colspan="4" class="ml-uni-grp ml-uni-sep">Detección · ¿llueve sí/no?</th>
+              <th colspan="6" class="ml-uni-grp ml-uni-sep">Cuantificación · ¿cuánto?</th></tr>
+          <tr><th class="ml-uni-sep">Calif.</th><th class="der">POD</th><th class="der">FAR</th><th class="der">CSI</th>
+              <th class="ml-uni-sep">Calif.</th><th class="der">MAE</th><th class="der">RMSE</th><th class="der">Sesgo</th>
+              <th class="der">Corr</th><th class="der">R²</th></tr>
         </thead>
-        <tbody>${filas || `<tr><td colspan="14" class="suave" style="padding:14px">Sin modelos para esta estación y horizonte.</td></tr>`}</tbody>
-      </table></div>
-      <div class="ml-pb-nota">Detección: POD acierto · FAR falsa alarma · CSI global. Cuantificación: MAE/RMSE error en mm · Sesgo · Corr. Desliza la tabla para ver todas las métricas; el modelo y su calificación quedan fijos.</div>${orden.some(esReferencia) ? NOTA_REFERENCIAS : ""}`;
+        <tbody>${cuerpo || `<tr><td colspan="${nCols}" class="suave" style="padding:14px">Sin modelos para esta estación y horizonte.</td></tr>`}</tbody>
+      </table></div>${pieTablaHTML(dCua, cua, "ambos")}`;
   }
 
   // Tarjeta 'Clasificación de modelos'. d = bloque principal (cuantificación en
@@ -1587,14 +1748,6 @@
     ].map(([valor, texto]) =>
       `<option value="${valor}" ${horizonte === valor ? "selected" : ""}>${texto}</option>`
     ).join("");
-    const filasVisibles = new Set([
-      ...filtrarModelosHorizonteValidacion(d.modelos, S.familia, horizonte),
-      ...filtrarModelosHorizonteValidacion(
-        dDet && dDet.modelos, S.familia, horizonte),
-    ].map(claveModeloHorizonteValidacion)).size;
-    const alcance = horizonte === "todos"
-      ? `${filasVisibles} combinaciones modelo × plazo · cada fila identifica ambos campos`
-      : `${filasVisibles} modelos en ${etiquetaHorizonteValidacion(horizonte)} · una fila por modelo`;
     cont.innerHTML = `
       <div class="ml-card">
         <div class="ml-detalle-cab">
@@ -1605,7 +1758,6 @@
             <select id="ml-sel-lead">${optsHorizonte}</select>
           </label>
         </div>
-        <div class="ml-clasif-alcance">${esc(alcance)} · ordenados por calificación dentro de esta selección</div>
         ${cuerpo}
       </div>`;
     const selLead = cont.querySelector("#ml-sel-lead");
@@ -1624,7 +1776,77 @@
   /* ============================================================
      SERIE TEMPORAL (dentro de la vista de estación de Validación)
      pintarSerie la invoca cargarEstacion() con la respuesta de /series.
+
+     Idioma de la pantalla (2026-09-06): la serie habla como un meteorólogo.
+     Fuera de la vista quedan la nota por curva en la leyenda (vive en la
+     clasificación de abajo), la frase que explicaba el criterio de selección de
+     curvas y los rótulos de una letra. Lo que es procedencia o método baja al
+     pie o al title. Las funciones de abajo son puras y se prueban en Node.
      ============================================================ */
+  const fechaCorta = iso => FECHA_ISO_RE.test(String(iso || ""))
+    ? `${String(iso).slice(8, 10)}/${String(iso).slice(5, 7)}/${String(iso).slice(0, 4)}`
+    : null;
+  const rotuloVariableSerie = variable => variable === "precip" ? "Precipitación"
+    : (variable === "tmax" ? "Temperatura máxima" : "Temperatura mínima");
+  const rotuloAgregacionSerie = agregacion => ({
+    sum_07_07: "acumulación 07:00–07:00", sum_00_24: "acumulación 00:00–24:00",
+    max: "máxima diaria", min: "mínima diaria",
+  })[agregacion] || String(agregacion || "");
+  // Subtítulo de la serie: QUÉ se está viendo. Va bajo el nombre de la estación
+  // y con menos peso que él; nunca compite con la identidad.
+  const subtituloSerie = (variable, agregacion) =>
+    [rotuloVariableSerie(variable), rotuloAgregacionSerie(agregacion)]
+      .filter(Boolean).join(" · ");
+
+  // Nota de observación: es MÉTODO, no titular. Devuelve una sola línea para el
+  // pie del gráfico. Con mediciones dice cuántas y hasta cuándo; sin ellas dice
+  // el hecho y se calla — no explica que no se fabrica una serie sustituta.
+  function notaObservacionSerie(estadoServidor, observacionesVentana,
+    fechasObservadas, desdeVisual) {
+    const enVentana = Array.isArray(observacionesVentana) ? observacionesVentana : [];
+    const estado = estadoServidor || {};
+    if (enVentana.length) {
+      const ultima = enVentana[enVentana.length - 1] || {};
+      const dias = enVentana.length === 1 ? "1 día medido" : `${enVentana.length} días medidos`;
+      const cierre = fechaCorta(ultima.fecha);
+      return { hay: true,
+        texto: `Observación local · ${dias}${cierre ? ` · hasta ${cierre}` : ""}` };
+    }
+    if (estado.estado === "sin_reporte_reciente") {
+      const ultima = fechaCorta(estado.ultima_fecha);
+      return { hay: false,
+        texto: ultima ? `Sin reporte reciente · última medición ${ultima}`
+          : "Sin reporte reciente" };
+    }
+    if (estado.estado === "variable_no_observada")
+      return { hay: false, texto: "La estación no mide esta variable" };
+    const ultimaLocal = (Array.isArray(fechasObservadas) ? fechasObservadas : [])
+      .filter(fecha => FECHA_ISO_RE.test(String(fecha || ""))).sort().slice(-1)[0] || null;
+    if (ultimaLocal && desdeVisual && ultimaLocal < desdeVisual)
+      return { hay: false,
+        texto: `Última medición ${fechaCorta(ultimaLocal)} · anterior a la ventana` };
+    return { hay: false, texto: "Sin observación local en esta ventana" };
+  }
+
+  // Entrada de leyenda: identifica la curva y nada más. La calificación viaja en
+  // el title (sitio secundario), nunca como texto que compita con el nombre; el
+  // único rótulo visible es el rol de la curva que el sistema emite.
+  function entradaLeyendaSerie(modelo) {
+    const m = modelo || {};
+    if (m.sin_entrenar) {
+      return { nombre: "Respaldo sin ajuste local", operativo: false,
+        titulo: "Respaldo sin ajuste local · esta estación no tiene observación suficiente para entrenar" };
+    }
+    const nombre = aliasModeloPNG(m, 28);
+    const completo = aliasModeloCompleto(m);
+    const operativo = m.operacional === true;
+    const titulo = [completo,
+      esNumeroDeclarado(m.rating) ? `calificación ${num(m.rating, 1)}/10` : null,
+      operativo ? "curva en operación" : null,
+    ].filter(Boolean).join(" · ");
+    return { nombre, operativo, titulo };
+  }
+
   function pintarSerie(card, d) {
     const unidad = d.unidad || "mm";
     const esPrecip = !!d.es_precip;
@@ -1640,24 +1862,25 @@
     const regionCruda = String(meta.region || "—");
     // El último término es el nombre interno retirado, construido por puntos
     // de código para que la palabra no exista en el código fuente.
-    const region = new RegExp(
+    const region = (!regionCruda || regionCruda === "—" || new RegExp(
       "inamhi|celec|hidronaci[oó]n|" + String.fromCharCode(112, 105, 115, 99, 111),
-      "i").test(regionCruda)
-      ? "Región meteorológica no registrada" : regionCruda;
+      "i").test(regionCruda))
+      ? null : regionCruda;
     const coord = (v, etiqueta) => (v === null || v === undefined || !Number.isFinite(Number(v)))
-      ? null : `${etiqueta} ${Number(v).toFixed(5)}°`;
+      ? null : `${etiqueta} ${num(v, 5)}°`;
     const altitud = (meta.altitud_m === null || meta.altitud_m === undefined
       || !Number.isFinite(Number(meta.altitud_m)))
-      ? null : `${Math.round(Number(meta.altitud_m))} m s. n. m.`;
-    const varMet = d.variable === "precip" ? "Precipitación"
-      : (d.variable === "tmax" ? "Temperatura máxima" : "Temperatura mínima");
-    const aggMet = ({ sum_07_07: "acumulación 07:00–07:00",
-      sum_00_24: "acumulación 00:00–24:00", max: "máxima diaria",
-      min: "mínima diaria" })[d.agregacion] || String(d.agregacion || "");
-    const chips = [
+      ? null : `${num(meta.altitud_m, 0)} m s. n. m.`;
+    const varMet = rotuloVariableSerie(d.variable);
+    const aggMet = rotuloAgregacionSerie(d.agregacion);
+    // Identidad de la estación: se queda entera, pero como línea de referencia
+    // —pequeña y después del subtítulo—, no como seis pastillas que pesan más
+    // que el dato que se está mirando.
+    const identidad = [
       `Código ${meta.codigo || d.codigo || "—"}`,
-      redEst(meta), coord(meta.lat, "Lat"), coord(meta.lon, "Lon"), altitud, region,
-    ].filter(Boolean).map(x => `<span class="ml-serie-chip">${esc(x)}</span>`).join("");
+      redEst(meta), region, coord(meta.lat, "Lat"), coord(meta.lon, "Lon"), altitud,
+    ].filter(Boolean).map(x => `<span>${esc(x)}</span>`)
+      .join(' <span class="ml-serie-sep" aria-hidden="true">·</span> ');
     // Fecha de EMISIÓN del dato (campo "hoy" del fichero) y su antigüedad frente
     // al día real: la tarjeta la declara siempre, y en color de aviso si el
     // pronóstico ya lleva días congelado.
@@ -1666,15 +1889,17 @@
     const diasEmision = emision && FECHA_ISO_RE.test(String(hoyReal || ""))
       ? Math.round((fechaMs(hoyReal) - fechaMs(emision)) / DIA_MS) : null;
     const notaEmision = emision
-      ? `<div class="ml-serie-emision${diasEmision > 1 ? " vieja" : ""}">Pronóstico emitido el ${emision.slice(8, 10)}/${emision.slice(5, 7)}/${emision.slice(0, 4)}${diasEmision > 1 ? ` · hace ${diasEmision} días` : (diasEmision === 1 ? " · hace 1 día" : "")}</div>`
+      ? `<p class="ml-serie-emision${diasEmision > 1 ? " vieja" : ""}">Emitido ${fechaCorta(emision)}${diasEmision > 1 ? ` · hace ${diasEmision} días` : (diasEmision === 1 ? " · hace 1 día" : "")}</p>`
       : "";
     // Título propio del gráfico (se imprime en la imagen que exporta Plotly y
     // lo lee el lector de pantalla): estación, variable, unidad y emisión.
     const tituloGrafico = `${meta.nombre || d.nombre || d.codigo || "Estación"} (${meta.codigo || d.codigo || "—"}) · ${varMet} en ${unidad}${emision ? ` · emitido ${emision.slice(8, 10)}/${emision.slice(5, 7)}/${emision.slice(0, 4)}` : ""}`;
+    // Jerarquía: nombre (grande) → qué se está viendo (subtítulo) → identidad
+    // (referencia) → procedencia (discreta).
     const cabecera = `<header class="ml-serie-cabecera">
       <h2>${esc(meta.nombre || d.nombre || d.codigo || "Estación")}</h2>
-      <div class="ml-serie-chips">${chips}</div>
-      <div class="ml-serie-subtitulo">${esc(varMet)}<span aria-hidden="true"> · </span>${esc(aggMet)}</div>
+      <p class="ml-serie-que">${esc(subtituloSerie(d.variable, d.agregacion))}</p>
+      <p class="ml-serie-identidad">${identidad}</p>
       ${notaEmision}
     </header>`;
     const modelosCandidatos = Array.isArray(d.modelos) ? d.modelos : [];
@@ -1712,47 +1937,38 @@
     // aviso, pero continuar hasta construir la traza observada y su estado.
     const famSinModelos = d.familia_activa || d.familia || "seleccionada";
     const etiquetaFamiliaSerie = ({ ML: "aprendizaje automático",
-      Postprocesamiento: "ajuste estadístico" })[famSinModelos] || famSinModelos;
+      Postprocesamiento: "ajuste estadístico",
+      Convencionales: "modelos convencionales",
+      "No convencionales": "modelos no convencionales" })[famSinModelos] || famSinModelos;
     // Si la familia elegida depende del aprendizaje automático y este no emite,
     // el mensaje dice la verdad GENERAL en vez de culpar a la estación elegida.
     const mlFueraFam = S.mlFuera === true && FAMILIAS_ML.includes(famSinModelos);
     const avisoSinModelos = modelosRespuesta.length ? "" : `
       <div class="ml-serie-vacia ml-serie-vacia-modelos" role="status">
         <div class="icono">∅</div>
-        ${mlFueraFam ? `<b>Fuera de servicio.</b>
-        <span>El pronóstico por aprendizaje automático no está emitiendo: ninguna estación tiene estas curvas ahora mismo. La observación disponible se conserva debajo.</span>`
-        : `<b>Sin curvas para esta selección.</b>
-        <span>No hay modelos de ${esc(etiquetaFamiliaSerie)} con datos en esta estación y variable; la observación disponible se conserva debajo.</span>`}
+        ${mlFueraFam
+        ? `<b>El pronóstico por aprendizaje automático no está emitiendo</b>
+           <span>en ninguna estación.</span>`
+        : `<b>Sin curvas de ${esc(etiquetaFamiliaSerie)}</b>
+           <span>en esta estación y variable.</span>`}
       </div>`;
+    // Botón de descarga con rótulo legible. Antes eran dos cuadros idénticos
+    // marcados «S» y «P»: dos controles sin nombre para quien no escribió el código.
+    const botonPNG = (rol, rotulo, titulo) => `<button type="button"
+        class="ml-descarga-png" data-descarga-png="${rol}" title="${esc(titulo)}">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round"
+             stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>
+        </svg><span>${esc(rotulo)}</span>
+      </button>`;
     card.innerHTML = `
       ${cabecera}
-      <div class="ml-serie-acciones" aria-label="Descargas de la estación">
-        <button type="button" class="ml-descarga-png" data-descarga-png="serie"
-                title="Descargar serie PNG · 2310 × 1144 px · 220 dpi"
-                aria-label="Descargar serie en PNG">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-               stroke="currentColor" stroke-width="2" stroke-linecap="round"
-               stroke-linejoin="round" aria-hidden="true">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>
-          </svg><span class="ml-descarga-tipo" aria-hidden="true">S</span>
-        </button>
-        ${esPrecip ? `<button type="button" class="ml-descarga-png"
-                data-descarga-png="probabilidades"
-                title="Descargar probabilidades PNG · 2310 × 1144 px · 220 dpi"
-                aria-label="Descargar probabilidades en PNG">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-               stroke="currentColor" stroke-width="2" stroke-linecap="round"
-               stroke-linejoin="round" aria-hidden="true">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>
-          </svg><span class="ml-descarga-tipo" aria-hidden="true">P</span>
-        </button>` : ""}
-      </div>
       ${avisoSinModelos}
-      <div class="ml-obs-estado" id="ml-obs-estado" role="status"></div>
       <div class="ml-serie-leyenda" id="ml-serie-leyenda"
-           aria-label="Leyenda dinámica de la variable activa"></div>
+           aria-label="Curvas dibujadas"></div>
       <div class="ml-serie-shadow-leyenda" id="ml-serie-shadow-leyenda"
-           aria-label="Comparadores SHADOW no operativos" hidden></div>
+           aria-label="Comparadores no operativos" hidden></div>
       <div class="ml-time-scroll" role="region" tabindex="0"
            aria-label="Serie y probabilidades alineadas por fecha">
         <div class="ml-time-track">
@@ -1760,7 +1976,15 @@
                aria-label="Gráfico: ${esc(tituloGrafico)}. Pronóstico de cada modelo frente a la observación local, día por día."></div>
           <div class="ml-serie-probs" id="ml-serie-probs"></div>
         </div>
-      </div>`;
+      </div>
+      <footer class="ml-serie-pie">
+        <p class="ml-obs-estado" id="ml-obs-estado" role="status"></p>
+        <div class="ml-serie-acciones">
+          ${botonPNG("serie", "Serie", "Descargar el gráfico de la serie en PNG")}
+          ${esPrecip ? botonPNG("probabilidades", "Probabilidad",
+        "Descargar el gráfico de probabilidades en PNG") : ""}
+        </div>
+      </footer>`;
 
     const el = document.getElementById("ml-plot-serie");
     if (!window.Plotly || !el) return;
@@ -1789,31 +2013,15 @@
     })).filter(item => item.fecha && (!desdeVisual || item.fecha >= desdeVisual)
       && esFinito(item.valor));
     const hayObsVentana = observacionesVentana.length > 0;
+    // La observación es MÉTODO: baja al pie del gráfico, en una línea. Si falta,
+    // se dice el hecho —que cambia cómo se lee la figura— y se calla el resto.
     const obsEstadoEl = card.querySelector("#ml-obs-estado");
     if (obsEstadoEl) {
-      const estadoServidor = d.observacion_estado || {};
-      const ultimaServidor = String(estadoServidor.ultima_fecha || "");
-      const ultimaCorta = FECHA_ISO_RE.test(ultimaServidor)
-        ? `${ultimaServidor.slice(8, 10)}/${ultimaServidor.slice(5, 7)}/${ultimaServidor.slice(0, 4)}`
-        : null;
-      // Si el fichero SÍ trae mediciones pero todas quedaron antes de la
-      // ventana dibujada, se dice eso (la estación mide; la ventana avanzó),
-      // nunca un "sin observación" que suene a estación apagada.
-      const ultimaLocal = obsFechas
-        .filter(fecha => FECHA_ISO_RE.test(String(fecha || ""))).sort().slice(-1)[0] || null;
-      const ultimaLocalCorta = ultimaLocal
-        ? `${ultimaLocal.slice(8, 10)}/${ultimaLocal.slice(5, 7)}/${ultimaLocal.slice(0, 4)}` : null;
-      const mensajeSinObs = estadoServidor.estado === "sin_reporte_reciente"
-        ? `Sin reporte reciente; último ${ultimaCorta || "no informado"}. No se dibuja una serie sustituta.`
-        : estadoServidor.estado === "variable_no_observada"
-          ? "Esta estación no observa esta variable en la agregación seleccionada."
-          : (ultimaLocal && desdeVisual && ultimaLocal < desdeVisual
-            ? `La estación sí mide: su última medición es del ${ultimaLocalCorta}, anterior a la ventana mostrada.`
-            : "Sin observación local en esta ventana; se muestran pronósticos sin fabricar una serie sustituta.");
-      obsEstadoEl.classList.toggle("sin-datos", !hayObsVentana);
-      obsEstadoEl.innerHTML = hayObsVentana
-        ? `<span aria-hidden="true">●</span> Observación local · ${observacionesVentana.length} fecha(s) · última ${esc(observacionesVentana[observacionesVentana.length - 1].fecha)}`
-        : `<span aria-hidden="true">○</span> ${esc(mensajeSinObs)}`;
+      const nota = notaObservacionSerie(d.observacion_estado, observacionesVentana,
+        obsFechas, desdeVisual);
+      obsEstadoEl.classList.toggle("sin-datos", !nota.hay);
+      obsEstadoEl.innerHTML =
+        `<span class="ml-obs-punto" aria-hidden="true"></span>${esc(nota.texto)}`;
     }
 
     const traces = [];
@@ -1911,9 +2119,8 @@
       // colapsado: UNA línea punteada gris SIN rating (aunque sea precip), en vez de ~26
       // líneas/barras idénticas superpuestas ("todos los modelos iguales / plano").
       // v14: nombre CLARO para el usuario (el crudo "Sin entrenamiento" confundía).
-      if (m.sin_entrenar) m = { ...m, modelo: "Respaldo (sin obs para entrenar)" };
-      const rtxt = m.sin_entrenar ? "" : ` (${num(m.rating, 1)})`;
-      const otxt = esRecomendado ? " · recomendado" : (m.operacional ? " · operativo" : "");
+      const entradaLeyenda = entradaLeyendaSerie(m);
+      if (m.sin_entrenar) m = { ...m, modelo: entradaLeyenda.nombre };
       (m.fechas || []).forEach((fecha, i) => {
         registrarFecha(fecha);
         // 0 es válido: solo se excluyen nulos y fechas estrictamente pasadas.
@@ -1922,7 +2129,7 @@
         }
       });
       if (esPrecip && !m.dash) {
-        traces.push({ type: "bar", x: fx(m.fechas), y: m.valores, name: `${m.modelo}${otxt}${rtxt}`,
+        traces.push({ type: "bar", x: fx(m.fechas), y: m.valores, name: entradaLeyenda.nombre,
           marker: { color, line: {
             color: oscuro ? "rgba(255,255,255,.58)" : "rgba(15,39,69,.48)",
             width: ordenDesempeno === 0 ? 1.15 : 0.35,
@@ -1935,26 +2142,20 @@
       } else {
         // connectgaps:false + eje completo con null (series.py): un hueco de fechas
         // se ve como hueco, NO como diagonal fantasma (queja La Argelia 84270 03/07).
-        traces.push({ type: "scatter", mode: "lines", x: fx(m.fechas), y: m.valores, name: `${m.modelo}${otxt}${rtxt}`,
+        traces.push({ type: "scatter", mode: "lines", x: fx(m.fechas), y: m.valores, name: entradaLeyenda.nombre,
           line: { color, width: wLin, ...(m.dash ? { dash: m.dash } : {}) }, opacity: op, connectgaps: false,
           hovertemplate: `${esc(aliasModeloPNG(m, 24))}: %{y:.1f} ${esc(unidad)}<extra></extra>` });
       }
       opacidadesTrazas.push(op);
       const swStyle = m.dash ? `border-top:2px dotted ${esc(color)};height:0`
                              : `background:${esc(color)};opacity:${op}`;
-      // El title/aria-label lleva el alias entero; el texto visible sigue corto.
-      const aliasPublico = aliasModeloCompleto(m);
-      const nombreCompleto = `${aliasPublico}${otxt}${rtxt}`
-        + (esRecomendado
-          ? " — recomendado por la mejor calificación verificada entre los modelos operativos"
-          : "");
-      const notaLeyenda = m.sin_entrenar ? "sin calificar"
-        : `${esRecomendado ? "★ · " : (m.operacional ? "en operación · " : "")}nota ${num(m.rating, 1)}/10`;
+      // La leyenda identifica la curva por color y nombre. La calificación NO se
+      // repite aquí: vive en la clasificación de abajo y en el title.
       leyenda.push({ orden: ordenDesempeno,
-        html: `<span class="it" title="${esc(nombreCompleto)}" aria-label="${esc(nombreCompleto)}">
+        html: `<span class="it${entradaLeyenda.operativo ? " es-operativa" : ""}" title="${esc(entradaLeyenda.titulo)}">
           <span class="sw-caja" style="${swStyle}"></span>
-          <span class="ml-leyenda-nombre">${esc(aliasModeloPNG(m, 28))}</span>
-          <span class="ml-leyenda-nota">${esc(notaLeyenda)}</span>
+          <span class="ml-leyenda-nombre">${esc(entradaLeyenda.nombre)}</span>${entradaLeyenda.operativo
+          ? '<span class="ml-leyenda-rol">operativo</span>' : ""}
         </span>` });
     }
 
@@ -1968,22 +2169,21 @@
       (m.fechas || []).forEach(registrarFecha);
       traces.push({
         type: "scatter", mode: "lines", x: fx(m.fechas), y: m.valores,
-        name: String(m.alias || m.modelo || "SHADOW"),
+        name: String(m.alias || m.modelo || "Comparador"),
         line: { color, width: 1.35, dash: "dot" }, opacity: 0.48,
         connectgaps: false, showlegend: false,
-        hovertemplate: `Comparador ${esc(m.alias || m.modelo || "SHADOW")}: %{y:.1f} ${esc(unidad)}<extra>no operativo</extra>`,
+        hovertemplate: `Comparador ${esc(m.alias || m.modelo || "sin nombre")}: %{y:.1f} ${esc(unidad)}<extra>no operativo</extra>`,
       });
       opacidadesTrazas.push(0.48);
-      shadowLeyenda.push(`<span class="it-shadow" title="Comparador descriptivo; no participa en ranking, selector, consenso ni alertas">
+      shadowLeyenda.push(`<span class="it-shadow" title="Comparador descriptivo: no entra en la clasificación, el consenso ni las alertas">
         <span class="sw-shadow" style="border-color:${esc(color)}"></span>
-        <span>${esc(m.alias || m.modelo || `SHADOW ${indice + 1}`)}</span>
-        <small>no operativo</small>
+        <span>${esc(m.alias || m.modelo || `Comparador ${indice + 1}`)}</span>
       </span>`);
     });
     const shadowLeyendaEl = card.querySelector("#ml-serie-shadow-leyenda");
     if (shadowLeyendaEl && shadowLeyenda.length) {
       shadowLeyendaEl.hidden = false;
-      shadowLeyendaEl.innerHTML = `<b>Comparadores SHADOW</b>${shadowLeyenda.join("")}`;
+      shadowLeyendaEl.innerHTML = `<b>Comparadores no operativos</b>${shadowLeyenda.join("")}`;
     }
 
     // Observado: línea y marcadores con contorno para que también destaquen los
@@ -2024,14 +2224,17 @@
       new Date(`${ejeFechas[ejeFechas.length - 1]}T00:00:00Z`).getTime() + 43200000,
     ] : null;
 
-    const layout = App.plotlyLayoutSerie(esc(tituloGrafico), {
+    // Sin título dentro del lienzo: la tarjeta ya dice estación, variable, unidad
+    // y emisión justo encima. Repetirlo robaba 50 px de alto al gráfico. El PNG
+    // sí lleva cabecera propia (figuraTemporalPNG) porque viaja solo.
+    const layout = App.plotlyLayoutSerie("", {
       // Cada fecha es un grupo: ninguna barra tapa a otra. El orden de trazas ya
       // ubica al mejor modelo en el centro y desplaza los siguientes hacia afuera.
       // El eje X sigue siendo temporal para alinear observado y probabilidades.
       barmode: "group", bargap: 0.14, bargroupgap: 0.06,
       showlegend: false,   // única leyenda = la HTML (ml-serie-leyenda); evita leyenda doble
       annotations: etiquetasPuntos,
-      margin: { l: MARGEN_EJE_IZQ_PX, r: MARGEN_EJE_DER_PX, t: 50, b: 56 },
+      margin: { l: MARGEN_EJE_IZQ_PX, r: MARGEN_EJE_DER_PX, t: 24, b: 56 },
       yaxis: { title: { text: unidad, font: { size: 11 } }, rangemode: esPrecip ? "tozero" : "normal",
                showline: true, mirror: true, linecolor: C.marco, linewidth: 1.2,
                ticks: "outside", tickcolor: C.marco,
@@ -2122,17 +2325,14 @@
     const leyEl = document.getElementById("ml-serie-leyenda");
     if (leyEl) {
       const observadoHTML = hayObsVentana
-        ? `<span class="it" title="Observación local"><span class="sw-linea"></span><span class="ml-leyenda-nombre">Observado</span></span>`
+        ? `<span class="it es-observado"><span class="sw-linea"></span><span class="ml-leyenda-nombre">Observado</span></span>`
         : "";
       const modelosHTML = leyenda.sort((a, b) => a.orden - b.orden)
         .map(item => item.html).join("");
       leyEl.dataset.variable = String(d.variable || "");
-      // Recorte declarado: si hay más modelos con datos que el cupo dibujado, se
-      // dice cuántos y dónde ver el resto (la clasificación de abajo los lista).
-      const notaRecorte = modelosRespuesta.length > modelosVisibles.length
-        ? `<span class="it ml-leyenda-mas">se muestran ${modelosVisibles.length} de ${modelosRespuesta.length} modelos con datos (la curva servida, las 3 mejores NWP crudas y el resto por nota); la clasificación de abajo lista todos</span>`
-        : "";
-      leyEl.innerHTML = observadoHTML + modelosHTML + notaRecorte;
+      // Sin frase que justifique el cupo de curvas: quien quiera el censo de
+      // modelos lo tiene completo en la clasificación de abajo.
+      leyEl.innerHTML = observadoHTML + modelosHTML;
     }
 
     // Tabla de probabilidades por umbral: los porcentajes por nivel de lluvia (antes
@@ -2182,15 +2382,14 @@
         });
         const filasU = filasUmbral.map(fila => {
           const celdas = fila.valores.map((p, i) => {
-            return `<td class="ml-pb-c${sep(i)}" data-fecha="${esc(fechasTabla[i])}" style="${celStyle(p)}">${p == null ? "—" : p + "%"}</td>`;
+            return `<td class="ml-pb-c${sep(i)}" data-fecha="${esc(fechasTabla[i])}" style="${celStyle(p)}">${p == null ? "—" : num(p, 0) + " %"}</td>`;
           }).join("");
           const base = Math.abs(Number(fila.u) - 0.1) <= 1e-9
             ? "P(lluvia)" : `≥${fila.u} mm`;
           const etiqueta = fila.acreditada ? base : `${base}°`;
           const motivos = [
             fila.cobertura && fila.cobertura.motivo,
-            !fila.acreditada && fila.veredicto
-              ? (fila.veredicto.etiqueta || fila.veredicto.estado) : null,
+            !fila.acreditada && fila.veredicto ? fila.veredicto.etiqueta : null,
           ].filter(Boolean).join(" · ");
           // El motivo se PINTA bajo el umbral (visible también en táctil);
           // el title queda solo como refuerzo para quien pase el cursor.
@@ -2204,15 +2403,15 @@
         const estadoProb = estadoProbabilidad(
           pu, d.procedencia_probabilistica).texto;
         probsEl.innerHTML = filasUmbral.some(fila => fila.valores.some(esFinito))
-          ? `<div class="ml-pb-tit">Probabilidad de lluvia por umbral · ${estadoProb}</div>
+          ? `<div class="ml-pb-tit">Probabilidad de lluvia por umbral<span class="ml-pb-tit-nota">${esc(estadoProb)}</span></div>
            <div class="ml-pb-wrap"><table class="ml-pb-tabla"><colgroup>${columnas}</colgroup><thead><tr><th class="ml-pb-esq">Umbral</th>${cabFechas}<th class="ml-pb-spacer" aria-hidden="true"></th></tr></thead>
            <tbody>${filasU}</tbody></table></div>${hayNoAcreditados
-             ? `<div class="ml-pb-nota" role="note">° Umbral con destreza NO acreditada en la medición fuera de muestra: sirve para ordenar el riesgo, no como cifra verificada. El motivo aparece bajo cada umbral marcado.</div>`
+             ? `<div class="ml-pb-nota" role="note">° Umbral sin destreza acreditada en la verificación fuera de muestra.</div>`
              : ""}`
-          : `<div class="ml-pb-estado" role="status"><b>Producto probabilístico sin valores finitos en esta ventana.</b></div>`;
+          : `<div class="ml-pb-estado" role="status"><b>Sin probabilidades en esta ventana.</b></div>`;
       } else {
         probsEl.innerHTML = esPrecip
-          ? `<div class="ml-pb-estado" role="status"><b>Sin producto probabilístico emitido.</b><span>No hay datos para esta estación, agregación y ventana.</span></div>`
+          ? `<div class="ml-pb-estado" role="status"><b>Sin probabilidades publicadas para esta estación.</b></div>`
           : "";
       }
     }
@@ -2274,9 +2473,14 @@
 
     // Tarjeta 1 — ¿Qué es cada modelo? (un bloque por familia, borde de color)
     const modelosHTML = modelos.map(grp => {
+      // La clave interna (ML_LGBM, JMA_GSM, MFGLOBAL…) ya NO se enseña: un
+      // glosario traduce lo que el lector ve en otra pantalla, y en las tablas,
+      // la leyenda, el veredicto y las descargas hoy solo aparece el nombre
+      // publicado. Dejarla aquí era la última sigla del código a la vista, sin
+      // nada que traducir. La clave sigue viajando en el producto.
       const items = (grp.items || []).map(it =>
         `<div class="ml-gloss-modelo ${famClase(grp.grupo)}">
-          <div class="top"><code>${esc(it.clave)}</code> <b>${esc(it.nombre)}</b></div>
+          <div class="top"><b>${esc(it.nombre)}</b></div>
           <div class="desc">${esc(it.detalle)}</div>
         </div>`).join("");
       return `<div class="ml-gloss-modelo ${famClase(grp.grupo)}" style="border-left-width:0;padding-left:0">
@@ -2347,8 +2551,23 @@
     _aliasModeloPNG: aliasModeloPNG,
     _seleccionarModelosPNG: seleccionarModelosPNG,
     _seleccionarModelosVisiblesSerie: seleccionarModelosVisiblesSerie,
+    _subtituloSerie: subtituloSerie,
+    _notaObservacionSerie: notaObservacionSerie,
+    _entradaLeyendaSerie: entradaLeyendaSerie,
+    _fechaCorta: fechaCorta,
     _aliasModeloTabla: aliasModeloTabla,
+    _tituloModeloTabla: tituloModeloTabla,
     _tipoFamTabla: tipoFamTabla,
+    _entraEnComparacion: entraEnComparacion,
+    _ordenarPorComparacion: ordenarPorComparacion,
+    _coronar: coronar,
+    _minimoComparar: minimoComparar,
+    _nombreReferenciaOrden: nombreReferenciaOrden,
+    _cabeceraComparacionHTML: cabeceraComparacionHTML,
+    _podioHTML: podioHTML,
+    _tablaClasifHTML: tablaClasifHTML,
+    _tablaUnificadaHTML: tablaUnificadaHTML,
+    _estado: S,   // gancho de pruebas: fija variable/familia/horizonte sin pintar la vista
     _nombreArchivoSeriePNG: nombreArchivoSeriePNG,
     _figuraTemporalPNG: figuraTemporalPNG,
     _figuraProbabilidadesPNG: figuraProbabilidadesPNG,
@@ -2395,5 +2614,22 @@
   // geoglows o datos. Solo se re-pinta la vista de estación si está montada.
   document.addEventListener("temacambiado", () => {
     if (cuerpo() && S.estacion) { try { pintarVistaAmbito(); } catch (e) {} }
+  });
+
+  // Funciones PURAS del panel de series para las pruebas en Node
+  // (hidromet/tests/js/prueba_mlnwp_serie.js). En el navegador no existe
+  // `module`, así que esta línea no hace nada allí.
+  if (typeof module === "object" && module.exports) module.exports = Object.freeze({
+    subtituloSerie,
+    rotuloVariableSerie,
+    rotuloAgregacionSerie,
+    notaObservacionSerie,
+    entradaLeyendaSerie,
+    fechaCorta,
+    seleccionarModelosVisiblesSerie,
+    ordenarModelosPorDesempeno,
+    indiceRecomendadoModelos,
+    aliasModeloPNG,
+    aliasModeloCompleto,
   });
 })();
