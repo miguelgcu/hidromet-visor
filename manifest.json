@@ -1,10 +1,16 @@
 {
-  "generado": "2026-09-06 06:47",
+  "generado": "2026-09-06 09:38",
   "fuente": "Actualización operativa",
-  "ok": true,
-  "parcial": false,
-  "productos_con_fallback": 0,
-  "fallos": [],
-  "areas_degradadas": [],
-  "productos_retenidos_qc_fisico": []
+  "ok": false,
+  "parcial": true,
+  "productos_con_fallback": 1,
+  "fallos": [
+    "export"
+  ],
+  "areas_degradadas": [
+    "cartas:F2",
+    "export"
+  ],
+  "productos_retenidos_qc_fisico": [],
+  "aviso_degradacion": "DEGRADADO POR ORDEN DEL DUEÑO — respaldo físico etiquetado, no acreditado"
 }

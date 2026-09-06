@@ -184,11 +184,13 @@
     return ofrecidos.includes("fija") ? "fija" : (ofrecidos[0] || "fija");
   };
 
-  // Pura (probada en Node): los TRES botones del selector, siempre los tres y siempre
-  // en el mismo orden. Cada uno dice si se puede pulsar y por qué no, en una línea:
+  // Pura (probada en Node): los TRES criterios del selector, siempre los tres y
+  // siempre en el mismo orden. Cada uno dice si se puede elegir y por qué no:
   //   · ZPH fuera de precipitación → no aplica a la variable en pantalla.
   //   · modo sin cartas publicadas → se ve, pero no lleva a una pantalla vacía.
-  // El modo que se está viendo siempre se puede pulsar (es el que sirve el archivo).
+  // El modo que se está viendo siempre se puede elegir (es el que sirve el archivo).
+  // `motivo` es la razón CORTA que viaja dentro de la opción del desplegable;
+  // `titulo` es la línea larga del tooltip (o el método, cuando sí se puede elegir).
   function botonesUmbral(productos, varId, esVisor, modoActivo) {
     const servibles = new Set(variantesParaVariable(variantesUmbral(productos, esVisor), varId)
       .map(m => MODO_UMBRAL_ALIAS[m] || m));
@@ -196,6 +198,8 @@
     return UMBRAL_SELECTOR.map(b => {
       const aplica = b.modo !== "zph" || varId === "alerta_lluvia";
       const publicado = servibles.has(b.modo) || b.modo === activo;
+      const corto = !aplica ? "solo para precipitación"
+        : !publicado ? "sin cartas publicadas" : "";
       const motivo = !aplica ? "Solo para precipitación."
         : !publicado ? "Sin cartas publicadas con estos umbrales." : "";
       return {
@@ -203,10 +207,69 @@
         etiqueta: b.etiqueta,
         activo: aplica && publicado && b.modo === activo,
         habilitado: aplica && publicado,
+        motivo: corto,
         titulo: motivo || b.metodo,
       };
     });
   }
+
+  // Pura (probada en Node): las opciones del DESPLEGABLE de criterio. Un botón
+  // apagado se ve de un vistazo; una opción de una lista cerrada, no. Por eso la
+  // razón por la que un criterio no se puede elegir viaja DENTRO de su texto —
+  // el desplegable no puede esconder lo que el botón enseñaba.
+  const opcionesUmbral = (productos, varId, esVisor, modoActivo) =>
+    botonesUmbral(productos, varId, esVisor, modoActivo).map(b =>
+      Object.assign({}, b, { texto: b.motivo ? `${b.etiqueta} · ${b.motivo}` : b.etiqueta }));
+
+  /* ---------- VER LOS UMBRALES (los cortes, no la advertencia) ----------
+     Los cortes que disparan cada nivel viajan en el MISMO archivo de alertas, en
+     una capa por nivel y variable, y se piden igual que cualquier otra carta.
+     Nada se rellena: una fecha sin cortes se queda sin ellos y una celda sin
+     umbral se queda vacía, como el resto de las mallas. */
+  const NIVELES_UMBRAL = [1, 2, 3];
+  const VAR_BASE_UMBRAL = { alerta_lluvia: "lluvia", alerta_tmin: "tmin", alerta_tmax: "tmax" };
+  // Nombre de la variable en el título de la vista: ahí no se advierte de nada,
+  // se está mirando el corte.
+  const VAR_UMBRAL_ROTULO = { alerta_lluvia: "lluvia", alerta_tmin: "temperatura mínima",
+    alerta_tmax: "temperatura máxima" };
+  const capaUmbral = (nivel, varId) =>
+    `umbral${nivel}_${VAR_BASE_UMBRAL[varId] || VAR_BASE_UMBRAL.alerta_lluvia}`;
+  // Pura: ¿esta capa es un corte? Con esto los cortes NO entran en la grilla de
+  // advertencias como si fueran una fuente de pronóstico más.
+  const esCapaUmbral = (capa) => /^umbral\d+_/.test(String(capa || ""));
+  const RE_CAPA_ALERTA_VAR = /^alerta_(lluvia|tmin|tmax)_/;
+  /* Pura: la advertencia de esta variable en este instante, de la que cuelga su corte.
+     EL PORQUÉ. El corte no se publica como una fuente más: vive en el MISMO archivo,
+     el MISMO registro y la MISMA ventana que la advertencia que lo usó, y solo cambia
+     de capa. Buscarlo en `fuentes` (como se hizo primero) no encontraba nada nunca
+     —el árbol de productos no lista esas capas— y dejaba el botón apagado para siempre.
+     Derivarlo de la advertencia es además la MISMA cuenta que hace el exportador al
+     congelarlo, así que la ruta que se pide y la que se congeló coinciden por
+     construcción, sin un contrato nuevo que mantener a dos bandas.
+     Un instante servido por el archivo de fechas pasadas no lleva cortes: se queda sin
+     ninguno en vez de tomar prestado el de otro archivo. */
+  function alertaBaseUmbral(p, inst, varId) {
+    const base = VAR_BASE_UMBRAL[varId];
+    if (!p || !inst || !base) return null;
+    for (const f of (p.fuentes || [])) {
+      const d = descriptorCarta(p, inst, f);
+      if (!d || d.archivo !== "alertas_diarias.nc") continue;
+      const m = RE_CAPA_ALERTA_VAR.exec(String(d.capa || ""));
+      if (m && m[1] === base) return d;
+    }
+    return null;
+  }
+  // Pura: los tres cortes de la variable y el instante en pantalla. O los tres, o
+  // ninguno: los tres niveles se deciden y se publican juntos.
+  function cartasUmbral(p, inst, varId) {
+    const base = alertaBaseUmbral(p, inst, varId);
+    return NIVELES_UMBRAL.map(n => ({
+      nivel: n, etiqueta: NIVEL_ROTULO[n],
+      descriptor: base ? Object.assign({}, base, { capa: capaUmbral(n, varId) }) : null,
+    }));
+  }
+  const hayCartasUmbral = (p, inst, varId) =>
+    cartasUmbral(p, inst, varId).some(c => !!c.descriptor);
 
   /* ---------- SUBSISTEMA NUEVO (hidromet/alertas): cantonal y verificación ----------
      Funciones PURAS (probadas en Node). El cantonal publicado (/cartas/alertas_cantonal)
@@ -2196,16 +2259,26 @@
       `<option value="${i}" ${i === a.inst ? "selected" : ""}>${esc(x.etiqueta)}</option>`).join("")
       : `<option>Sin instantes</option>`;
 
-    // Selector de umbrales: los TRES criterios, siempre visibles y en el mismo sitio.
-    // El que no se puede servir (ZPH fuera de lluvia, o un criterio sin cartas
-    // publicadas) se ve apagado y dice su razón en el tooltip, no bajo la barra.
-    const segBotones = botonesUmbral(E.productos, a.varId, !!window.HIDROMET_VISOR, a.modo).map(b =>
-      `<button class="${b.activo ? "activo" : ""}" data-modo="${b.modo}" title="${esc(b.titulo)}"${
-        b.habilitado ? "" : " disabled aria-disabled=\"true\""}>${esc(b.etiqueta)}</button>`).join("");
+    // Selector de umbrales: los TRES criterios en un desplegable, siempre los tres
+    // y en el mismo orden. El que no se puede servir (ZPH fuera de lluvia, o un
+    // criterio sin cartas publicadas) sigue en la lista, no se puede elegir y dice
+    // su razón EN LA PROPIA OPCIÓN: cerrada, la lista no enseña nada más.
+    const _opcs = opcionesUmbral(E.productos, a.varId, !!window.HIDROMET_VISOR, a.modo);
+    const optsUmbral = _opcs.map(b =>
+      `<option value="${esc(b.modo)}" title="${esc(b.titulo)}"${b.activo ? " selected" : ""}${
+        b.habilitado ? "" : " disabled"}>${esc(b.texto)}</option>`).join("");
+    const _opcActiva = _opcs.find(b => b.activo) || _opcs[0];
+
+    // Ver los umbrales: se puede entrar cuando el criterio elegido publica sus
+    // cortes para la variable en pantalla; y siempre se puede salir.
+    const _hayUmbrales = hayCartasUmbral(p, inst, a.varId);
+    const _verHabil = _hayUmbrales || !!a.verUmbrales;
 
     // Grilla: una carta por fuente PRESENTE (Consenso + pronóstico + CALIBRADOS),
-    // ordenada según ALERTA_FUENTES; oculta las capas meta (Confianza/Referencia).
-    let _fdisp = p ? (p.fuentes || []).map(f => f.fuente).filter(s => !ALERTA_FUENTE_OCULTA.has(s)) : [];
+    // ordenada según ALERTA_FUENTES; oculta las capas meta (Confianza/Referencia)
+    // y las capas de UMBRAL, que no son una fuente de pronóstico sino el corte.
+    let _fdisp = p ? (p.fuentes || []).filter(f => !esCapaUmbral(f && f.capa))
+      .map(f => f.fuente).filter(s => !ALERTA_FUENTE_OCULTA.has(s)) : [];
     // Cada modo adjunta su inventario REAL de capas. Una calibrada no acreditada
     // permanece visible como diagnóstico; disponibilidad no implica consenso.
     const _porModo = E.productos && E.productos.fuentes_alerta_por_modo;
@@ -2291,20 +2364,38 @@
            alerta.<span data-rol="cant-resumen"> · cargando…</span></p>`
       : "";
 
-    return `
-      <div class="ct-barra compacta">
-        <label><span class="et">Variable</span><select data-rol="avar">${optsVar}</select></label>
-        <span class="ct-div"></span>
-        <div class="segmentado ct-umbral-seg" data-rol="umbral" role="group"
-          aria-label="Umbrales de la advertencia" style="--seg-color:var(--blue)">${segBotones}</div>
-        <button class="boton azulclaro chico" data-rol="editar">✎ Editar umbrales</button>
-        <div class="ct-inst-nav">
-          <button class="ct-nav" data-rol="aprev" title="Paso anterior" aria-label="Paso anterior" ${a.inst <= 0 ? "disabled" : ""}>◀</button>
-          <select class="ct-instante" data-rol="ainst" aria-label="Fecha y hora">${optsInst}</select>
-          <button class="ct-nav" data-rol="anext" title="Paso siguiente" aria-label="Paso siguiente" ${(!p || a.inst >= p.instantes.length - 1) ? "disabled" : ""}>▶</button>
-        </div>
-        ${capasHTML(true, true)}
-      </div>
+    // VISTA DE UMBRALES: los tres cortes —Medio, Alto y Muy alto— de la variable en
+    // pantalla, en la MISMA rejilla de tarjetas y sobre el mismo mapa que se está
+    // mirando, para compararlos de un vistazo. Cada tarjeta lleva su leyenda (con la
+    // unidad que declara el propio dato). Los tres niveles se publican juntos: si no
+    // hay ninguno la vista lo dice en una línea y no llega a dibujar tarjetas.
+    const cartasUmb = cartasUmbral(p, inst, a.varId).filter(u => u.descriptor).map(u => {
+      const meta = `Umbral${inst ? " · " + esc(inst.rango || inst.etiqueta) : ""}`;
+      const cab = `<div class="ct-carta-cab"><span class="titulo">${esc(u.etiqueta)}</span><span class="meta">${meta}</span></div>`;
+      const params = paramsDescriptor(u.descriptor);
+      // Mismo contrato que las cartas de advertencia: en el VISOR se pide la
+      // variante congelada con &modo=<m>; en la app el archivo activo ya es el del
+      // criterio elegido (el POST lo intercambió).
+      if (window.HIDROMET_VISOR) { const _m = modoParaCarta(a.modo, a.varId); if (_m) params.modo = _m; }
+      return `<figure class="ct-carta ct-carta-umbral">${cab}
+        ${lienzoCarta(params, "Umbral " + u.etiqueta + " · " + fechaLocalISO(inst.inicio))}
+        <div class="ct-ley-card" data-rol="ley-card"></div>
+      </figure>`;
+    }).join("");
+    // El editor de cortes regionales no acompaña a la vista de los cortes: allí se
+    // está mirando el criterio elegido, no editando otro.
+    const _botonEditar = a.verUmbrales ? ""
+      : `<button class="boton azulclaro chico" data-rol="editar">✎ Editar umbrales</button>`;
+    const _tituloUmbrales = (_opcActiva ? _opcActiva.etiqueta : "Umbrales")
+      + (VAR_UMBRAL_ROTULO[a.varId] ? " · " + VAR_UMBRAL_ROTULO[a.varId] : "");
+    const _cabUmbrales = `<div class="ct-umbrales-cab"><h3>${esc(_tituloUmbrales)}</h3></div>`;
+    const _rejillaUmbrales = `<div class="ct-grid ct-grid-umbral">${cartasUmb}</div>`;
+    // Los cortes viven en el archivo del pronóstico: una fecha ya pasada no los
+    // conserva. Se dice tal cual —no «todavía», que prometería que van a llegar.
+    const _sinUmbrales = `<p class="ct-umbrales-vacio">Sin umbrales para esta fecha.</p>`;
+    const vistaUmbrales = _cabUmbrales + (_hayUmbrales ? _rejillaUmbrales : _sinUmbrales);
+
+    const vistaAlertas = `
       ${sinArbol}
       <div class="ct-grid">${cartas}</div>
       ${notaFFR}
@@ -2328,6 +2419,29 @@
         <div class="ct-ver-tabla-wrap" data-rol="vtabla"><span class="suave">Leyendo la verificación publicada…</span></div>
         <p class="ct-nota" data-rol="vnota"></p>
       </div>`;
+
+    return `
+      <div class="ct-barra compacta">
+        <label><span class="et">Variable</span><select data-rol="avar">${optsVar}</select></label>
+        <span class="ct-div"></span>
+        <label class="ct-umbral-sel"><span class="et">Criterio</span><select data-rol="umbral"
+          aria-label="Criterio de umbrales de la advertencia"
+          title="${esc(_opcActiva ? _opcActiva.titulo : "")}">${optsUmbral}</select></label>
+        <button class="boton azulclaro chico ct-umbral-ver" data-rol="ver-umbrales"
+          aria-pressed="${a.verUmbrales ? "true" : "false"}"${_verHabil ? "" : " disabled"}
+          title="${esc(!_verHabil ? "Sin umbrales para esta fecha."
+            : a.verUmbrales ? "Volver a las cartas de advertencia."
+            : "Los cortes de Medio, Alto y Muy alto sobre el mapa.")}"
+          >${a.verUmbrales ? "Volver a las advertencias" : "Ver umbrales"}</button>
+        ${_botonEditar}
+        <div class="ct-inst-nav">
+          <button class="ct-nav" data-rol="aprev" title="Paso anterior" aria-label="Paso anterior" ${a.inst <= 0 ? "disabled" : ""}>◀</button>
+          <select class="ct-instante" data-rol="ainst" aria-label="Fecha y hora">${optsInst}</select>
+          <button class="ct-nav" data-rol="anext" title="Paso siguiente" aria-label="Paso siguiente" ${(!p || a.inst >= p.instantes.length - 1) ? "disabled" : ""}>▶</button>
+        </div>
+        ${a.verUmbrales ? capasHTML(false, false) : capasHTML(true, true)}
+      </div>
+      ${a.verUmbrales ? vistaUmbrales : vistaAlertas}`;
   }
 
   function conectarAlertas(cont) {
@@ -2357,9 +2471,14 @@
       a.inst = null;
       re();
     };
-    cont.querySelectorAll('[data-rol="umbral"] button:not([disabled])').forEach(b =>
-      b.onclick = async () => { await fijarModo(b.dataset.modo); re(); });
-    cont.querySelector('[data-rol="editar"]').onclick = abrirEditorUmbrales;
+    const _selUmbral = cont.querySelector('select[data-rol="umbral"]');
+    if (_selUmbral) _selUmbral.onchange = async (e) => { await fijarModo(e.target.value); re(); };
+    // Ver los umbrales / volver a las advertencias: el mismo botón, y su rótulo
+    // dice lo que va a pasar al pulsarlo.
+    const _ver = cont.querySelector('[data-rol="ver-umbrales"]');
+    if (_ver) _ver.onclick = () => { a.verUmbrales = !a.verUmbrales; re(); };
+    const _editar = cont.querySelector('[data-rol="editar"]');
+    if (_editar) _editar.onclick = abrirEditorUmbrales;
 
     const t = tipoNodo("alertas");
     const v = t && t.variables.length ? t.variables.find(x => x.id === a.varId) : null;
@@ -2628,7 +2747,9 @@
       E = { tipo: "pronostico", productos: { tipos: [] }, grid: {},
             // §P4: los cuatro toggles de capa inician ACTIVOS en todas las cartas.
             capas: { grilla: true, isolineas: true, galapagos: true, estaciones: true, cantones: false },
-            alerta: { varId: "alerta_lluvia", modo: "fija", inst: null,
+            // verUmbrales: la pestaña arranca SIEMPRE en las advertencias; la vista
+            // de los cortes se abre a mano y se cierra con el mismo botón.
+            alerta: { varId: "alerta_lluvia", modo: "fija", inst: null, verUmbrales: false,
                       opts: Object.fromEntries(TOGGLES.map(t => [t.id, t.on])) } };
     }
     if (!(E.productos.tipos || []).length || E._stale) {
@@ -3160,6 +3281,15 @@
     MODO_UMBRAL_BOTON,
     UMBRAL_SELECTOR,
     botonesUmbral,
+    opcionesUmbral,
+    // Ver los umbrales: qué capa es cada corte y cuáles están publicados.
+    NIVELES_UMBRAL,
+    VAR_UMBRAL_ROTULO,
+    capaUmbral,
+    esCapaUmbral,
+    alertaBaseUmbral,
+    cartasUmbral,
+    hayCartasUmbral,
     // Subsistema nuevo (hidromet/alertas): puras probadas en Node.
     ALERTA_FUENTES,
     ALERTA_FUENTE_ROTULO,

@@ -1,7 +1,24 @@
 {
   "esquema": "hidromet.degradado.v1",
   "etiqueta": "DEGRADADO — se publicó igual, sin acreditar; el dato va etiquetado",
-  "generado_utc": "2026-09-06T11:47:54+00:00",
-  "total": 0,
-  "degradado": []
+  "generado_utc": "2026-09-06T14:39:17+00:00",
+  "total": 4,
+  "degradado": [
+    {
+      "area": "cartas:F2",
+      "motivo": "cartas:F2: validación espacial estricta bloqueada (PARTIAL_PENDING no conserva evidencia válida previa; las métricas nuevas no sustituyen un incumbente verificado.)"
+    },
+    {
+      "area": "export",
+      "motivo": "resumen de exportación sin cuadrar: 15421 ok + 1 fallidos ≠ 15421 del inventario"
+    },
+    {
+      "area": "export",
+      "motivo": "caché de cartas NO acreditado para la próxima corrida (cache-cartas-no-acreditado): los productos se publican igual; la corrida siguiente volverá a renderizar las cartas"
+    },
+    {
+      "area": "export",
+      "motivo": "1 producto(s) no regenerado(s): conservan su versión anterior, etiquetada con su propia fecha (restaurar-modo-umbrales)"
+    }
+  ]
 }

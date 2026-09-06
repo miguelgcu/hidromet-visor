@@ -38,12 +38,29 @@
 .ct-nav[data-rol="dprev"], .ct-nav[data-rol="dnext"] { font-size: 10px; letter-spacing: -1px; }
 .ct-instante { font: 500 12.5px var(--mono); color: var(--ink); }
 
-/* ---------- selector de umbrales: los TRES criterios, siempre los tres ----------
-   El criterio que ahora no se puede servir (ZPH fuera de precipitación, o uno sin
-   cartas publicadas) NO desaparece: se queda en su sitio, apagado y con el borde
-   punteado, y la razón vive en su tooltip. Ni un párrafo bajo la barra. */
-.ct-umbral-seg button[disabled] { opacity: .45; cursor: not-allowed; border-style: dashed; }
-.ct-umbral-seg button[disabled]:hover { border-color: var(--ctrl-bd); }
+/* ---------- selector de umbrales: los TRES criterios en un desplegable ----------
+   El criterio que ahora no se puede elegir (ZPH fuera de precipitación, o uno sin
+   cartas publicadas) NO desaparece de la lista: sigue en su sitio, en gris y con
+   su razón escrita en la propia opción. Ni un párrafo bajo la barra. */
+.ct-umbral-sel select { min-height: 32px; min-width: 210px; font: 500 12.5px var(--fuente); color: var(--ink); }
+.ct-umbral-sel select option:disabled { color: var(--faint); }
+/* El botón que abre y cierra la vista de los cortes va PEGADO al desplegable:
+   se lee como una sola cosa («este criterio · ver sus umbrales»). */
+.ct-umbral-ver { margin-left: -6px; white-space: nowrap; }
+.ct-umbral-ver[aria-pressed="true"] { background: var(--blue); color: #fff; border-color: var(--blue); }
+.ct-umbral-ver[aria-pressed="true"]:hover { background: var(--blue-press); }
+
+/* ---------- vista de UMBRALES (no es la advertencia: es el corte) ----------
+   Encabezado propio con filete azul: al entrar se ve de inmediato que la pantalla
+   ha cambiado de asunto. Las tarjetas reusan la rejilla de siempre —una por nivel,
+   con su leyenda y su unidad— para comparar los tres cortes de un vistazo. */
+.ct-umbrales-cab { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  margin: 0 0 12px; padding: 2px 0 2px 11px; border-left: 3px solid var(--blue); }
+.ct-umbrales-cab h3 { margin: 0; font-size: 15px; font-weight: 650; color: var(--ink); }
+.ct-umbrales-vacio { margin: 0 0 14px; font-size: 12.5px; color: var(--muted); }
+/* La tarjeta de un corte no puede confundirse con la de una advertencia: su meta
+   dice «Umbral» y va en el azul del módulo. */
+.ct-carta-umbral .ct-carta-cab .meta { color: var(--blue); font-weight: 650; }
 
 /* ---------- toggles de capa (activo = relleno slate) ---------- */
 .ct-toggles { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }

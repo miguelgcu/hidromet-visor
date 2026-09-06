@@ -1,8 +1,8 @@
 {
   "schema": "hidromet.frontend.v1",
   "source": "ui/",
-  "source_sha256": "05d157b7bcfae3eacb6233585d3912936edfe9af50010af812e7079d3e829f02",
-  "cache_version": "05d157b7bcfa",
+  "source_sha256": "fbb682c40e258f77f4ae859e4813772c0b28d14e54945fe725909c9613587cc4",
+  "cache_version": "fbb682c40e25",
   "mode": "readonly-static",
   "included_modules": [
     "mlnwp",
