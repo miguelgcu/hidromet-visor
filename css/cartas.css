@@ -26,8 +26,11 @@
 .ct-barra.compacta, .ct-barra.cols.compacta { align-items: center; }
 .ct-barra.compacta label.bloque { flex-direction: row; align-items: center; gap: 7px; }
 .ct-barra .et { font: 600 10px var(--mono); letter-spacing: .08em; color: var(--faint); text-transform: uppercase; }
+/* Barra de ADVERTENCIAS: tiene que caber en UNA fila desde 1366 px. Hueco propio,
+   más corto que el de las demás barras; el resto del ahorro sale del marcado
+   (sin divisor, sin micro-etiquetas y con el editor en la vista de umbrales). */
+.ct-barra.ct-barra-alertas { gap: 10px; }
 .ct-barra select { font: 500 13px var(--fuente); color: var(--ink); }
-.ct-div { width: 1px; height: 28px; background: var(--line-4); }
 .ct-derecha { display: flex; align-items: center; gap: 6px; margin-left: auto; }
 .ct-nav { width: 32px; height: 32px; border: 1px solid var(--line-2); background: var(--surface);
   border-radius: 8px; cursor: pointer; color: var(--muted); font-size: 13px;
@@ -42,7 +45,13 @@
    El criterio que ahora no se puede elegir (ZPH fuera de precipitación, o uno sin
    cartas publicadas) NO desaparece de la lista: sigue en su sitio, en gris y con
    su razón escrita en la propia opción. Ni un párrafo bajo la barra. */
-.ct-umbral-sel select { min-height: 32px; min-width: 210px; font: 500 12.5px var(--fuente); color: var(--ink); }
+/* Ancho FIJO: la barra ya no cambia de tamaño al pasar de lluvia a temperatura ni
+   al perder un criterio sus cartas. Los tres rótulos caben enteros; el motivo
+   («· sin cartas publicadas») solo acompaña a opciones DESHABILITADAS, que el
+   navegador nunca deja seleccionadas, y si alguna vez se recortara termina en
+   puntos suspensivos —el motivo entero sigue en el title de la opción. */
+.ct-umbral-sel select { min-height: 32px; width: 168px; font: 500 12.5px var(--fuente);
+  color: var(--ink); text-overflow: ellipsis; }
 .ct-umbral-sel select option:disabled { color: var(--faint); }
 /* El botón que abre y cierra la vista de los cortes va PEGADO al desplegable:
    se lee como una sola cosa («este criterio · ver sus umbrales»). */
@@ -57,12 +66,26 @@
 .ct-umbrales-cab { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
   margin: 0 0 12px; padding: 2px 0 2px 11px; border-left: 3px solid var(--blue); }
 .ct-umbrales-cab h3 { margin: 0; font-size: 15px; font-weight: 650; color: var(--ink); }
+/* Donde el criterio NO se edita, el botón «Editar umbrales» ya no está. En vez de
+   desaparecer sin más, DEBAJO de la cabecera va una línea llana con la procedencia de
+   esos cortes: de dónde salen y que los calcula el sistema. Fuera del titular —que es
+   solo el nombre del criterio y la variable— y en tono menor: explica, no advierte. */
+.ct-umbrales-fuente { margin: -6px 0 12px; max-width: 72ch; font-size: 12px;
+  line-height: 1.45; color: var(--muted-2); }
 .ct-umbrales-vacio { margin: 0 0 14px; font-size: 12.5px; color: var(--muted); }
 /* La tarjeta de un corte no puede confundirse con la de una advertencia: su meta
    dice «Umbral» y va en el azul del módulo. */
 .ct-carta-umbral .ct-carta-cab .meta { color: var(--blue); font-weight: 650; }
 
-/* ---------- toggles de capa (activo = relleno slate) ---------- */
+/* ---------- toggles de capa (activo = relleno slate) ----------
+   El relleno vuelve a 5px 11px (2026-09-06). Se había recortado a 5px 8px para que la
+   barra de Advertencias cupiera en una fila, y MEDIDO no hacía falta: con 11px la barra
+   nueva pide 980,4 px de los 1036 disponibles a 1366 px de ventana (una fila, holgura
+   55,6 px; entra desde 1311 px). El recorte tampoco compraba accesibilidad: el bloque
+   @media (hover: none) de base.css sube a 44 px .boton/.chip/.pestana/select, pero NO
+   alcanza a .ct-toggle —no es .boton—, así que el toggle mide 26 px de alto con
+   cualquiera de los dos rellenos. Eso sigue siendo un blanco táctil corto; lo que no
+   es, es una razón para estrecharlo. */
 .ct-toggles { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
 .ct-toggle { font: 600 11px var(--fuente); color: var(--muted); background: var(--surface-3);
   border: 1px solid var(--line); padding: 5px 11px; border-radius: 7px; cursor: pointer;
@@ -146,6 +169,63 @@ html[data-tema="oscuro"] .ct-toggle.activo { color: #101B33; }
 .ct-dl-shp { right: 44px; width: auto; min-width: 30px; padding: 0 7px;
   font: 800 10px/30px ui-monospace, "IBM Plex Mono", monospace; letter-spacing: .4px; }
 
+/* ---------- §DESCARGA-GEOM (2026-09-10): el shapefile, en DOS geometrías ----------
+   El dueño pidió «dos botones, uno de geometría exacta y otro de geometría
+   simplificada» PARA DESCARGAR — el mapa sigue dibujando siempre la exacta.
+   Dos botones sueltos no caben: la esquina de la carta ya lleva el de la imagen y
+   la barra de advertencias costó dejarla en UNA fila desde 1366 px. Así que es UN
+   control con DOS entradas: el disparador ocupa EXACTAMENTE el hueco del «SHP» de
+   antes (mismo alto, mismo ancho, misma esquina — `.ct-dl-desc` hereda su sitio y
+   el botón pasa a `static` dentro) y las opciones se despliegan ENCIMA del mapa,
+   en capa, sin empujar ni un píxel de la tarjeta ni de la barra.
+
+   MEDIDO en hidromet/_pruebas/barra_descarga.html (el banco reconstruido con este
+   marcado; `medirDescarga()` en consola), a 1366 / 1440 / 1536 px de ventana:
+     · disparador ANTES y AHORA: 35,2 × 30 px, a 44 px del borde derecho del
+       lienzo y 8 px del alto. Idéntico en los tres anchos.
+     · tarjeta 339,7 / 364,3 / 396,3 px de ancho; menú desplegado 236 px, alto
+       160,1 (opción apagada) a 204,6 px (frase larga). Le sobran 95,7 / 120,3 /
+       152,3 px por la izquierda y 8 px por la derecha dentro del lienzo, y
+       112,6 a 217,4 px por abajo.
+     · la tarjeta NO cambia de tamaño al abrirlo (el menú va en capa).
+     · caso apretado: a 1181 px —la ventana más estrecha en que la grilla sigue a
+       3 columnas y la tarjeta baja a 278 × 295,6 px— aún sobran 34 px por la
+       izquierda y 47 px por abajo.
+   Y la barra de advertencias sigue clavada donde estaba (`medir()` en
+   hidromet/_pruebas/barra.html): 980,4 px pedidos, UNA fila desde 1311 px. Este
+   control no la toca porque no vive en ella. */
+.ct-dl-desc { position: absolute; top: 8px; right: 44px; z-index: 4; line-height: 0; }
+.ct-dl-desc > .ct-dl-shp { position: static; }
+/* El menú se ancla al BORDE de la carta (right: -36px = los 44 del botón menos los
+   8 del margen), no al botón: así cabe entero en la columna más estrecha en que la
+   grilla sigue a 3 columnas (~285 px de tarjeta a 1181 px de ventana). */
+/* max-height + scroll = RED DE SEGURIDAD, no recorte: el lienzo tiene
+   overflow:hidden, y una carta con muchas más manchas alarga la frase. 232 px es
+   lo que cabe en la tarjeta más baja que llega a tener el menú (278 × 295,7 px, a
+   1181 px de ventana). Si el texto crece, el menú SE DESPLAZA; nunca se corta lo
+   que declara. */
+/* [hidden] lo pone el agente de usuario con display:none, pero un display de
+   AUTOR lo pisa sin importar la especificidad: sin esta linea el menu salia
+   abierto en todas las cartas, tapando el mapa. */
+.ct-dl-menu[hidden] { display: none !important; }
+.ct-dl-menu { position: absolute; top: calc(100% + 6px); right: -36px; z-index: 5;
+  width: 236px; max-height: 232px; display: flex; flex-direction: column;
+  overflow: hidden auto; overscroll-behavior: contain;
+  background: var(--surface); border: 1px solid var(--line-2); border-radius: 10px;
+  box-shadow: 0 8px 22px rgba(8, 18, 38, .20); }
+.ct-dl-op { display: block; width: 100%; text-align: left; padding: 8px 10px 9px;
+  background: none; border: 0; border-top: 1px solid var(--line); cursor: pointer;
+  color: var(--ink); font: inherit; line-height: normal; }
+.ct-dl-op:first-child { border-top: 0; }
+.ct-dl-op:hover, .ct-dl-op:focus-visible { background: var(--blue-50); outline: none; }
+.ct-dl-op:focus-visible { box-shadow: inset 2px 0 0 var(--blue); }
+.ct-dl-op-t { display: block; font: 650 12px var(--fuente); color: var(--ink); }
+.ct-dl-op-d { display: block; margin-top: 2px; font: 400 11px/1.35 var(--fuente); color: var(--muted); }
+/* No disponible: SE VE y dice por qué (jamás se esconde la opción). */
+.ct-dl-op[aria-disabled="true"] { cursor: not-allowed; }
+.ct-dl-op[aria-disabled="true"] .ct-dl-op-t { color: var(--muted-2); }
+.ct-dl-op[aria-disabled="true"]:hover { background: none; }
+
 /* hint de zoom (Ctrl + rueda) — aparece al pasar el cursor sobre la carta */
 .ct-zoomhint { position: absolute; left: 8px; bottom: 8px; z-index: 3; pointer-events: none;
   font: 600 9.5px var(--mono); letter-spacing: .02em; color: var(--muted-2);
@@ -171,6 +251,18 @@ html[data-tema="oscuro"] .ct-toggle.activo { color: #101B33; }
 .ct-leyenda-ticks { position: relative; height: 18px; margin-top: 3px; }
 .ct-leyenda-ticks .t { position: absolute; transform: translateX(-50%); top: 0;
   font: 500 11px var(--mono); color: var(--muted); white-space: nowrap; }
+/* SIN DATO NO ES SIN ALERTA (§17.1b): el hueco que la geometría deja donde no hubo
+   dato se pinta en el mapa con color propio y tramado, y aquí lleva su rótulo con el
+   área DECLARADA. Va FUERA de la barra de riesgo porque no es un nivel más de la
+   escala. La muestra repite el MISMO tramado que dibuja el mapa —mismo ángulo (45°,
+   como el shape "/" de Plotly) y los mismos dos colores— para que la leyenda y el
+   mapa se lean como la misma cosa. Los colores van literales, no por variable de
+   tema, justo por eso: los del mapa también lo son. */
+.ct-leyenda-sindato { display: flex; align-items: center; gap: 7px; margin-top: 2px; }
+.ct-leyenda-sindato .ct-sd-muestra { flex: none; width: 16px; height: 11px; border-radius: 3px;
+  border: 1px solid var(--line-2);
+  background: repeating-linear-gradient(45deg, #4a5162 0 2px, #e6e9ef 2px 6px); }
+.ct-leyenda-sindato .ct-sd-txt { font: 500 11px var(--mono); color: var(--muted); }
 
 /* ---------- panel de validación de desempeño ---------- */
 .ct-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 13px;
@@ -265,9 +357,8 @@ html[data-tema="oscuro"] .ct-toggle.activo { color: #101B33; }
   /* cabecera propia a columna */
   .ct-cabecera { flex-direction: column; align-items: flex-start; gap: 10px; }
   .ct-cabecera h1 { font-size: 19px; }
-  /* barras de control: menos padding, sin divisor vertical */
+  /* barras de control: menos padding */
   .ct-barra, .ct-barra.cols { padding: 10px 12px; gap: 9px 12px; }
-  .ct-div { display: none; }
   .ct-derecha, .ct-capas { margin-left: 0; }
   .ct-inst-nav, .ct-derecha { flex-wrap: wrap; }
   /* controles de instante cómodos al tacto (40px = no revertir el target de base.css) */

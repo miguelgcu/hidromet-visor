@@ -127,12 +127,54 @@
   const MODO_UMBRAL_BOTON = { fija: "Umbrales regionales", zph: "ZPH",
     pctl: "Umbrales zonificados", irf: "Umbrales zonificados" };
   const MODO_UMBRAL_ALIAS = { irf: "pctl" };
+  // PROCEDENCIA de los cortes que NO se editan a mano. El editor solo escribe los
+  // umbrales regionales (cuatro regiones × tres niveles); con cualquier otro criterio
+  // el botón «Editar umbrales» no tiene nada que abrir y desaparecía sin decir por qué.
+  // Esta frase ocupa su sitio: de dónde salen esos cortes y que el sistema los calcula.
+  // Es una explicación, no un candado: la vista de umbrales y la advertencia salen igual.
+  const UMBRAL_PROCEDENCIA = {
+    pctl: "Estos cortes los calcula el sistema con el percentil del día del año de la"
+      + " climatología de cada estación: no se editan a mano.",
+    zph: "Estos cortes salen de la zona de peligro hidrológico de cada área: los calcula"
+      + " el sistema y no se editan a mano.",
+  };
+  // Pura: frase de procedencia del criterio en pantalla, o "" cuando es el que SÍ se edita.
+  const procedenciaUmbrales = modo =>
+    UMBRAL_PROCEDENCIA[MODO_UMBRAL_ALIAS[modo] || modo] || "";
   // Modo del visor → generador del subsistema nuevo (claves del cantonal y de la
   // verificación publicada: `${generador}|${fuente}|${variable}`).
   const GENERADOR_DE_MODO = { fija: "fijo", zph: "zph", pctl: "propio", irf: "propio" };
   // Variable UI → variable del ledger nuevo (precip/tmin/tmax).
   const VAR_LEDGER = { alerta_lluvia: "precip", alerta_tmin: "tmin", alerta_tmax: "tmax" };
   const NIVEL_ROTULO = { 0: "Sin alerta", 1: "Medio", 2: "Alto", 3: "Muy alto" };
+
+  // Nombre legible del ZIP de una alerta. IDÉNTICO a nombre_alerta() en
+  // app/modulos/cartas/advertencias.py: la app lo escribe en Descargas y el
+  // visor lo pone en <a download>; el fichero congelado conserva su ruta.
+  const ALERTA_VAR_NOMBRE = { alerta_lluvia: "Lluvia", alerta_tmin: "Tmin", alerta_tmax: "Tmax" };
+  // Espejo EXACTO de slug_archivo() en app/nucleo/util.py, paso por paso: NFD y fuera
+  // todo lo no-ASCII (así «Ñ»→«N» y un símbolo raro desaparece, como hace
+  // encode("ascii","ignore")), lo que no sea [A-Za-z0-9._-] pasa a «-», se recortan los
+  // bordes, se colapsan los guiones repetidos y se limita a 120. Con fuentes ASCII el
+  // espejo anterior (un solo replace) coincidía; con una fuente acentuada el nombre
+  // visible del ZIP se habría separado del de los miembros que lleva DENTRO.
+  function slugArchivo(texto, maxlen) {
+    const max = maxlen || 120;
+    let t = String(texto == null ? "" : texto).normalize("NFD").replace(/[^\x00-\x7F]/g, "");
+    t = t.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^[-_.]+/, "").replace(/[-_.]+$/, "");
+    t = t.replace(/-{2,}/g, "-");
+    if (t.length > max) t = t.slice(0, max).replace(/[-_.]+$/, "");
+    return t || "descarga";
+  }
+  function nombreDescargaAlerta(capa, tsInicio) {
+    const s = String(capa || ""); const i = s.lastIndexOf("_");
+    const base = i > 0 ? s.slice(0, i) : s, fuente = i > 0 ? s.slice(i + 1) : "";
+    const variable = ALERTA_VAR_NOMBRE[base];
+    if (!variable || !fuente || !Number.isFinite(tsInicio)) return "";   // sin datos -> nombre físico
+    const [a, m, d] = fechaLocalISO(tsInicio).split("-");
+    // El motor slugifica el nombre SIN la extensión y luego le pega «.zip»: aquí igual.
+    return slugArchivo(`Alerta_${variable}_${fuente}_${d}${m}${a}`) + ".zip";
+  }
 
   // Pura: variantes de umbral que de verdad se pueden SERVIR. App viva: las que tienen
   // variante pre-calculada en disco (productos.umbrales_variantes). Visor estático: de
@@ -891,8 +933,223 @@
     if (Number.isSafeInteger(params.reference_time))
       query.esperado_reference_time = params.reference_time;
     const ruta = "/cartas/ffgs_shp?" + qs(query);
-    return `<a class="ct-dl ct-dl-shp" role="button" tabindex="0" data-shp="${esc(ruta)}"
-      title="Descargar en formato shapefile" aria-label="Descargar en formato shapefile">SHP</a>`;
+    // Las cuencas del FFGS no salen de una malla contorneada: la simplificada no
+    // aplica y se dice, en su sitio, en vez de esconder la segunda opción.
+    return controlDescargaShp({ ruta, familia: "ffgs" });
+  }
+
+  /* ============================================================
+     §DESCARGA-GEOM (2026-09-10) — EL SHAPEFILE SE BAJA EN DOS GEOMETRÍAS.
+     Palabras del dueño: «quiero dos botones, uno de geometría exacta y otro de
+     geometría simplificada» y «con eso me bajo ambas versiones, pero en el
+     aplicativo siempre debe mostrarse la geometría exacta».
+
+     POR QUÉ. Los polígonos van a un sistema CAP y hoy son inmanejables. Medido
+     el 2026-09-10 sobre las 165 cartas con alerta del fichero vivo: 8.684 piezas
+     y 647.964 vértices. La simplificada (motor: §17.1c de
+     app/modulos/cartas/cruce.py) los deja en 240.348 vértices, un 63 % menos, SIN
+     dejar fuera ni una celda alertada, a cambio de un 5,9 % más de área.
+
+     Y AQUÍ LA VERDAD INCÓMODA: el número de PIEZAS no baja. 8.684 -> 8.708 (0
+     cartas bajan, 19 suben, 146 igual). Engordar una mota no la funde con su
+     vecina si no se tocan, y fundirlas de verdad exigiría absorberlas hacia el
+     nivel que las rodea, que es lo único que sí perdería alertas. Así que la
+     simplificada alivia el PESO del contorno, no el RECUENTO de manchas: para un
+     CAP manejable por número de áreas hay que ir por cantón, no por geometría.
+
+     LO QUE ESTE MÓDULO **NO** HACE, y es lo importante: no toca el mapa. El mapa
+     dibuja SIEMPRE la exacta, que es la verdad del dato. Aquí no hay conmutador,
+     ni preferencia guardada, ni estado que recordar: hay UN control de descarga
+     con DOS entradas, y la que se elige solo decide QUÉ ZIP se pide. Cerrar el
+     menú deja la pantalla exactamente como estaba.
+
+     UN CONTROL, NO DOS BOTONES. El disparador ocupa EXACTAMENTE el sitio del
+     botón «SHP» de antes (mismo tamaño, misma esquina): la barra de advertencias
+     costó dejarla en una fila desde 1366 px y la carta no tiene un píxel de
+     sobra. Las dos opciones viven en un menú que se despliega bajo el botón y no
+     empuja nada.
+
+     LO QUE AÑADE, DICHO ANTES DE BAJARLO. La simplificada engorda el área: quien
+     la baje tiene que saber cuánta ANTES de bajarla, no al abrir el zip. Si la
+     carta trae la medida (`poligonos.simplificada`, proyección del contrato
+     `hidromet.carta-poligonos-simplificados.v1`), la opción dice los km² y las
+     piezas fundidas de ESA emisión. Si no la trae, dice qué hace el método —los
+     topes son constantes conocidas, no una medida— y que la cifra va escrita en
+     el zip. Nunca se inventa un número: o es el medido o no hay número.
+
+     SIN COMPUERTAS. Si la simplificada no está para esa carta, la entrada SE VE,
+     no se puede elegir y dice por qué. La exacta sigue bajándose igual que hoy:
+     que falte el derivado no puede costar la descarga. ============================================================ */
+  const PARAM_GEOMETRIA = "geometria";
+  const GEOMETRIA_SIMPLIFICADA = "simplificada";
+  const CONTRATO_SIMPLIFICADA = "hidromet.carta-poligonos-simplificados.v1";
+
+  // Rótulos: castellano llano, como se le habla a un colega. El dueño ya rechazó
+  // una etiqueta escrita en clave («Tipo (c), Climatológico, percentil propio…»).
+  const DESC_EXACTA_T = "Geometría exacta";
+  const DESC_EXACTA_D = "El borde tal como sale de la malla. Es el que se dibuja en el mapa y el que sirve para medir.";
+  const DESC_SIMPLE_T = "Geometría simplificada";
+  /* Sin la medida del motor, la frase dice EL MÉTODO —los topes son constantes
+     conocidas, no una medida— y, si la carta está pintada, el «antes» REAL contado
+     sobre el mismo payload que dibuja el mapa: cuántas manchas y cuántos huecos
+     tiene hoy. Eso es exactamente el problema que el dueño quiere ver antes de
+     bajar nada. Lo que NO se dice sin medirlo es cuánta área añade: esa cifra la
+     declara el zip. */
+  const _plural = (n, uno, varios) => `${App.fmtNum(n, 0)} ${n === 1 ? uno : varios}`;
+  function DESC_SIMPLE_METODO(conteo) {
+    const c = conteo;
+    // 2026-09-10: esta frase decia que la simplificada "funde las manchas
+    // sueltas". Es FALSO y se midio sobre las 165 cartas del fichero real: el
+    // numero de piezas no baja NUNCA (0 cartas bajan, 19 suben, 146 igual;
+    // 8.684 -> 8.708). Lo que baja es el DETALLE del contorno: 647.964 -> 240.348
+    // vertices, un 63 % menos. Engordar una mota no la funde con su vecina.
+    const cabeza = (c && c.piezas > 0)
+      ? `Esta carta ${c.piezas === 1 ? "es" : "son"} ${_plural(c.piezas, "mancha", "manchas")}`
+        + (c.huecos > 0 ? ` y ${_plural(c.huecos, "hueco", "huecos")}` : "")
+        + ". La simplificada deja el mismo número de manchas, pero con"
+      : "La simplificada dibuja el mismo territorio con";
+    return cabeza + " un contorno mucho más ligero: engorda las manchas pequeñas, "
+      + "tapa los huecos menores y redondea el borde. Nunca recorta la alerta; "
+      + "añade área, y cuánta añade va escrito en el zip.";
+  }
+
+  /* El «antes» que SÍ se puede contar en el navegador: las piezas y los huecos de
+     la geometría EXACTA de esta carta, sobre el mismo bloque `poligonos` que pinta
+     el mapa. No estima nada de la simplificada —eso no se estima, se declara—;
+     cuenta lo que ya está en la pantalla. */
+  function conteoExactaCarta(d) {
+    const niv = d && d.poligonos && d.poligonos.niveles;
+    if (!niv || typeof niv !== "object") return null;
+    let piezas = 0, huecos = 0;
+    for (const k of ["1", "2", "3"]) {
+      const lista = Array.isArray(niv[k]) ? niv[k] : [];
+      piezas += lista.length;
+      for (const p of lista) huecos += (p && Array.isArray(p.huecos)) ? p.huecos.length : 0;
+    }
+    return { piezas, huecos };
+  }
+
+  /* La medida de ESTA emisión, si la carta la trae. Acepta las dos formas: el
+     resumen plano y la declaración entera del motor (que lleva sus totales en
+     `total`). Ausencia = «no hay medida», jamás un fallo ni una cifra puesta a
+     mano. Pura: solo mira el payload. */
+  function resumenSimplificada(d) {
+    const b = d && d.poligonos && d.poligonos.simplificada;
+    if (!b || typeof b !== "object") return null;
+    if (b.contrato && b.contrato !== CONTRATO_SIMPLIFICADA) return null;
+    const t = (b.total && typeof b.total === "object") ? b.total : b;
+    const num = v => (typeof v === "number" && Number.isFinite(v)) ? v : null;
+    return {
+      derivada: b.derivada !== false,
+      motivo: typeof b.motivo === "string" ? b.motivo : "",
+      area_anadida_km2: num(t.area_anadida_km2),
+      area_anadida_pct: num(t.area_anadida_pct),
+      piezas_antes: num(t.piezas_antes),
+      piezas_despues: num(t.piezas_despues),
+    };
+  }
+
+  /* Frase que lee el usuario ANTES de bajarla. Con medida: los km² de más y las
+     piezas que se funden, de esta carta. Sin medida: qué hace el método. */
+  function frasePreviaSimplificada(resumen, conteo) {
+    const r = resumen;
+    if (!r || r.derivada === false || r.area_anadida_km2 === null)
+      return DESC_SIMPLE_METODO(conteo);
+    const km2 = App.fmtNum(r.area_anadida_km2, r.area_anadida_km2 < 10 ? 1 : 0);
+    const pct = r.area_anadida_pct === null ? "" : ` (+${App.fmtNum(r.area_anadida_pct, 1)} %)`;
+    let s = `Bordes más suaves para un CAP. Cubre toda la alerta exacta y le añade ${km2} km²${pct}`;
+    if (r.piezas_antes !== null && r.piezas_despues !== null && r.piezas_antes > r.piezas_despues) {
+      s += `, y funde ${App.fmtNum(r.piezas_antes - r.piezas_despues, 0)} manchas sueltas:`
+         + ` las ${App.fmtNum(r.piezas_antes, 0)} piezas quedan en ${App.fmtNum(r.piezas_despues, 0)}`;
+    }
+    return s + ".";
+  }
+
+  /* ¿Se puede elegir la simplificada en esta carta? Devuelve el motivo ESCRITO
+     cuando no, para enseñarlo en la propia entrada. Nunca afecta a la exacta. */
+  function estadoSimplificada(ctx) {
+    const c = ctx || {};
+    if (c.familia === "ffgs")
+      return { puede: false, motivo: "Las cuencas del FFGS ya vienen dibujadas una a una: aquí no hay malla que redondear." };
+    if (c.esVisor && !c.publicadaEnVisor)
+      return { puede: false, motivo: "El visor lleva congelada solo la descarga exacta. La simplificada se arma en la aplicación." };
+    const r = c.resumen;
+    if (r && r.derivada === false)
+      return { puede: false, motivo: r.motivo
+        ? `Esta carta no se pudo simplificar: ${r.motivo}`
+        : "Esta carta no se pudo simplificar; queda la exacta, que es la buena." };
+    return { puede: true, motivo: "" };
+  }
+
+  // El nombre del archivo dice qué geometría lleva dentro (rótulo del visor; en la
+  // app el nombre lo pone el servidor). Un zip engordado no puede llamarse igual.
+  function nombreDescargaSimplificada(nombre) {
+    const n = String(nombre || "");
+    if (!n) return "";
+    return n.replace(/\.zip$/i, "") + "_simplificada.zip";
+  }
+
+  // ¿El visor tiene congelado el zip simplificado de esta carta? Contrato aditivo
+  // del catálogo, igual que el de FFGS: si no lo declara, no está.
+  function simplificadaEnVisor(productos) {
+    const raw = productos && productos.disponibilidad && productos.disponibilidad.alerta_shp_simplificada;
+    return !!(raw && raw.publicada === true);
+  }
+
+  let _nDesc = 0;
+  /* El control entero, en HTML. `o`: {ruta, nombreDl, familia, esVisor,
+     publicadaEnVisor, resumen}. Sin `ruta` (el FFGS que el visor no publica) sale
+     el botón inerte de siempre: no hay nada que elegir. */
+  function controlDescargaShp(o) {
+    const c = o || {};
+    const id = `ctdl${++_nDesc}`;
+    const est = estadoSimplificada(c);
+    const nombre = c.nombreDl || "";
+    const rutaSimple = c.ruta + (c.ruta.indexOf("?") >= 0 ? "&" : "?")
+      + `${PARAM_GEOMETRIA}=${GEOMETRIA_SIMPLIFICADA}`;
+    const opExacta = `<button type="button" class="ct-dl-op" role="menuitem" data-shp="${esc(c.ruta)}"${
+      nombre ? ` data-dl="${esc(nombre)}"` : ""}>`
+      + `<span class="ct-dl-op-t">${esc(DESC_EXACTA_T)}</span>`
+      + `<span class="ct-dl-op-d">${esc(DESC_EXACTA_D)}</span></button>`;
+    const opSimple = est.puede
+      ? `<button type="button" class="ct-dl-op" role="menuitem" data-rol="op-simplificada"`
+        + ` data-shp="${esc(rutaSimple)}"${nombre ? ` data-dl="${esc(nombreDescargaSimplificada(nombre))}"` : ""}>`
+        + `<span class="ct-dl-op-t">${esc(DESC_SIMPLE_T)}</span>`
+        + `<span class="ct-dl-op-d">${esc(frasePreviaSimplificada(c.resumen, c.conteo))}</span></button>`
+      : `<button type="button" class="ct-dl-op" role="menuitem" data-rol="op-simplificada"`
+        + ` aria-disabled="true" tabindex="-1">`
+        + `<span class="ct-dl-op-t">${esc(DESC_SIMPLE_T)}</span>`
+        + `<span class="ct-dl-op-d">${esc(est.motivo)}</span></button>`;
+    return `<span class="ct-dl-desc" data-rol="dl-desc">`
+      + `<a class="ct-dl ct-dl-shp" role="button" tabindex="0" aria-haspopup="menu" aria-expanded="false"`
+      + ` aria-controls="${id}" title="Descargar en formato shapefile"`
+      + ` aria-label="Descargar en formato shapefile: geometría exacta o simplificada">SHP</a>`
+      + `<span class="ct-dl-menu" id="${id}" role="menu" hidden`
+      + ` aria-label="Geometría del shapefile">${opExacta}${opSimple}</span></span>`;
+  }
+
+  /* Cuando llega el payload de la carta se REESCRIBE la frase de la entrada
+     simplificada: con las manchas y los huecos que esa emisión tiene de verdad y,
+     si alguien llegara a publicar la medida del derivado, con los km² que añade.
+     Si el motor declaró que no la pudo derivar, la entrada se apaga con el motivo.
+     Antes de esto la entrada ya decía la verdad —qué hace el método—, así que solo
+     afina; nunca es una espera ni una compuerta. */
+  function anotarSimplificadaEnLienzo(div, d) {
+    const op = div && div.querySelector && div.querySelector('[data-rol="op-simplificada"]');
+    if (!op) return;
+    const res = resumenSimplificada(d);
+    const conteo = conteoExactaCarta(d);
+    if (!res && !conteo) return;
+    const txt = op.querySelector(".ct-dl-op-d");
+    if (res && res.derivada === false) {
+      op.setAttribute("aria-disabled", "true");
+      op.setAttribute("tabindex", "-1");
+      delete op.dataset.shp;
+      if (txt) txt.textContent = estadoSimplificada({ resumen: res }).motivo;
+      return;
+    }
+    if (op.getAttribute("aria-disabled") === "true") return;   // no la reabre: el motivo es de fuera
+    if (txt) txt.textContent = frasePreviaSimplificada(res, conteo);
   }
 
   function lienzoCarta(params, alt) {
@@ -913,11 +1170,17 @@
       ? "/cartas/alerta_shp?" + qs({ capa: params.capa, record: params.record,
                                      modo: (E && E.alerta && E.alerta.modo) || "fija" })
       : "";
+    // §DESCARGA-GEOM: el mismo sitio de siempre, con las DOS geometrías dentro.
     const shpBtn = esFFGS
       ? botonShpFFGS(params, E && E.productos, !!window.HIDROMET_VISOR)
       : esAlertaNivel
-      ? `<a class="ct-dl ct-dl-shp" role="button" tabindex="0" data-shp="${esc(shpRuta)}"
-           title="Descargar en formato shapefile" aria-label="Descargar en formato shapefile">SHP</a>`
+      ? controlDescargaShp({
+          ruta: shpRuta,
+          nombreDl: nombreDescargaAlerta(params.capa, params.esperado_inicio),
+          familia: "alerta",
+          esVisor: !!window.HIDROMET_VISOR,
+          publicadaEnVisor: simplificadaEnVisor(E && E.productos),
+        })
       : "";
     // §P18a: data-ffr = fecha (ISO) de la carta cuando es ALERTA DE LLUVIA → el
     // overlay del indicador de susceptibilidad FFR se dibuja encima en pintarMapaCarta.
@@ -965,6 +1228,166 @@
     return fr;
   }
 
+  /* ===================================================================== §POLI
+     UNA SOLA GEOMETRÍA DEL RIESGO ORDINAL (2026-09-06).
+
+     El PNG, el shapefile y este mapa pintaban TRES geometrías distintas del mismo
+     dato. El PNG y el shapefile ya salen de `cruce.poligonos_por_nivel`; el mapa
+     interactivo contorneaba color en RGB (zsmooth:"best") sobre la malla cruda, así
+     que su borde no era el de la descarga. Ahora el motor publica esos MISMOS
+     vértices como UNA CLAVE MÁS del JSON de carta_datos —misma petición, mismo
+     record, sin producto ni slug nuevos— y aquí se pintan tal cual.
+
+     Contrato `hidromet.carta-poligonos.v1`:
+       d.poligonos.niveles["1"|"2"|"3"] = [ {exterior: [[lon,lat],…], huecos: [anillo,…]}, … ]
+     Anillos CERRADOS, ≥4 puntos, WGS84 [lon,lat] a 4 decimales, anidamiento 3⊆2⊆1
+     garantizado, un solo bloque para TODO el dominio (sirve al continente y al inset
+     de Galápagos, igual que el PNG). Un nivel sin geometría NO tiene entrada.
+
+     AUSENCIA = "no hay geometría": la clave sencillamente no está (build congelado
+     antes del cambio, capa que no es riesgo ordinal, o contorneo que falló y se
+     publicó igual). No llega null, ni {}, ni error. Por eso la caída es un `if`
+     sobre la PRESENCIA del dato y no una compuerta: no hay nada que encender. */
+
+  // Pura: piezas de un nivel → arrays x/y de Plotly. Cada anillo (exterior y SUS
+  // huecos) es un subtrazo separado por null: con fill:"toself" Plotly rellena con la
+  // regla PAR-IMPAR, así que el hueco recorta de verdad en vez de taparse. UN nivel =
+  // UNA traza (así el 3 nunca queda por debajo del 2 al apilar).
+  function anillosPoligonoNivel(piezas) {
+    const xs = [], ys = [];
+    for (const pieza of (piezas || [])) {
+      if (!pieza) continue;
+      const anillos = [pieza.exterior].concat(pieza.huecos || []);
+      for (const anillo of anillos) {
+        if (!Array.isArray(anillo) || anillo.length < 4) continue;
+        for (const p of anillo) { xs.push(p[0]); ys.push(p[1]); }
+        xs.push(null); ys.push(null);
+      }
+    }
+    return { xs, ys };
+  }
+  // Pura: color del nivel 0 ("sin alerta"/"sin riesgo") de la escala de la carta. Es el
+  // que el PNG usa de FONDO bajo los polígonos, y el que aquí deja el heatmap PLANO.
+  const colorNivelCeroCarta = d => coloresBanda((d && d.colorscale) || [])[0] || "#ffffff";
+  // Pura: ¿la pieza puede pintar algo dentro de `bbox` [x0,x1,y0,y1]? Comparación de
+  // envolventes, EXACTA para lo que se ve: si la caja de la pieza no toca la del
+  // recuadro, ni un píxel suyo cae dentro. No recorta ni simplifica nada — solo evita
+  // mandarle al inset de Galápagos los 21.927 vértices del continente.
+  function piezaTocaBbox(pieza, bbox) {
+    if (!bbox) return true;
+    const an = pieza && pieza.exterior;
+    if (!Array.isArray(an) || !an.length) return false;
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (const p of an) {
+      if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0];
+      if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1];
+    }
+    return x1 >= bbox[0] && x0 <= bbox[1] && y1 >= bbox[2] && y0 <= bbox[3];
+  }
+  /* SIN DATO NO ES SIN ALERTA (§17.1b, 2026-09-07). El motor RESTA de los tres
+     niveles las celdas SIN DATO que la alerta tapaba y publica esa huella aparte,
+     en `d.poligonos.sin_dato` = {km2, celdas, piezas:[{exterior, huecos}, …]}.
+     Si no se pintara, el agujero quedaría del color del nivel 0 y se leería como
+     «aquí no hay alerta», que NO es lo que dice el dato: es «aquí no hay dato».
+     Por eso lleva color PROPIO —ninguno de los cuatro de la escala de riesgo, para
+     que no pueda confundirse con un nivel— y tramado, más su rótulo con el área en
+     la leyenda. El tramado es `fillpattern` (Plotly 2.35 lo dibuja); una versión
+     que no lo conociera lo ignora y deja el color plano, que ya distingue igual.
+     AUSENCIA = "no hay área sin dato que declarar", como el resto del contrato. */
+  const SIN_DATO_ROTULO = "Sin dato";
+  const SIN_DATO_TINTA = "#4a5162";
+  const SIN_DATO_FONDO = "#e6e9ef";
+  // Pura: bloque `sin_dato` del contrato → {km2, celdas, piezas}, o null cuando no
+  // está o no trae ni una pieza. Nunca inventa el cero: sin piezas no hay rótulo.
+  function sinDatoCarta(d) {
+    const sd = d && d.poligonos && d.poligonos.sin_dato;
+    const piezas = (sd && Array.isArray(sd.piezas)) ? sd.piezas.filter(Boolean) : [];
+    if (!piezas.length) return null;
+    return { km2: Number(sd.km2) || 0, celdas: Number(sd.celdas) || 0, piezas };
+  }
+  // Pura: la traza del hueco SIN DATO, o null. Va SIEMPRE la última para quedar
+  // ENCIMA de los tres niveles: es lo que corrige lo que hay debajo.
+  function trazaSinDatoCarta(d, ejeX, ejeY, bbox) {
+    const sd = sinDatoCarta(d);
+    if (!sd) return null;
+    const a = anillosPoligonoNivel(sd.piezas.filter(p => piezaTocaBbox(p, bbox)));
+    if (!a.xs.length) return null;
+    const t = { type: "scatter", mode: "lines", x: a.xs, y: a.ys, fill: "toself",
+      fillcolor: SIN_DATO_FONDO, line: { color: SIN_DATO_TINTA, width: 0.6 },
+      fillpattern: { shape: "/", size: 7, solidity: 0.3,
+        fgcolor: SIN_DATO_TINTA, bgcolor: SIN_DATO_FONDO },
+      meta: "riesgo-sin-dato", name: SIN_DATO_ROTULO,
+      hoverinfo: "skip", showlegend: false };
+    if (ejeX) t.xaxis = ejeX;
+    if (ejeY) t.yaxis = ejeY;
+    return t;
+  }
+  // Pura: la línea «Sin dato» de la leyenda — muestra tramada + área DECLARADA (la
+  // cifra que el motor ya publica). "" cuando la carta no trae hueco sin dato: no
+  // se enseña un cero que nadie ha medido.
+  function rotuloSinDatoCarta(d) {
+    const sd = sinDatoCarta(d);
+    if (!sd) return "";
+    const area = App.fmtNum(sd.km2, 1, { minimos: 0 });
+    const celdas = App.fmtNum(sd.celdas, 0);
+    const nc = sd.celdas === 1 ? "celda" : "celdas";
+    return `<div class="ct-leyenda-sindato"><span class="ct-sd-muestra" aria-hidden="true"></span>`
+      + `<span class="ct-sd-txt">${esc(SIN_DATO_ROTULO)} · ${esc(area)} km² (${esc(celdas)} ${nc})</span></div>`;
+  }
+  // Pura: bloque `poligonos` → una traza de relleno por nivel, en orden 1 → 2 → 3 (el
+  // anidamiento del contrato hace que apilarlas sea correcto). Colores: los MISMOS de
+  // la escala de la carta, sólidos y sin borde, igual que los parches del PNG.
+  // Devuelve null cuando no hay clave o no hay ni una pieza dibujable.
+  function trazasPoligonosCarta(d, ejeX, ejeY, bbox) {
+    const niveles = d && d.poligonos && d.poligonos.niveles;
+    if (!niveles) return null;
+    const colores = coloresBanda((d && d.colorscale) || []);
+    const rotulos = Array.isArray(d.tick_labels) ? d.tick_labels : [];
+    const colorNivel = k => (colores.length >= 4 && colores[k]) ? colores[k] : CANTONAL_COLOR_NIVEL[k];
+    const traces = [];
+    for (const k of [1, 2, 3]) {
+      const a = anillosPoligonoNivel((niveles[String(k)] || []).filter(p => piezaTocaBbox(p, bbox)));
+      if (!a.xs.length) continue;
+      const t = { type: "scatter", mode: "lines", x: a.xs, y: a.ys, fill: "toself",
+        fillcolor: colorNivel(k), line: { color: colorNivel(k), width: 0 },
+        meta: "riesgo-poligono", name: rotulos[k] || NIVEL_ROTULO[k],
+        hoverinfo: "skip", showlegend: false };
+      if (ejeX) t.xaxis = ejeX;
+      if (ejeY) t.yaxis = ejeY;
+      traces.push(t);
+    }
+    // El hueco SIN DATO, encima de todo: el agujero que dejaron los tres niveles
+    // deja de leerse como «sin alerta» y pasa a leerse como lo que es.
+    const sinDato = trazaSinDatoCarta(d, ejeX, ejeY, bbox);
+    if (sinDato) traces.push(sinDato);
+    return traces.length ? traces : null;
+  }
+  /* Pura: las trazas de RELLENO del campo de una carta. Aquí vive LA ÚNICA CONDICIÓN
+     de todo esto —la PRESENCIA de `d.poligonos.niveles`—, y por eso se puede probar:
+       · con polígonos → heatmap PLANO (color del nivel 0, zsmooth apagado) que solo
+         sostiene el hover por celda + una traza de relleno por nivel, 1 → 2 → 3;
+       · sin ellos     → EXACTAMENTE el heatmap de siempre, con su escala y su
+         zsmooth (`opc.suave`).
+     No es una compuerta: no hay nada que encender, solo un dato que está o no está.
+     `opc` = {escSA, ejeX, ejeY, bbox, suave} (escSA = escala «sin amenaza» del FFGS;
+     bbox = recuadro del inset, para no mandarle piezas que no puede llegar a ver). */
+  function trazasCampoCarta(d, PR, zCampo, hov, opc) {
+    const o = opc || {};
+    const polTr = trazasPoligonosCarta(d, o.ejeX, o.ejeY, o.bbox);
+    const plano = polTr ? colorNivelCeroCarta(d) : null;
+    const escSA = o.escSA;
+    const hm = Object.assign({
+      type: "heatmap", x: PR.lon, y: PR.lat, z: zCampo,
+      colorscale: plano ? [[0, plano], [1, plano]] : (escSA ? escSA.colorscale : d.colorscale),
+      zmin: escSA ? escSA.zmin : d.vmin, zmax: escSA ? escSA.zmax : d.vmax,
+      zsmooth: polTr ? false : (o.suave === undefined ? "best" : o.suave),
+      hoverongaps: false, showscale: false,
+    }, hov || {});
+    if (o.ejeX) hm.xaxis = o.ejeX;
+    if (o.ejeY) hm.yaxis = o.ejeY;
+    return polTr ? [hm].concat(polTr) : [hm];
+  }
+
   // Leyenda de una carta (por tarjeta en Advertencias/FFGS/heladas; compartida bajo la
   // grilla en pronóstico/calibrado/hidro). Distingue escala DISCRETA (bandas iguales,
   // tick en su frontera real derivada del colorscale) de CONTINUA (gradiente, tick
@@ -995,7 +1418,9 @@
       const barra = items.map(it => `<span style="background:${esc(it.c)}"></span>`).join("");
       const tk = items.map((it, i) =>
         `<span class="t" style="left:${((i + 0.5) / n) * 100}%;transform:translateX(-50%)">${esc(it.et)}</span>`).join("");
-      return `${cab}<div class="ct-leyenda-barra">${barra}</div><div class="ct-leyenda-ticks">${tk}</div>`;
+      // «Sin dato» va FUERA de la barra de riesgo, con su propia muestra: no es un
+      // nivel más de la escala, es la ausencia del dato. Solo sale si la carta lo trae.
+      return `${cab}<div class="ct-leyenda-barra">${barra}</div><div class="ct-leyenda-ticks">${tk}</div>${rotuloSinDatoCarta(d)}`;
     }
 
     // "pasos" o "discreto" → bandas de ancho igual (como la carta formal);
@@ -1187,6 +1612,10 @@
     try { d = await apiDatosCarta(datosUrl); }
     catch (e) { if (vivo()) falloLienzo(div, "Sin carta para este instante"); return; }
     if (!vivo()) return;
+    // §DESCARGA-GEOM: la carta trae (o no) la medida de la simplificada. Solo
+    // afina la frase de la opción de descarga; el mapa no la usa para NADA —
+    // dibuja siempre la exacta, con o sin esta clave.
+    anotarSimplificadaEnLienzo(div, d);
     const P = d.principal || d;
     const hayCuencas = !!(d.cuencas && d.cuencas.ids && d.cuencas.ids.length);
     if ((!P || !P.campo || !P.campo.length) && !hayCuencas) { falloLienzo(div, "Sin datos para este instante"); return; }
@@ -1213,9 +1642,15 @@
         if (hov) traces.push(hov);
       }
     }
+    // §POLI: ¿trae la carta los polígonos suaves del motor? Es la ÚNICA condición
+    // (presencia del dato); sin ellos todo sigue exactamente como estaba.
+    const hayPoligonos = !!(d.poligonos && d.poligonos.niveles);
     // Malla refinada en cliente (§pixelado): en el visor sube 71×66 → 141×131;
     // en la app viva ya viene fina (0.05°) y refinarMalla devuelve la misma.
-    const PR = (!d.malla && P && P.campo && P.campo.length) ? refinarMalla(P) : P;
+    // §POLI: con polígonos el COLOR ya no sale del ráster, así que no hay nada que
+    // suavizar — y la malla se queda CRUDA a propósito: el hover de cada celda dice
+    // entonces su nivel REAL, no un valor interpolado entre dos niveles vecinos.
+    const PR = (!d.malla && !hayPoligonos && P && P.campo && P.campo.length) ? refinarMalla(P) : P;
     // §P4: etiqueta de nivel (cartas categóricas) y formateador "valor unidad" — se usan
     // en el hover del heatmap (principal y Galápagos) y en el de las ESTACIONES.
     const etiq = etiquetasCarta(d);
@@ -1239,7 +1674,11 @@
       // FFGS (d.malla): lo NÍTIDO es el relleno vectorial por subcuenca de arriba; si ese
       // falló (cuencasOk=false) llegamos a este raster de RESPALDO → también lo suavizamos,
       // porque pintarlo con zsmooth:false son los cuadrados duros 0.10° (el pixelado real).
-      const suavizar = "best";
+      // §POLI: cuando el motor publica la geometría, el color lo ponen LOS MISMOS
+      // polígonos del PNG y del shapefile. El heatmap NO se quita —es lo que sostiene
+      // el hover celda a celda— pero se queda PLANO: un único color, el del nivel 0
+      // (el mismo fondo que pinta el PNG bajo sus parches) y zsmooth apagado, para
+      // que no vuelva a dibujar un borde propio interpolando color en RGB.
       const hov = etiq                  // alertas/riesgo → etiqueta de nivel en el popup
         ? { text: PR.campo.map(row => (row || []).map(v => etiq(v) || "")),
             hovertemplate: `%{y:.2f}°, %{x:.2f}°<br><b>%{text}</b><extra></extra>` }
@@ -1247,12 +1686,7 @@
       // FFGS con el dominio ENTERO en cero: el cero se pinta gris "sin amenaza", nunca
       // recortado al color más bajo de la escala oficial (eso sería amenaza inventada).
       const escSA = d.vacio === "sin_amenaza" ? escalaSinAmenazaFFGS(d) : null;
-      traces.push(Object.assign({
-        type: "heatmap", x: PR.lon, y: PR.lat, z: _zCampo,
-        colorscale: escSA ? escSA.colorscale : d.colorscale,
-        zmin: escSA ? escSA.zmin : d.vmin, zmax: escSA ? escSA.zmax : d.vmax,
-        zsmooth: suavizar, hoverongaps: false, showscale: false,
-      }, hov));
+      traces.push(...trazasCampoCarta(d, PR, _zCampo, hov, { escSA, suave: "best" }));
     }
     // TOGGLE Isolíneas: contornos sobre el campo (aplican a las cartas raster CONTINUAS:
     // pronóstico, calibrado, hidroestimadores, heladas/calor). Traza encima del relleno,
@@ -1345,7 +1779,9 @@
     // TOGGLE Galápagos: inset en la esquina inferior izquierda. Los modelos globales
     // traen d.galapagos (recorte del archipiélago); los regionales no → se omite.
     const _G0 = d.galapagos, _gb = d.bbox_galapagos;
-    const _G = (_G0 && _G0.campo && _G0.campo.length && !d.malla) ? refinarMalla(_G0) : _G0;
+    // §POLI: mismo criterio que en el panel continental — con polígonos la malla del
+    // inset se queda cruda (el color lo ponen las piezas, el hover dice el nivel real).
+    const _G = (_G0 && _G0.campo && _G0.campo.length && !d.malla && !hayPoligonos) ? refinarMalla(_G0) : _G0;
     if (cap.galapagos && _G && _G.campo && _G.campo.length && _gb) {
       // inset en la ESQUINA INFERIOR DERECHA, separado ~0.5 cm de los márgenes der./inf.
       // §P17: recuadro y título corridos ~2 mm a la DERECHA y ~2 mm hacia ABAJO
@@ -1374,9 +1810,12 @@
         ? { text: _G.campo.map(row => (row || []).map(v => etiq(v) || "")),
             hovertemplate: `%{y:.2f}°, %{x:.2f}°<br><b>%{text}</b><extra></extra>` }
         : { hovertemplate: `%{y:.2f}°, %{x:.2f}°<br><b>%{z:.2f} ${esc(d.unidad || "")}</b><extra></extra>` };
-      traces.push(Object.assign({ type: "heatmap", x: _G.lon, y: _G.lat, z: _G.campo, xaxis: "x2", yaxis: "y2",
-        colorscale: d.colorscale, zmin: d.vmin, zmax: d.vmax, zsmooth: d.malla ? false : "best",
-        hoverongaps: false, showscale: false }, hovG));
+      // §POLI: el bloque de polígonos es UNO para todo el dominio (lon −92,5…−75), así
+      // que el archipiélago se pinta con LAS MISMAS piezas que el continente —igual que
+      // hace el PNG—, solo que sobre los ejes del inset y quedándose con las que tocan
+      // su recuadro (las demás no podrían pintar ni un píxel ahí).
+      traces.push(...trazasCampoCarta(d, _G, _G.campo, hovG,
+        { ejeX: "x2", ejeY: "y2", bbox: _gb, suave: d.malla ? false : "best" }));
       traces.push(...trazasOutline("x2", "y2", _gb, esHeladas ? 0.6 : 0.9, esHeladas ? 1.2 : 2, fijo));   // contorno de las islas con encasillado (§P10: fino en heladas)
       const _muestraG = { lon: _G.lon, lat: _G.lat, campo: _G.campo, fmt: _fmtVal };
       if (cap.estaciones) { await asegurarEstaciones(); const teg = trazaEstaciones(_gb, "x2", "y2", oscuro, _muestraG); if (teg) traces.push(teg); }
@@ -2382,14 +2821,31 @@
         <div class="ct-ley-card" data-rol="ley-card"></div>
       </figure>`;
     }).join("");
-    // El editor de cortes regionales no acompaña a la vista de los cortes: allí se
-    // está mirando el criterio elegido, no editando otro.
-    const _botonEditar = a.verUmbrales ? ""
-      : `<button class="boton azulclaro chico" data-rol="editar">✎ Editar umbrales</button>`;
+    // EL EDITOR VIVE DONDE SE VEN LOS CORTES. Sale de la barra de control (que tenía
+    // que caber en una fila) y pasa a la cabecera de la vista de umbrales, que es la
+    // pantalla donde se está mirando exactamente lo que él cambia. Y solo con el
+    // criterio "Umbrales regionales", porque es el único que edita: el modal escribe
+    // PRECIP/TMIN/TMAX_ALERT_THRESHOLDS (4 regiones × 3 niveles, umbrales.py) y su
+    // "Previsualizar" reclasifica con ESAS tripletas CUALQUIER capa de alerta; con los
+    // zonificados en pantalla sustituía en silencio sus cortes por los regionales.
+    // No es candado: no retiene ningún producto, y con otro criterio la cabecera dice
+    // en una línea de dónde salen esos cortes y que el editor no los toca.
+    const _editaEsteCriterio = (MODO_UMBRAL_ALIAS[a.modo] || a.modo) === "fija";
+    const _botonEditar = _editaEsteCriterio
+      ? `<button class="boton azulclaro chico" data-rol="editar"
+           title="Cambia los umbrales regionales: cuatro regiones por tres niveles. Los zonificados y los de ZPH no se editan aquí; salen de la climatología de cada estación y de su zona.">✎ Editar umbrales</button>`
+      : "";
+    // Y donde no hay botón hay FRASE: el hueco no puede quedarse mudo. Dice de dónde
+    // salen estos cortes y que los calcula el sistema, en una línea llana. Va DEBAJO
+    // de la cabecera, no dentro: el titular sigue siendo el nombre del criterio y la
+    // variable, sin coletillas (prueba_cartas_alertas.js lo vigila).
+    const _procUmbrales = _editaEsteCriterio ? "" : procedenciaUmbrales(a.modo);
+    const _fuenteUmbrales = _procUmbrales
+      ? `<p class="ct-umbrales-fuente">${esc(_procUmbrales)}</p>` : "";
     const _tituloUmbrales = (_opcActiva ? _opcActiva.etiqueta : "Umbrales")
       + (VAR_UMBRAL_ROTULO[a.varId] ? " · " + VAR_UMBRAL_ROTULO[a.varId] : "");
-    const _cabUmbrales = `<div class="ct-umbrales-cab"><h3>${esc(_tituloUmbrales)}</h3></div>`;
-    const _rejillaUmbrales = `<div class="ct-grid ct-grid-umbral">${cartasUmb}</div>`;
+    const _cabUmbrales = `<div class="ct-umbrales-cab"><h3>${esc(_tituloUmbrales)}</h3>${_botonEditar}</div>${_fuenteUmbrales}`;
+    const _rejillaUmbrales = `<div class="ct-grid">${cartasUmb}</div>`;
     // Los cortes viven en el archivo del pronóstico: una fecha ya pasada no los
     // conserva. Se dice tal cual —no «todavía», que prometería que van a llegar.
     const _sinUmbrales = `<p class="ct-umbrales-vacio">Sin umbrales para esta fecha.</p>`;
@@ -2421,10 +2877,9 @@
       </div>`;
 
     return `
-      <div class="ct-barra compacta">
-        <label><span class="et">Variable</span><select data-rol="avar">${optsVar}</select></label>
-        <span class="ct-div"></span>
-        <label class="ct-umbral-sel"><span class="et">Criterio</span><select data-rol="umbral"
+      <div class="ct-barra compacta ct-barra-alertas">
+        <label><select data-rol="avar" aria-label="Variable de la advertencia">${optsVar}</select></label>
+        <label class="ct-umbral-sel"><select data-rol="umbral"
           aria-label="Criterio de umbrales de la advertencia"
           title="${esc(_opcActiva ? _opcActiva.titulo : "")}">${optsUmbral}</select></label>
         <button class="boton azulclaro chico ct-umbral-ver" data-rol="ver-umbrales"
@@ -2432,8 +2887,7 @@
           title="${esc(!_verHabil ? "Sin umbrales para esta fecha."
             : a.verUmbrales ? "Volver a las cartas de advertencia."
             : "Los cortes de Medio, Alto y Muy alto sobre el mapa.")}"
-          >${a.verUmbrales ? "Volver a las advertencias" : "Ver umbrales"}</button>
-        ${_botonEditar}
+          >Umbrales</button>
         <div class="ct-inst-nav">
           <button class="ct-nav" data-rol="aprev" title="Paso anterior" aria-label="Paso anterior" ${a.inst <= 0 ? "disabled" : ""}>◀</button>
           <select class="ct-instante" data-rol="ainst" aria-label="Fecha y hora">${optsInst}</select>
@@ -2473,8 +2927,9 @@
     };
     const _selUmbral = cont.querySelector('select[data-rol="umbral"]');
     if (_selUmbral) _selUmbral.onchange = async (e) => { await fijarModo(e.target.value); re(); };
-    // Ver los umbrales / volver a las advertencias: el mismo botón, y su rótulo
-    // dice lo que va a pasar al pulsarlo.
+    // Ver los cortes / volver a las advertencias: UN solo botón, que queda hundido
+    // mientras la vista está abierta (aria-pressed + relleno azul) y dice en su
+    // tooltip lo que va a pasar al pulsarlo.
     const _ver = cont.querySelector('[data-rol="ver-umbrales"]');
     if (_ver) _ver.onclick = () => { a.verUmbrales = !a.verUmbrales; re(); };
     const _editar = cont.querySelector('[data-rol="editar"]');
@@ -2810,6 +3265,113 @@
     montarMapasCarta(document);
   });
 
+  /* AVISOS DE GEOMETRÍA DE LA ADVERTENCIA (contrato de /cartas/alerta_shp, 2026-09-06).
+     El motor retiró la compuerta: que un nivel de la malla no diera contorno suave ya NO
+     retiene la advertencia; se dibuja con la huella cuadrada de sus celdas —el dato crudo,
+     sin inventar nada— y el hecho viaja como ETIQUETA en `avisos_geometria`. La interfaz
+     lo CUENTA y nunca oculta ni bloquea el botón: la descarga ya salió completa.
+     Lista vacía = camino normal (hoy, el 100 % de los casos) → ni un aviso de más.
+     Pura: solo mira la respuesta. Dentro del zip lo mismo vive en metadata.json
+     (`pixel_fallback_used` + `geometry_avisos`), que es lo que ve el visor congelado. */
+  function avisoGeometriaAdvertencia(r) {
+    const avisos = (r && Array.isArray(r.avisos_geometria)) ? r.avisos_geometria : [];
+    if (!avisos.length) return "";
+    const frases = avisos.map(a => {
+      const det = String((a && a.detalle) || "").trim();
+      if (!det) return "";
+      return (a && a.etiqueta) ? `${a.etiqueta} — ${det}` : det;
+    }).filter(Boolean);
+    const cabeza = avisos.some(a => a && a.respaldo === "celdas")
+      ? "La advertencia se descargó completa: un nivel se dibujó con la huella cuadrada de sus celdas."
+      : "La advertencia se descargó completa, con un aviso de geometría.";
+    return frases.length ? `${cabeza} ${frases.join(" ")}` : cabeza;
+  }
+
+  /* §DESCARGA-GEOM — apertura y cierre del menú de descarga. Estado EFÍMERO: vive
+     en el DOM mientras el menú está abierto y muere al cerrarlo. No se guarda
+     preferencia ninguna: la próxima carta abre igual que esta, y el mapa no se
+     entera de nada. */
+  function cerrarMenusDescarga(salvo) {
+    const abiertos = document.querySelectorAll(".ct-dl-menu:not([hidden])");
+    for (const m of abiertos) {
+      if (m === salvo) continue;
+      m.hidden = true;
+      const disp = m.parentNode && m.parentNode.querySelector(".ct-dl-shp");
+      if (disp) disp.setAttribute("aria-expanded", "false");
+    }
+  }
+
+  function alternarMenuDescarga(disp, forzar) {
+    const menu = disp && disp.parentNode && disp.parentNode.querySelector(".ct-dl-menu");
+    if (!menu) return null;
+    const abrir = forzar === undefined ? !!menu.hidden : !!forzar;
+    cerrarMenusDescarga(abrir ? menu : null);
+    menu.hidden = !abrir;
+    disp.setAttribute("aria-expanded", abrir ? "true" : "false");
+    return abrir ? menu : null;
+  }
+
+  const _opcionesMenu = (menu) => [...menu.querySelectorAll(".ct-dl-op")]
+    .filter(b => b.getAttribute("aria-disabled") !== "true");
+
+  document.addEventListener("click", (ev) => {
+    const t = ev.target;
+    if (!t || !t.closest) return;
+    const disp = t.closest(".ct-dl-desc > .ct-dl-shp");
+    if (disp) { ev.preventDefault(); alternarMenuDescarga(disp); return; }
+    if (!t.closest(".ct-dl-menu")) cerrarMenusDescarga(null);
+  });
+
+  document.addEventListener("keydown", (ev) => {
+    const t = ev.target;
+    if (!t || !t.closest) return;
+    const disp = t.closest(".ct-dl-desc > .ct-dl-shp");
+    if (disp) {
+      if (ev.key === "Enter" || ev.key === " " || ev.key === "ArrowDown") {
+        ev.preventDefault();
+        const menu = alternarMenuDescarga(disp, ev.key === "ArrowDown" ? true : undefined);
+        const ops = menu ? _opcionesMenu(menu) : [];
+        if (ops.length) ops[0].focus();
+      } else if (ev.key === "Escape") { alternarMenuDescarga(disp, false); }
+      return;
+    }
+    const menu = t.closest(".ct-dl-menu");
+    if (!menu) return;
+    const dispo = menu.parentNode.querySelector(".ct-dl-shp");
+    if (ev.key === "Escape" || ev.key === "Tab") {
+      alternarMenuDescarga(dispo, false);
+      if (ev.key === "Escape" && dispo) { ev.preventDefault(); dispo.focus(); }
+      return;
+    }
+    if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+      ev.preventDefault();
+      const ops = _opcionesMenu(menu);
+      if (!ops.length) return;
+      const i = ops.indexOf(t.closest(".ct-dl-op"));
+      const paso = ev.key === "ArrowDown" ? 1 : -1;
+      ops[(i + paso + ops.length) % ops.length].focus();
+    }
+  });
+
+  /* La descarga simplificada trae ÁREA AÑADIDA. Si el servidor la entrega sin la
+     declaración del contrato, eso se DICE —no se calla y no se bloquea: el zip ya
+     está guardado y su LÉEME es la fuente de verdad. Etiqueta, nunca candado. */
+  function avisoDescargaSimplificada(ruta, r) {
+    if (!new RegExp(`[?&]${PARAM_GEOMETRIA}=${GEOMETRIA_SIMPLIFICADA}(?:&|$)`).test(String(ruta || "")))
+      return "";
+    const dec = r && (r.declaracion_simplificada || r.simplificada);
+    const tot = dec && dec.total;
+    if (dec && dec.derivada === false)
+      return "Ojo: no se pudo simplificar y el zip lleva la geometría EXACTA. "
+           + (dec.motivo ? String(dec.motivo) : "");
+    if (!tot || typeof tot.area_anadida_km2 !== "number")
+      return "El zip se guardó, pero no vino la declaración de cuánta área añade: "
+           + "léela en el archivo LEEME del zip antes de subirla a CAP.";
+    return `Geometría engordada a propósito: añade ${App.fmtNum(tot.area_anadida_km2, 0)} km²`
+         + (typeof tot.area_anadida_pct === "number" ? ` (+${App.fmtNum(tot.area_anadida_pct, 1)} %)` : "")
+         + ". Para analizar y medir, la exacta.";
+  }
+
   // Descarga de shapefile (alertas / FFGS) O carta JPG: se GUARDA en la carpeta Descargas desde el
   // servidor (el <a download> de WebView2 no descarga) y se avisa, como el resto de exports.
   document.addEventListener("click", async (ev) => {
@@ -2817,6 +3379,9 @@
     if (!b) return;
     ev.preventDefault();
     if (b.dataset.busy) return;
+    // Elegida la geometría, el menú se cierra: no hay nada que recordar.
+    const _menu = b.closest(".ct-dl-menu");
+    if (_menu) cerrarMenusDescarga(null);
     b.dataset.busy = "1"; b.style.opacity = ".45";
     try {
       // IMAGEN del mapa: FFR (data-dlimg) siempre, y las cartas (data-jpg) cuando
@@ -2828,10 +3393,18 @@
         App.aviso(`Carta guardada en Descargas: ${r.archivo}`, "ok", 6000);
       } else if (b.dataset.shp) {
         if (window.HIDROMET_VISOR) {
-          await _descargarShpVisor(b.dataset.shp);   // ZIP directo o FFGS reconstruido
+          await _descargarShpVisor(b.dataset.shp, b.dataset.dl);   // ZIP directo o FFGS reconstruido
         } else {
           const r = await App.api(b.dataset.shp);
           App.aviso(`Shapefile guardado en Descargas: ${r.archivo}`, "ok", 6000);
+          // Etiqueta, no candado: el archivo YA está guardado; esto solo cuenta cómo
+          // se dibujó un nivel cuando el contorneo suave no dio geometría.
+          const nota = avisoGeometriaAdvertencia(r);
+          if (nota) App.aviso(nota, "info", 11000);
+          // §DESCARGA-GEOM: si lo bajado fue la simplificada, se dice cuánta área
+          // añadió. Que el zip esté guardado no exime de declarar lo que engorda.
+          const notaGeom = avisoDescargaSimplificada(b.dataset.shp, r);
+          if (notaGeom) App.aviso(notaGeom, "info", 12000);
         }
       }
     } catch (e) {
@@ -2843,9 +3416,11 @@
 
   // VISOR: descarga un ZIP directo (alertas/FFR) o recompone FFGS desde bloques
   // compartidos. No hay motor que genere el shapefile en vivo.
-  async function _descargarShpVisor(rutaApi) {
+  async function _descargarShpVisor(rutaApi, nombrePreferido) {
     const prod = App.rutaAProducto(rutaApi).replace(/\.json$/, ".zip");
-    let blob = null, nombre = prod.split("/").pop() || "shapefile.zip";
+    // El nombre FÍSICO del producto es la ruta congelada, nunca el nombre visible:
+    // se pide por `prod` y se baja con el rótulo que trae el botón (data-dl).
+    let blob = null, nombre = nombrePreferido || prod.split("/").pop() || "shapefile.zip";
     // Los FFGS comparten una geometría grande entre variables/records. El visor
     // publica una sola copia de cada bloque y recompone localmente el mismo ZIP.
     // El fallback mantiene compatibles builds anteriores durante la transición.
@@ -2856,7 +3431,7 @@
         if (mr.ok) {
           const reconstruido = await App.zipDesdeManifest(await mr.json(), manifestProd);
           blob = reconstruido.blob;
-          nombre = reconstruido.nombre;
+          if (!nombrePreferido) nombre = reconstruido.nombre;   // el manifiesto solo gana si el botón no trajo rótulo
         }
       } catch (e) { /* intentar el ZIP legado debajo */ }
     }
@@ -3280,6 +3855,34 @@
     ffgsUsaReferencia,
     MODO_UMBRAL_BOTON,
     UMBRAL_SELECTOR,
+    procedenciaUmbrales,
+    // §POLI: una sola geometría del riesgo ordinal (contrato carta-poligonos.v1) y
+    // los avisos de geometría de la advertencia; espejo del slug del motor.
+    anillosPoligonoNivel,
+    piezaTocaBbox,
+    sinDatoCarta,
+    trazaSinDatoCarta,
+    rotuloSinDatoCarta,
+    trazasPoligonosCarta,
+    trazasCampoCarta,
+    colorNivelCeroCarta,
+    avisoGeometriaAdvertencia,
+    // §DESCARGA-GEOM: las dos geometrías de la descarga. Puras y probadas en Node
+    // (hidromet/tests/js/prueba_cartas_descarga_geom.js). El mapa no las llama.
+    PARAM_GEOMETRIA,
+    GEOMETRIA_SIMPLIFICADA,
+    CONTRATO_SIMPLIFICADA,
+    resumenSimplificada,
+    conteoExactaCarta,
+    frasePreviaSimplificada,
+    estadoSimplificada,
+    nombreDescargaSimplificada,
+    simplificadaEnVisor,
+    controlDescargaShp,
+    anotarSimplificadaEnLienzo,
+    avisoDescargaSimplificada,
+    slugArchivo,
+    nombreDescargaAlerta,
     botonesUmbral,
     opcionesUmbral,
     // Ver los umbrales: qué capa es cada corte y cuáles están publicados.
