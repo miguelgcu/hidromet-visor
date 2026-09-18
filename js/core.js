@@ -32,7 +32,7 @@ const App = (() => {
   // rutas que ya son un archivo (.geojson) se sirven tal cual bajo productos/.
   // Construye el path del producto con el MISMO stripping que el exportador (exportar_web.py):
   // carta_datos ignora fin/corrido (redundantes dado archivo+record); mlnwp ignora deps (y
-  // familia salvo en el resumen de validación); sngr/eventos = ventana completa publicada. 'drop' añade
+  // familia salvo en el resumen de validación). 'drop' añade
   // parámetros volátiles a ignorar para el fallback difuso.
   function _slugProducto(ruta, drop) {
     const [path, query] = String(ruta).split("?");
@@ -42,10 +42,7 @@ const App = (() => {
     const quita = new Set(drop || []);
     if (base === "cartas/carta_datos") { quita.add("fin"); quita.add("corrido"); }
     // La referencia certifica el ciclo pedido al endpoint vivo, pero el artefacto
-    // FFGS público conserva su identidad canónica exacta: archivo+record.
-    if (base === "cartas/ffgs_shp") quita.add("esperado_reference_time");
-    if (base.indexOf("mlnwp/") === 0) { quita.add("deps"); if (base !== "mlnwp/validacion") quita.add("familia"); }
-    if (base === "sngr/eventos") pares = [];
+      if (base.indexOf("mlnwp/") === 0) { quita.add("deps"); if (base !== "mlnwp/validacion") quita.add("familia"); }
     if (quita.size) pares = pares.filter(p => !quita.has(p.split("=")[0]));
     // canónico: decodifica los valores (el exportador usa el valor crudo) antes del slug,
     // así "familia=Mejor%20desempe%C3%B1o" y "familia=Mejor desempeño" mapean igual.
@@ -75,91 +72,6 @@ const App = (() => {
       throw new Error("Este navegador no admite la descompresión gzip del visor.");
     const flujo = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
     return new Response(flujo).json();
-  }
-
-  function _zipCabeceraLocal(entrada, nombre) {
-    const b = new Uint8Array(30);
-    const v = new DataView(b.buffer);
-    v.setUint32(0, 0x04034b50, true);
-    v.setUint16(4, 20, true);          // ZIP 2.0 (DEFLATE)
-    v.setUint16(6, 0x0800, true);      // nombres UTF-8
-    v.setUint16(8, 8, true);           // DEFLATE crudo
-    v.setUint16(10, 0, true);
-    v.setUint16(12, 0x0021, true);     // 1980-01-01, reproducible
-    v.setUint32(14, entrada.crc32 >>> 0, true);
-    v.setUint32(18, entrada.tamano_comprimido >>> 0, true);
-    v.setUint32(22, entrada.tamano >>> 0, true);
-    v.setUint16(26, nombre.length, true);
-    return b;
-  }
-
-  function _zipCabeceraCentral(entrada, nombre, offset) {
-    const b = new Uint8Array(46);
-    const v = new DataView(b.buffer);
-    v.setUint32(0, 0x02014b50, true);
-    v.setUint16(4, 20, true);
-    v.setUint16(6, 20, true);
-    v.setUint16(8, 0x0800, true);
-    v.setUint16(10, 8, true);
-    v.setUint16(12, 0, true);
-    v.setUint16(14, 0x0021, true);
-    v.setUint32(16, entrada.crc32 >>> 0, true);
-    v.setUint32(20, entrada.tamano_comprimido >>> 0, true);
-    v.setUint32(24, entrada.tamano >>> 0, true);
-    v.setUint16(28, nombre.length, true);
-    v.setUint32(42, offset >>> 0, true);
-    return b;
-  }
-
-  async function zipDesdeManifest(manifiesto, urlManifest) {
-    if (!manifiesto || manifiesto.schema !== "hidromet.ffgs-shp-dedup.v1"
-        || !Array.isArray(manifiesto.entradas) || !manifiesto.entradas.length)
-      throw new Error("Manifiesto de shapefile no válido.");
-    if (manifiesto.entradas.length > 0xffff)
-      throw new Error("El shapefile excede el límite ZIP del visor.");
-    const encoder = new TextEncoder();
-    const base = new URL(urlManifest, document.baseURI);
-    const cache = new Map();
-    const cargar = async entrada => {
-      const clave = String(entrada.url || "");
-      if (!cache.has(clave)) cache.set(clave, (async () => {
-        const resp = await fetch(new URL(clave, base), { cache: "no-cache" });
-        if (!resp.ok) throw new Error(`Bloque de shapefile no publicado (HTTP ${resp.status}).`);
-        return new Uint8Array(await resp.arrayBuffer());
-      })());
-      return cache.get(clave);
-    };
-    const datos = await Promise.all(manifiesto.entradas.map(cargar));
-    const locales = [], centrales = [];
-    let offset = 0, tamanoCentral = 0;
-    manifiesto.entradas.forEach((entrada, i) => {
-      const nombre = encoder.encode(String(entrada.nombre || ""));
-      const comprimido = datos[i];
-      const tc = Number(entrada.tamano_comprimido);
-      const tr = Number(entrada.tamano);
-      if (!nombre.length || nombre.length > 0xffff || !Number.isInteger(tc)
-          || !Number.isInteger(tr) || tc < 0 || tr < 0 || tc > 0xffffffff
-          || tr > 0xffffffff || comprimido.length !== tc)
-        throw new Error("Bloque de shapefile inconsistente.");
-      const local = _zipCabeceraLocal(entrada, nombre);
-      const central = _zipCabeceraCentral(entrada, nombre, offset);
-      locales.push(local, nombre, comprimido);
-      centrales.push(central, nombre);
-      offset += local.length + nombre.length + comprimido.length;
-      tamanoCentral += central.length + nombre.length;
-      if (offset > 0xffffffff || tamanoCentral > 0xffffffff)
-        throw new Error("El shapefile excede el límite ZIP del visor.");
-    });
-    const fin = new Uint8Array(22);
-    const vf = new DataView(fin.buffer);
-    vf.setUint32(0, 0x06054b50, true);
-    vf.setUint16(8, manifiesto.entradas.length, true);
-    vf.setUint16(10, manifiesto.entradas.length, true);
-    vf.setUint32(12, tamanoCentral, true);
-    vf.setUint32(16, offset, true);
-    const nombre = String(manifiesto.nombre_descarga || "ffgs_shapefile.zip")
-      .split(/[\\/]/).pop() || "ffgs_shapefile.zip";
-    return { blob: new Blob([...locales, ...centrales, fin], { type: "application/zip" }), nombre };
   }
 
   async function apiVisor(ruta, opts = {}) {
@@ -482,15 +394,14 @@ const App = (() => {
   }
 
   // Grupos de la barra lateral (rediseño v9): PRINCIPAL · MÓDULOS · SISTEMA.
-  const GRUPO_NAV = { pronostico: "MÓDULOS", validacion: "MÓDULOS", hidrologia: "MÓDULOS",
+  const GRUPO_NAV = { pronostico: "MÓDULOS", validacion: "MÓDULOS",
                       advertencias: "MÓDULOS", clima: "MÓDULOS", glosario: "MÓDULOS",
-                      cartas: "MÓDULOS", sngr: "MÓDULOS", eventos: "MÓDULOS", mlnwp: "MÓDULOS",
+                      cartas: "MÓDULOS", mlnwp: "MÓDULOS",
                       datos: "SISTEMA", configuracion: "SISTEMA", config: "SISTEMA" };
 
   // Iconos SVG de línea del nav (rediseño v9, stroke:currentColor) — sustituyen a los emojis.
   const ICONOS_NAV = {
     cartas: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3z"/><path d="M9 4v13M15 7v13"/></svg>',
-    sngr: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M3 8c2.5 0 2.5 2 5 2s2.5-2 5-2 2.5 2 5 2"/><path d="M3 14c2.5 0 2.5 2 5 2s2.5-2 5-2 2.5 2 5 2"/></svg>',
     mlnwp: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M3 21h18"/><rect x="4" y="12" width="3.6" height="6" rx="1"/><rect x="10.2" y="7" width="3.6" height="11" rx="1"/><rect x="16.4" y="4" width="3.6" height="14" rx="1"/></svg>',
     datos: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><ellipse cx="12" cy="5.5" rx="7.5" ry="2.8"/><path d="M4.5 5.5v6c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8v-6"/><path d="M4.5 11.5v6c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8v-6"/></svg>',
     configuracion: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="7" cy="8" r="2.2"/><circle cx="16" cy="16" r="2.2"/><path d="M3 8h2M9.2 8H21M3 16h10.8M18.2 16H21"/></svg>',
@@ -498,7 +409,6 @@ const App = (() => {
   // Nuevos módulos (reestructura de menús): reutilizan/derivan iconos coherentes.
   ICONOS_NAV.pronostico = ICONOS_NAV.cartas;
   ICONOS_NAV.validacion = ICONOS_NAV.mlnwp;
-  ICONOS_NAV.hidrologia = ICONOS_NAV.sngr;
   ICONOS_NAV.advertencias = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"><path d="M12 3.5 22 20H2z"/><path d="M12 10v4.5M12 17.4v.1"/></svg>';
   ICONOS_NAV.glosario = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M4 4.5h6.5a2 2 0 0 1 2 2V20a2 2 0 0 0-2-1.8H4z"/><path d="M20 4.5h-6.5a2 2 0 0 0-2 2V20a2 2 0 0 1 2-1.8H20z"/></svg>';
   ICONOS_NAV.clima = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="11" r="3.4"/><path d="M12 3.2v2M12 17v1.4M3.8 11h2M18.2 11h2M6.2 5.2l1.4 1.4M16.4 15.4l1.4 1.4M17.8 5.2l-1.4 1.4M7.6 15.4l-1.4 1.4"/></svg>';
@@ -545,8 +455,6 @@ const App = (() => {
     cartas: "Mapas de pronóstico y alertas",
     observaciones: "Observaciones de estaciones",
     clima: "Climatología",
-    sngr: "Eventos de ríos",
-    geoglows: "Caudales de ríos",
     // El parte de degradación no solo trae áreas de CONTENIDO: también trae el
     // área de la ETAPA que anotó el aviso ("qc-fisico", "gate", "export"…).
     // Sin traducción salían crudas al tooltip público —"Secciones afectadas:
@@ -734,144 +642,10 @@ const App = (() => {
     document.head.appendChild(st);
   }
 
-  /* ---------------- puerta de acceso del VISOR (v15, pedido del dueño) ----------------
-     SOLO en el visor publicado (HIDROMET_VISOR): overlay de usuario/contraseña antes de
-     arrancar la app. Verificación por hash SHA-256 (la credencial no viaja ni se guarda
-     en claro); "recordar dispositivo" persiste en localStorage, si no, solo la sesión.
-     NOTA honesta: en un sitio estático esto es una CORTINA de acceso (disuade el acceso
-     casual), no seguridad criptográfica de servidor. */
-  async function exigirAcceso() {
-    const raiz = document.documentElement;
-    // ACCESO_LIBRE (2026-08-06): cortina y autenticación deshabilitadas temporalmente
-    // a pedido del dueño (también en index.html). Para reactivar: HM_ACCESO_LIBRE=false.
-    if (window.HM_ACCESO_LIBRE) { raiz.classList.remove("hm-prelogin"); return; }
-    if (!window.HIDROMET_VISOR) { raiz.classList.remove("hm-prelogin"); return; }
-    // Autenticación real: si el exportador declaró un backend, las banderas del
-    // antiguo login estático NO autorizan nada. El gestor valida contraseña,
-    // licencia, concurrencia y revocación; este camino falla cerrado si el módulo
-    // no cargó. El fallback cosmético de abajo solo se conserva para despliegues
-    // que todavía no tengan HIDROMET_AUTH_BASE.
-    if (window.HIDROMET_AUTH_BASE) {
-      raiz.classList.add("hm-prelogin");
-      const capaDinamica = document.getElementById("capa-app");
-      if (capaDinamica) capaDinamica.style.visibility = "hidden";
-      const bloquear = mensaje => {
-        let aviso = document.getElementById("hm-auth-fallo-config");
-        if (!aviso) {
-          aviso = document.createElement("div");
-          aviso.id = "hm-auth-fallo-config";
-          aviso.style.cssText = "position:fixed;inset:0;z-index:100000;display:grid;" +
-            "place-items:center;padding:24px;background:#0b1220;color:#e6ecf7;" +
-            "font:15px/1.5 system-ui,Segoe UI,sans-serif;text-align:center";
-          document.body.appendChild(aviso);
-        }
-        aviso.textContent = mensaje;
-        return new Promise(() => {}); // fail-closed: App.iniciar no continúa
-      };
-      if (!window.HMAuth || typeof window.HMAuth.exigirLogin !== "function") {
-        return bloquear("No se pudo cargar el servicio de acceso. Contacta al administrador.");
-      }
-      try {
-        await window.HMAuth.exigirLogin();
-      } catch (e) {
-        return bloquear("El servicio de acceso no pudo inicializarse. Intenta nuevamente más tarde.");
-      }
-      raiz.classList.remove("hm-prelogin");
-      if (capaDinamica) capaDinamica.style.visibility = "";
-      return;
-    }
-    const LLAVE = "hm-acceso-v1";
-    if (localStorage.getItem(LLAVE) === "1" || sessionStorage.getItem(LLAVE) === "1") {
-      raiz.classList.remove("hm-prelogin");   // el guard pre-paint del index pudo ocultar la app
-      return;
-    }
-    // P19: refuerzo del guard SÍNCRONO del index (html.hm-prelogin oculta #capa-app
-    // ANTES del primer pintado). Si el index no lo aplicó, se aplica aquí igual.
-    raiz.classList.add("hm-prelogin");
-    const HASH = "191453084223bb19af625548019079b0b3a24cf079978383ec152fa456f7d952";
-    const sha = async t => {
-      const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t));
-      return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, "0")).join("");
-    };
-    const capa = document.getElementById("capa-app");
-    if (capa) capa.style.visibility = "hidden";
-    const div = document.createElement("div");
-    div.id = "hm-login";
-    // P21: escenografía hidrometeorológica AUTOCONTENIDA (SVG inline + CSS puro, sin
-    // recursos externos): isolíneas que derivan lentamente + lluvia fina diagonal.
-    div.innerHTML = `
-      <div class="hm-login-fondo" aria-hidden="true">
-        <svg class="hm-login-iso" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" focusable="false">
-          <g class="iso-a" fill="none" stroke-linecap="round">
-            <path d="M-80 150 C 160 90, 320 220, 560 170 S 1000 60, 1240 140 S 1480 230, 1560 190"/>
-            <path d="M-80 235 C 180 175, 340 305, 580 255 S 1010 145, 1250 225 S 1490 315, 1560 275"/>
-            <path d="M-80 320 C 200 260, 360 390, 600 340 S 1020 230, 1260 310 S 1500 400, 1560 360"/>
-            <path d="M-80 405 C 220 345, 380 475, 620 425 S 1030 315, 1270 395 S 1510 485, 1560 445"/>
-          </g>
-          <g class="iso-b" fill="none" stroke-linecap="round">
-            <path d="M-80 545 C 200 485, 400 625, 660 575 S 1060 455, 1300 545 S 1500 635, 1560 595"/>
-            <path d="M-80 640 C 220 580, 420 720, 680 670 S 1080 550, 1320 640 S 1510 730, 1560 690"/>
-            <path d="M-80 735 C 240 675, 440 815, 700 765 S 1100 645, 1340 735 S 1520 825, 1560 785"/>
-            <path d="M-80 830 C 260 770, 460 910, 720 860 S 1120 740, 1360 830 S 1530 920, 1560 880"/>
-          </g>
-        </svg>
-        <div class="hm-login-lluvia"></div>
-      </div>
-      <div class="hm-login-caja" role="dialog" aria-labelledby="hm-login-tit">
-        <div class="hm-login-marca">
-          <div class="hm-login-logo">HM</div>
-          <div class="hm-login-txt"><div class="hm-login-nombre">HidroMet</div>
-            <div class="hm-login-sub">ECUADOR · OPERATIVO</div></div>
-        </div>
-        <h1 id="hm-login-tit">Acceso al visor</h1>
-        <p class="hm-login-hint">Ingresa tus credenciales para ver los productos operativos.</p>
-        <form novalidate>
-          <label class="hm-login-campo">Usuario
-            <input name="u" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
-          <label class="hm-login-campo">Contraseña
-            <input name="p" type="password" autocomplete="current-password" required></label>
-          <label class="hm-login-rec"><input type="checkbox" name="r" checked> Recordarme en este dispositivo</label>
-          <button type="submit" class="hm-login-btn">Ingresar</button>
-          <div class="hm-login-err" hidden>Usuario o contraseña incorrectos.</div>
-        </form>
-        <div class="hm-login-pie">Sistema hidrometeorológico operativo · acceso restringido</div>
-      </div>`;
-    document.body.appendChild(div);
-    const form = div.querySelector("form"), err = div.querySelector(".hm-login-err");
-    const caja = div.querySelector(".hm-login-caja");
-    setTimeout(() => { try { form.u.focus(); } catch (e) {} }, 60);
-    // Enter SIEMPRE envía (algunos teclados móviles no disparan el submit implícito).
-    form.addEventListener("keydown", e => {
-      if (e.key === "Enter") { e.preventDefault(); form.requestSubmit ? form.requestSubmit() : form.querySelector("button[type=submit]").click(); }
-    });
-    await new Promise(listo => {
-      form.addEventListener("submit", async e => {
-        e.preventDefault();
-        err.hidden = true;
-        let ok = false;
-        try { ok = (await sha(form.u.value.trim())) === HASH && (await sha(form.p.value)) === HASH; }
-        catch (e2) { ok = false; }
-        if (!ok) {
-          err.hidden = false;
-          caja.classList.remove("shake"); void caja.offsetWidth; caja.classList.add("shake");
-          form.p.value = ""; form.p.focus();
-          return;
-        }
-        (form.r.checked ? localStorage : sessionStorage).setItem(LLAVE, "1");
-        div.classList.add("ok");
-        setTimeout(() => {
-          div.remove();
-          raiz.classList.remove("hm-prelogin");            // libera el guard pre-paint (P19)
-          if (capa) capa.style.visibility = "";
-          listo();
-        }, 420);
-      });
-    });
-  }
 
   /* v17: ZOOM DE DOS DEDOS en los mapas Plotly (pedido del dueño): la pinza hace zoom
      DEL MAPA (no de la página) alrededor del centro del gesto; un dedo sigue
-     desplazando la página. Leaflet (SNGR/GEOGLOWS) ya lo trae nativo. Funciona
+     desplazando la página. Funciona
      también sobre cartas staticPlot (relayout programático). */
   function pinchZoomMapa(gd) {
     if (!gd || gd._hmPinch) return;
@@ -938,36 +712,12 @@ const App = (() => {
   }
 
   async function iniciar() {
-    await exigirAcceso();
     inyectarEstilosBloqueo();
     idiomaGraficos();
     const guardado = localStorage.getItem("hidromet-tema");
     if (guardado) document.documentElement.dataset.tema = guardado;
     document.getElementById("btn-tema").onclick = () =>
       tema(tema() === "claro" ? "oscuro" : "claro");
-    // v17: CERRAR SESIÓN en el menú (solo visor con puerta de acceso ACTIVA): borra el
-    // acceso recordado y recarga → vuelve a la pantalla de login. Con HM_ACCESO_LIBRE
-    // no existe sesión que cerrar y el botón no debe existir.
-    if (window.HIDROMET_VISOR && !window.HM_ACCESO_LIBRE) {
-      const bt = document.getElementById("btn-tema");
-      if (bt && !document.getElementById("btn-salir")) {
-        const bs = document.createElement("button");
-        bs.id = "btn-salir"; bs.className = "boton-fantasma"; bs.type = "button";
-        bs.title = "Salir y volver a la pantalla de acceso";
-        bs.textContent = "⏻ Cerrar sesión";
-        bs.style.marginTop = "6px";
-        bs.onclick = async () => {
-          if (window.HIDROMET_AUTH_BASE && window.HMAuth &&
-              typeof window.HMAuth.cerrarSesion === "function") {
-            await window.HMAuth.cerrarSesion();
-            return;
-          }
-          try { localStorage.removeItem("hm-acceso-v1"); sessionStorage.removeItem("hm-acceso-v1"); } catch (e) {}
-          location.reload();
-        };
-        bt.insertAdjacentElement("afterend", bs);
-      }
-    }
     pintarNav();
     // Menú hamburguesa GLOBAL (P22): en móvil abre/cierra el drawer off-canvas (patrón
     // v12 intacto); en ESCRITORIO colapsa/expande la sidebar y el contenido gana el
@@ -1237,7 +987,7 @@ const App = (() => {
 
   /* ---------------- paneles reutilizables + pestañas ----------------
      Un PANEL es un trozo de contenido que puede vivir bajo varios menús
-     (p.ej. FFGS bajo Hidrología). Los módulos registran sus paneles con
+     Los módulos registran sus paneles con
      panel(id, fn) y otros módulos los reusan con panel(id). */
   const paneles = new Map();
   function panel(id, fn) {
@@ -1320,7 +1070,7 @@ const App = (() => {
 
   return { api, aviso, tarea, seguirTarea, modalTarea, tema, registrar, navegar, iniciar, el, fmtFecha, plotlyLayoutBase,
            plotlyLayoutSerie, plotlyConfig, pinchZoomMapa, hayTareaActiva, cancelarTarea, cancelarTodas, panel, vistaPestanas, restaurador,
-           rutaAProducto, leerJsonGzip, zipDesdeManifest, hoyEC, redEtiqueta, nombreEstacion,
+           rutaAProducto, leerJsonGzip, hoyEC, redEtiqueta, nombreEstacion,
            fmtNum, fmtSigno, textoServidor, textosServidor };
 })();
 

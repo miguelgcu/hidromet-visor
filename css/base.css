@@ -90,14 +90,6 @@ body { font-family: var(--fuente); background: var(--bg-app); color: var(--ink);
 /* P23: scrollbars finas también en Firefox (webkit ya está estilizado abajo) */
 html { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--muted) 35%, transparent) transparent; }
 
-/* ---------- P19: arranque SIN parpadeo (guard pre-paint) ----------
-   El index aplica html.hm-prelogin de forma SÍNCRONA (script inline en <head>)
-   cuando el visor exige acceso y no hay sesión: la app queda oculta ANTES del
-   primer pintado y el fondo ya es el del login (ni un frame de la interfaz). */
-html.hm-prelogin #capa-app { visibility: hidden; }
-html.hm-prelogin body { background: #0A1526; }
-html.hm-prelogin[data-tema="claro"] body { background: #E4EBF5; }
-
 /* ---------- accesibilidad global ----------
    Foco de teclado de MARCA en TODO control interactivo. Antes --focus-ring estaba
    definido pero sin usar y los controles propios de cada módulo (.gg-btn, .sngr-*,

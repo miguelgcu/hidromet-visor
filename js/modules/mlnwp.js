@@ -172,6 +172,97 @@
     })).sort((a, b) => a.posicion - b.posicion);
   }
 
+  /* ============================================================
+     MARCA DEL CONTROL DE CALIDAD SOBRE LA OBSERVACIÓN
+     ============================================================
+     Doctrina del dueño: etiqueta, jamás candado. Un dato que el QC marcó NO
+     se borra ni se oculta — se dibuja distinto y dice por qué al pasar por
+     encima. El motivo ya viaja desde la base en `observado.qc_flags` (varios
+     separados por «;»); aquí solo se traduce del vocabulario de la base al
+     castellano de un meteorólogo. Un solo diccionario para las tres
+     superficies: el gráfico, el pie de la tarjeta y los PNG descargables.
+     Un motivo desconocido NO se inventa ni se esconde: se limpia de guiones
+     bajos y se enseña tal cual, para que una regla nueva se vea el día uno. */
+  const QC_MOTIVOS = Object.freeze({
+    total_fin_de_mes_sospechoso: "acumulado del mes volcado en el último día",
+    racha_ceros_60d_con_vecinas_lluviosas: "dos meses a cero mientras llovía alrededor",
+    valor_mayor_5xp99: "más de cinco veces el percentil 99 de la estación",
+    valor_mayor_5xp99_con_rechazo_cercano:
+      "más de cinco veces el percentil 99, con un rechazo en días contiguos",
+    valor_positivo_identico_5d_o_mas: "el mismo valor positivo cinco días o más seguidos",
+    precip_mayor_250mm_sin_confirmacion_vecina:
+      "más de 250 mm sin que ninguna estación vecina lo confirme",
+    precip_mayor_250mm_sin_vecinas_con_dato:
+      "más de 250 mm y ninguna estación vecina midió ese día",
+    ruptura_regimen_termico: "la serie cambia de régimen térmico",
+    precip_diaria_extrema_en_revision: "lluvia diaria extrema, en revisión en el origen",
+    daily_completeness_below_threshold: "el día llegó incompleto desde el origen",
+    QUARANTINED_EPMAPS_WEB_QC: "retenido por el control de calidad de EPMAPS",
+    QUARANTINED_CONTEXTUAL_THERMAL_QC: "temperatura fuera del contexto de la estación",
+  });
+  // Día incompleto legado: el propio motivo trae la cobertura y las muestras.
+  const QC_DIA_INCOMPLETO_RE =
+    /^QUARANTINED_INCOMPLETE_LOCAL_DAY_COBERTURA_([\d.]+)_MUESTRAS_(\d+)_DE_(\d+)$/;
+
+  // Traduce UN motivo. Se le quitan los prefijos de transporte
+  // (`cuarentena_legada:`, `bandera_origen:`, `diagnostico:`) porque nombran el
+  // canal por el que llegó la marca, no lo que le pasa al dato.
+  function motivoQCSuelto(bruto) {
+    let t = String(bruto || "").trim();
+    if (!t) return "";
+    t = t.replace(/^(?:cuarentena_legada|bandera_origen|diagnostico):/, "").trim();
+    if (!t) return "";
+    if (QC_MOTIVOS[t]) return QC_MOTIVOS[t];
+    const dia = QC_DIA_INCOMPLETO_RE.exec(t);
+    if (dia) {
+      const pct = Math.round(Number(dia[1]) * 100);
+      return `día incompleto · ${dia[2]} de ${dia[3]} registros`
+        + (Number.isFinite(pct) ? ` (${pct} %)` : "");
+    }
+    // Motivo con parámetros pegados (p. ej. ruptura_regimen_termico:2019-04-01:+5.2C).
+    const raiz = t.split(":")[0];
+    if (QC_MOTIVOS[raiz]) return QC_MOTIVOS[raiz];
+    return t.replace(/_/g, " ").toLowerCase();
+  }
+
+  // Traduce la cadena entera de motivos de un punto. Varios motivos se leen
+  // como una lista, no como un volcado: se unen con « · » y no se repiten.
+  function motivoQC(bruto) {
+    const vistos = new Set();
+    String(bruto || "").split(";").forEach(parte => {
+      const texto = motivoQCSuelto(parte);
+      if (texto) vistos.add(texto);
+    });
+    return [...vistos].join(" · ") || "marcado por el control de calidad";
+  }
+
+  // Parte la observación en lo que el QC dejó limpio y lo que marcó, y prepara
+  // el dibujo: el tramo que ENTRA y el que SALE de un punto marcado se pintan
+  // punteados, así que el trazo marcado incluye a los vecinos inmediatos —con
+  // marcador invisible— para que el segmento exista. Función pura: recibe
+  // [{fecha, valor, cuarentena, motivo}] y devuelve las dos series ya listas.
+  function partirObservacionQC(observaciones) {
+    const puntos = Array.isArray(observaciones) ? observaciones : [];
+    const marcado = puntos.map(p => !!(p && p.cuarentena));
+    const nMarcados = marcado.filter(Boolean).length;
+    const limpia = { x: [], y: [] };
+    const marca = { x: [], y: [], simbolos: [], tamanos: [], motivos: [], hover: [] };
+    puntos.forEach((p, i) => {
+      const valor = Number(p.valor);
+      limpia.x.push(p.fecha);
+      limpia.y.push(marcado[i] ? null : valor);
+      if (!nMarcados) return;
+      const vecino = marcado[i - 1] || marcado[i + 1];
+      marca.x.push(p.fecha);
+      marca.y.push(marcado[i] || vecino ? valor : null);
+      marca.simbolos.push(marcado[i] ? "circle-open" : "circle");
+      marca.tamanos.push(marcado[i] ? 13 : 0);
+      marca.motivos.push(marcado[i] ? motivoQC(p.motivo) : "");
+      marca.hover.push(marcado[i] ? "y" : "skip");
+    });
+    return { nMarcados, limpia, marca: nMarcados ? marca : null };
+  }
+
   // Acento del módulo y colores de modelos de la cabecera de la tabla/leyenda.
   /* ---------------- PNG portable de series por estación ----------------
      La figura descargable es un entregable de papel independiente del tema y
@@ -417,6 +508,7 @@
     const modelos = seleccionarModelosPNG(d.modelos, inicio, fin, 8);
     const obsFechas = (d.observado && d.observado.fechas) || [];
     const obsValores = (d.observado && d.observado.valores) || [];
+    const obsCuarentena = (d.observado && d.observado.cuarentena) || [];
     const hayObs = obsFechas.some((fecha, i) => fecha >= inicio && fecha <= fin
       && esFinito(obsValores[i]));
     if (!modelos.length && !hayObs) return null;
@@ -425,15 +517,20 @@
       meta, contexto.variableLabel, contexto.agregacionLabel);
     const nObs = obsFechas.filter((fecha, i) => fecha >= inicio && fecha <= fin
       && esFinito(obsValores[i])).length;
+    // El papel viaja a reuniones sin quien lo explique: si un punto está marcado
+    // por el control de calidad, el PNG lo dice en el pie y lo dibuja hueco.
+    const nObsMarcados = obsFechas.filter((fecha, i) => fecha >= inicio && fecha <= fin
+      && esFinito(obsValores[i]) && obsCuarentena[i]).length;
     anotaciones.push({
       name: "png-observation-status", xref: "paper", yref: "paper",
       x: 0.5, y: 0.145, showarrow: false,
       xanchor: "center", yanchor: "middle",
       text: hayObs
-        ? `<i>Observación local disponible · ${nObs} fecha(s)</i>`
+        ? `<i>Observación local disponible · ${nObs} fecha(s)`
+          + `${nObsMarcados ? ` · ${nObsMarcados} marcada(s) por control de calidad` : ""}</i>`
         : "<i>Sin observación local en esta ventana · pronóstico no sustituido</i>",
       font: { family: PNG_SERIE.font, size: pxDesdePt(9.2),
-        color: hayObs ? "#4B5D72" : "#8A4F19" },
+        color: nObsMarcados ? "#8A4F19" : (hayObs ? "#4B5D72" : "#8A4F19") },
     });
     const valoresY = [];
     const recortarLluvia = valor => esPrecip && esFinito(valor)
@@ -514,12 +611,20 @@
     }
 
     if (hayObs) {
-      const fechas = [], valores = [];
+      const fechas = [], valores = [], simbolos = [], colores = [], anchos = [];
+      const tamanoObs = pxDesdePt(esPrecip ? 2.7 : 2.8);
       obsFechas.forEach((fecha, i) => {
         if (fecha < inicio || fecha > fin) return;
         fechas.push(fecha);
         const valor = recortarLluvia(obsValores[i]);
+        const marcado = !!obsCuarentena[i];
         valores.push(valor);
+        // Marcado: cuadrado hueco y algo mayor; limpio: cuadrado macizo. La
+        // etiqueta numérica del marcado va en el ocre que el pie ya usa, así
+        // que la cifra sigue ahí —nunca se borra— pero no se lee como las demás.
+        simbolos.push(marcado ? "square-open" : "square");
+        colores.push(marcado ? "rgba(0,0,0,0)" : PNG_SERIE.observation);
+        anchos.push(marcado ? pxDesdePt(0.9) : 0);
         if (valor !== null) {
           valoresY.push(valor);
           anotaciones.push({
@@ -528,7 +633,7 @@
             yshift: pxDesdePt(4), bgcolor: "rgba(0,0,0,0)",
             borderwidth: 0, borderpad: 0,
             font: { family: PNG_SERIE.font, size: pxDesdePt(7.2),
-              color: PNG_SERIE.observation, shadow: ETIQUETA_SOMBRA },
+              color: marcado ? "#8A4F19" : PNG_SERIE.observation, shadow: ETIQUETA_SOMBRA },
           });
         }
       });
@@ -536,9 +641,8 @@
         type: "scatter", mode: "lines+markers", x: fechas, y: valores,
         name: "Observado", connectgaps: false, opacity: 1,
         line: { color: PNG_SERIE.observation, width: pxDesdePt(1.05), dash: "dash" },
-        marker: { color: PNG_SERIE.observation,
-          size: pxDesdePt(esPrecip ? 2.7 : 2.8),
-          symbol: "square" },
+        marker: { color: colores, size: tamanoObs, symbol: simbolos,
+          line: { color: PNG_SERIE.observation, width: anchos } },
         zorder: 6,
         hoverinfo: "skip",
       });
@@ -547,7 +651,9 @@
     const entradasLeyenda = [];
     if (hayObs) entradasLeyenda.push({ texto: "Observado", color: PNG_SERIE.observation,
       simbolo: "━" });
-    const maximoAliasLeyenda = modelos.length + (hayObs ? 1 : 0) >= 8 ? 15 : 17;
+    if (nObsMarcados) entradasLeyenda.push({
+      texto: "Marcado por control de calidad", color: "#8A4F19", simbolo: "□" });
+    const maximoAliasLeyenda = entradasLeyenda.length + modelos.length >= 8 ? 15 : 17;
     modelos.forEach(modelo => {
       const score = scoreModeloPNG(modelo);
       entradasLeyenda.push({
@@ -632,6 +738,73 @@
     };
   }
 
+  /* ------------------------------------------------------------------
+     Filas de la tabla de probabilidad por umbral. UNA sola definición para
+     la pantalla y para el PNG: antes cada una tenía su copia y el mismo
+     defecto repetido dos veces.
+
+     Se lee de arriba abajo: primero la OCURRENCIA (¿llueve o no?, el umbral
+     de 0,1 mm que el contrato llama P(lluvia)) y después las intensidades.
+
+     2026-09-10: la fila de P(lluvia) salía SIEMPRE en guiones. Dos causas
+     encadenadas: (1) la base probabilística no emite todavía el umbral de
+     0,1 mm —eso se declara en `umbrales_no_emitidos` y aquí se convierte en
+     un motivo VISIBLE, no en un hueco mudo—; y (2) el nominal viaja como
+     float32 (0,1 llega como 0.10000000149011612), así que con la tolerancia
+     de 1e-9 que había antes la fila no habría encontrado su columna ni
+     el día que la base la emita. El emparejamiento es por cercanía.
+     ------------------------------------------------------------------ */
+  const UMBRALES_PROBABILIDAD = Object.freeze([
+    { umbral: 0.1, etiqueta: "P(lluvia)" },
+    { umbral: 1, etiqueta: "≥1 mm" },
+    { umbral: 5, etiqueta: "≥5 mm" },
+    { umbral: 10, etiqueta: "≥10 mm" },
+    { umbral: 25, etiqueta: "≥25 mm" },
+    { umbral: 50, etiqueta: "≥50 mm" },
+  ]);
+  const TOLERANCIA_UMBRAL = 1e-6;   // el nominal llega en float32
+  const MOTIVO_UMBRAL_SIN_EMITIR = "sin publicar en esta corrida";
+
+  function filasProbabilidadUmbral(pu, fechas) {
+    const p = pu || {};
+    const eje = fechas || [];
+    const umbrales = (p.umbrales || []).map(Number);
+    const indicesFecha = new Map((p.fechas || []).map((fecha, i) => [fecha, i]));
+    const probs = p.probs || [];
+    const calib = p.calibracion_probabilidad || {};
+    const veredictos = calib.veredicto_por_umbral || {};
+    const coberturas = new Map(((p.diagnostico || {}).cobertura_umbral || [])
+      .map(item => [Number(item.umbral), item]));
+    // Umbrales que el producto declara NO haber emitido, con su motivo. Es una
+    // etiqueta del propio dato: si mañana la base los emite, la lista llega
+    // vacía y la fila se llena sola.
+    const sinEmitir = new Map((p.umbrales_no_emitidos || [])
+      .map(item => [Number(item && item.umbral), item || {}]));
+    return UMBRALES_PROBABILIDAD.map(def => {
+      const j = umbrales.findIndex(valor => Number.isFinite(valor)
+        && Math.abs(valor - def.umbral) <= TOLERANCIA_UMBRAL);
+      const valores = eje.map(fecha => {
+        const i = indicesFecha.get(fecha);
+        const bruto = (i === undefined || j < 0) ? null : (probs[i] || [])[j];
+        return esFinito(bruto) ? Number(bruto) : null;
+      });
+      const ausente = j < 0 ? (sinEmitir.get(def.umbral) || {}) : null;
+      const cobertura = coberturas.get(def.umbral) || null;
+      const veredicto = veredictos[String(def.umbral)] || null;
+      const acreditada = !veredicto || veredicto.publicable_como_verificada !== false;
+      const motivo = [
+        ausente ? (ausente.motivo || MOTIVO_UMBRAL_SIN_EMITIR) : null,
+        cobertura && cobertura.motivo,
+        !acreditada && veredicto ? veredicto.etiqueta : null,
+      ].filter(Boolean).join(" · ");
+      return {
+        umbral: def.umbral, etiqueta: def.etiqueta, valores,
+        emitido: j >= 0, acreditada, motivo,
+        detalle: ausente ? String(ausente.detalle || "") : "",
+      };
+    });
+  }
+
   // Estado REAL del producto probabilístico, leído del propio fichero: manda la
   // calibración aplicada y su veredicto. Los textos fijos anteriores solo
   // reconocían dos estados antiguos y desacreditaban ("provisional no
@@ -663,32 +836,17 @@
     if (!d.es_precip || !pu || !fechas.length || !hoy) return null;
     const obsFechas = (d.observado && d.observado.fechas) || [];
     const obsValores = (d.observado && d.observado.valores) || [];
+    const obsCuarentena = (d.observado && d.observado.cuarentena) || [];
     const nObs = obsFechas.filter((fecha, i) =>
       fechas.includes(fecha) && esFinito(obsValores[i])).length;
+    const nObsMarcados = obsFechas.filter((fecha, i) =>
+      fechas.includes(fecha) && esFinito(obsValores[i]) && obsCuarentena[i]).length;
     const hayObs = nObs > 0;
-    const indicesFecha = new Map(
-      (pu.fechas || []).map((fecha, i) => [fecha, i]));
-    const umbrales = (pu.umbrales || []).map(Number);
-    // Los mismos rótulos que la tabla de la pantalla, con la unidad separada del
-    // número: «P≥1mm» pegaba la unidad a la cifra y no era la misma fila.
-    const filasDef = [
-      { valor: 0.1, label: "P(lluvia)" },
-      { valor: 1, label: "≥1 mm" },
-      { valor: 5, label: "≥5 mm" },
-      { valor: 10, label: "≥10 mm" },
-      { valor: 25, label: "≥25 mm" },
-      { valor: 50, label: "≥50 mm" },
-    ];
-    const filas = filasDef.map(def => {
-      const j = umbrales.findIndex(valor => Number.isFinite(valor)
-        && Math.abs(valor - def.valor) <= 1e-9);
-      const valores = fechas.map(fecha => {
-        const i = indicesFecha.get(fecha);
-        const bruto = i === undefined || j < 0 ? null : ((pu.probs || [])[i] || [])[j];
-        return esFinito(bruto) ? Number(bruto) : null;
-      });
-      return { ...def, valores };
-    });
+    // Las MISMAS filas que la tabla de la pantalla (una sola definición), con
+    // la unidad separada del número: «P≥1mm» pegaba la unidad a la cifra y no
+    // era la misma fila.
+    const filas = filasProbabilidadUmbral(pu, fechas)
+      .map(fila => ({ ...fila, label: fila.etiqueta }));
     if (!filas.some(fila => fila.valores.some(esFinito))) return null;
 
     const anotaciones = anotacionesCabeceraPNG(
@@ -698,10 +856,11 @@
       x: 0.5, y: 0.145, showarrow: false,
       xanchor: "center", yanchor: "middle",
       text: hayObs
-        ? `<i>Observación local disponible · ${nObs} fecha(s)</i>`
+        ? `<i>Observación local disponible · ${nObs} fecha(s)`
+          + `${nObsMarcados ? ` · ${nObsMarcados} marcada(s) por control de calidad` : ""}</i>`
         : "<i>Sin observación local en esta ventana · probabilidades pronosticadas</i>",
       font: { family: PNG_SERIE.font, size: pxDesdePt(9.2),
-        color: hayObs ? "#4B5D72" : "#8A4F19" },
+        color: nObsMarcados ? "#8A4F19" : (hayObs ? "#4B5D72" : "#8A4F19") },
     });
     const estadoPU = estadoProbabilidad(pu, d.procedencia_probabilistica);
     anotaciones.push({
@@ -711,6 +870,20 @@
       text: `<i>${esc(estadoPU.texto)}</i>`,
       font: { family: PNG_SERIE.font, size: pxDesdePt(8.8),
         color: estadoPU.ok ? "#1E6A43" : "#8A4F19" },
+    });
+    // Fila sin una sola cifra: en la imagen tampoco se deja una banda muda. Se
+    // escribe encima el motivo que el propio producto declara, centrado en el
+    // eje de fechas (misma regla que la tabla de pantalla).
+    filas.forEach(fila => {
+      if (fila.valores.some(esFinito)) return;
+      const texto = fila.motivo || (fila.emitido ? "" : MOTIVO_UMBRAL_SIN_EMITIR);
+      if (!texto) return;
+      anotaciones.push({
+        xref: "x", yref: "y", x: fechas[Math.floor(fechas.length / 2)], y: fila.label,
+        showarrow: false, text: `<i>${esc(texto)}</i>`,
+        xanchor: "center", yanchor: "middle",
+        font: { family: PNG_SERIE.font, size: pxDesdePt(7.5), color: "#F2F2F2" },
+      });
     });
     filas.forEach(fila => fila.valores.forEach((valor, i) => {
       if (!esFinito(valor)) return;
@@ -1809,8 +1982,14 @@
       const ultima = enVentana[enVentana.length - 1] || {};
       const dias = enVentana.length === 1 ? "1 día medido" : `${enVentana.length} días medidos`;
       const cierre = fechaCorta(ultima.fecha);
+      // Si el control de calidad marcó algún día, el pie lo dice con el número.
+      // No es un aviso ni un cartel: es el mismo censo de días, desglosado.
+      const marcados = enVentana.filter(item => item && item.cuarentena).length;
+      const marca = marcados
+        ? ` · ${marcados === 1 ? "1 marcado" : `${marcados} marcados`} por control de calidad`
+        : "";
       return { hay: true,
-        texto: `Observación local · ${dias}${cierre ? ` · hasta ${cierre}` : ""}` };
+        texto: `Observación local · ${dias}${cierre ? ` · hasta ${cierre}` : ""}${marca}` };
     }
     if (estado.estado === "sin_reporte_reciente") {
       const ultima = fechaCorta(estado.ultima_fecha);
@@ -2008,11 +2187,18 @@
     const angosto = !!(window.matchMedia && window.matchMedia("(max-width: 560px)").matches);
     const obsFechas = (d.observado && d.observado.fechas) || [];
     const obsValores = (d.observado && d.observado.valores) || [];
+    // La marca del control de calidad viaja con el punto, no aparte: si aquí se
+    // copiaran solo fecha y valor —como se hacía hasta el 2026-09-10— la
+    // etiqueta llegaría del servidor y moriría en esta línea.
+    const obsCuarentena = (d.observado && d.observado.cuarentena) || [];
+    const obsMotivos = (d.observado && d.observado.qc_flags) || [];
     const observacionesVentana = obsFechas.map((fecha, i) => ({
       fecha, valor: obsValores[i],
+      cuarentena: !!obsCuarentena[i], motivo: obsMotivos[i] || "",
     })).filter(item => item.fecha && (!desdeVisual || item.fecha >= desdeVisual)
       && esFinito(item.valor));
     const hayObsVentana = observacionesVentana.length > 0;
+    const obsQC = partirObservacionQC(observacionesVentana);
     // La observación es MÉTODO: baja al pie del gráfico, en una línea. Si falta,
     // se dice el hecho —que cambia cómo se lee la figura— y se calla el resto.
     const obsEstadoEl = card.querySelector("#ml-obs-estado");
@@ -2020,6 +2206,8 @@
       const nota = notaObservacionSerie(d.observacion_estado, observacionesVentana,
         obsFechas, desdeVisual);
       obsEstadoEl.classList.toggle("sin-datos", !nota.hay);
+      // Mismo aro hueco que en el gráfico: el pie y la curva hablan igual.
+      obsEstadoEl.classList.toggle("con-marca", !!obsQC.nMarcados);
       obsEstadoEl.innerHTML =
         `<span class="ml-obs-punto" aria-hidden="true"></span>${esc(nota.texto)}`;
     }
@@ -2191,13 +2379,31 @@
     if (hayObsVentana) {
       observacionesVentana.forEach(item => registrarFecha(item.fecha));
       traces.push({ type: "scatter", mode: "lines+markers",
-        x: observacionesVentana.map(item => item.fecha),
-        y: observacionesVentana.map(item => Number(item.valor)),
+        x: obsQC.limpia.x, y: obsQC.limpia.y,
         name: "Observado", opacity: 1, line: { color: C.obs, width: 3.2 }, connectgaps: false,
         marker: { color: C.obs, size: 9, symbol: "circle",
           line: { color: oscuro ? "#111827" : "#FFFFFF", width: 1.4 } },
         hovertemplate: `Observado: %{y:.1f} ${esc(unidad)}<extra></extra>` });
       opacidadesTrazas.push(1);
+      // Lo que el control de calidad marcó sigue EN SU SITIO y con su valor: se
+      // descuelga de la línea continua —entra y sale punteado— y el punto pasa
+      // a ser un aro hueco. La forma es el canal, no el color: el color ya está
+      // repartido entre los modelos y el daltonismo no perdona. Va sin entrada
+      // propia en la leyenda de Plotly para no partir en dos «Observado».
+      if (obsQC.marca) {
+        traces.push({ type: "scatter", mode: "lines+markers",
+          x: obsQC.marca.x, y: obsQC.marca.y,
+          name: "Observado · marcado por control de calidad", showlegend: false,
+          opacity: 1, connectgaps: false,
+          line: { color: C.obs, width: 2.4, dash: "dot" },
+          marker: { color: "rgba(0,0,0,0)", size: obsQC.marca.tamanos,
+            symbol: obsQC.marca.simbolos,
+            line: { color: C.obs, width: 2.6 } },
+          customdata: obsQC.marca.motivos, hoverinfo: obsQC.marca.hover,
+          hovertemplate: `Observado: %{y:.1f} ${esc(unidad)}`
+            + `<br>Marcado por control de calidad: %{customdata}<extra></extra>` });
+        opacidadesTrazas.push(1);
+      }
     }
 
     // Eje canónico compartido. Las probabilidades se reindexan más abajo a estas
@@ -2326,6 +2532,9 @@
     if (leyEl) {
       const observadoHTML = hayObsVentana
         ? `<span class="it es-observado"><span class="sw-linea"></span><span class="ml-leyenda-nombre">Observado</span></span>`
+          + (obsQC.nMarcados
+            ? `<span class="it es-observado-qc" title="El dato se publica con su valor; el control de calidad lo marcó y el motivo está al pasar por encima del punto."><span class="sw-anillo"></span><span class="ml-leyenda-nombre">Marcado por control de calidad</span></span>`
+            : "")
         : "";
       const modelosHTML = leyenda.sort((a, b) => a.orden - b.orden)
         .map(item => item.html).join("");
@@ -2341,11 +2550,10 @@
     if (probsEl) {
       const pu = d.probs_umbral;
       if (esPrecip && pu && pu.fechas && pu.fechas.length) {
-        // Reindexación explícita al eje del gráfico. Si el probabilístico no trae
-        // una fecha intermedia, se conserva la columna y se pinta “—”; nunca se
-        // corre el resto de la tabla respecto de la precipitación diaria.
-        const probabilidadesPorFecha = new Map(
-          pu.fechas.map((fecha, i) => [fecha, (pu.probs || [])[i] || []]));
+        // Reindexación explícita al eje del gráfico (la hace
+        // `filasProbabilidadUmbral`). Si el probabilístico no trae una fecha
+        // intermedia, se conserva la columna y se pinta “—”; nunca se corre el
+        // resto de la tabla respecto de la precipitación diaria.
         const fechasTabla = ejeFechas;
         const iHoy = _hoy ? fechasTabla.findIndex(fecha => fecha >= _hoy) : -1;
         const alfa = p => p < 20 ? 0.08 : p < 50 ? 0.20 : p < 75 ? 0.38 : 0.58;
@@ -2356,48 +2564,35 @@
         const sep = i => i === iHoy ? " ml-pb-hoy" : "";   // borde que marca el inicio del pronóstico
         const cabFechas = fechasTabla.map((fecha, i) =>
           `<th class="ml-pb-f${sep(i)}" data-fecha="${esc(fecha)}" aria-label="${esc(fecha)}">${dd(fecha)}</th>`).join("");
-        const coberturaPorUmbral = new Map(
-          ((pu.diagnostico || {}).cobertura_umbral || []).map(item =>
-            [Number(item.umbral), item]));
         // DECISIÓN 4 (2026-08-14): cada umbral viaja con SU veredicto medido fuera
         // de muestra. Los que la medición no acredita se publican IGUAL —esconderlos
         // tiraría información honesta— pero marcados con ° y con el motivo en el
         // tooltip, para que nadie los lea como cifra verificada.
-        const calibProb = pu.calibracion_probabilidad || {};
-        const veredictoPorUmbral = calibProb.veredicto_por_umbral || {};
-        const claveUmbral = u => (Number.isInteger(u) ? String(u) : String(u));
-        const filasUmbral = [0.1, 1, 5, 10, 25, 50].map(u => {
-          const j = (pu.umbrales || []).findIndex(valor =>
-            Number.isFinite(Number(valor))
-            && Math.abs(Number(valor) - u) <= 1e-9);
-          const v = veredictoPorUmbral[claveUmbral(u)] || null;
-          return {
-            u, j,
-            cobertura: coberturaPorUmbral.get(u) || null,
-            veredicto: v,
-            acreditada: !v || v.publicable_como_verificada !== false,
-            valores: fechasTabla.map(fecha =>
-              j < 0 ? null : (probabilidadesPorFecha.get(fecha) || [])[j]),
-          };
-        });
+        // 2026-09-10: las filas salen de `filasProbabilidadUmbral`, la misma
+        // definición que usa el PNG (antes había dos copias y el mismo fallo de
+        // emparejamiento en las dos).
+        const filasUmbral = filasProbabilidadUmbral(pu, fechasTabla);
         const filasU = filasUmbral.map(fila => {
           const celdas = fila.valores.map((p, i) => {
             return `<td class="ml-pb-c${sep(i)}" data-fecha="${esc(fechasTabla[i])}" style="${celStyle(p)}">${p == null ? "—" : num(p, 0) + " %"}</td>`;
           }).join("");
-          const base = Math.abs(Number(fila.u) - 0.1) <= 1e-9
-            ? "P(lluvia)" : `≥${fila.u} mm`;
-          const etiqueta = fila.acreditada ? base : `${base}°`;
-          const motivos = [
-            fila.cobertura && fila.cobertura.motivo,
-            !fila.acreditada && fila.veredicto ? fila.veredicto.etiqueta : null,
-          ].filter(Boolean).join(" · ");
+          const etiqueta = fila.acreditada ? fila.etiqueta : `${fila.etiqueta}°`;
           // El motivo se PINTA bajo el umbral (visible también en táctil);
           // el title queda solo como refuerzo para quien pase el cursor.
-          const detalle = motivos ? ` title="${esc(motivos)}"` : "";
+          const motivos = fila.motivo;
+          const ayuda = [motivos, fila.detalle].filter(Boolean).join(" — ");
+          const detalle = ayuda ? ` title="${esc(ayuda)}"` : "";
           const motivoVisible = motivos ? `<small>${esc(motivos)}</small>` : "";
           return `<tr><th class="ml-pb-u"${detalle}><span>${etiqueta}</span>${motivoVisible}</th>${celdas}<td class="ml-pb-spacer" aria-hidden="true"></td></tr>`;
         }).join("");
         const hayNoAcreditados = filasUmbral.some(fila => !fila.acreditada);
+        // Umbral que el producto NO trae: la fila se queda, pero con el porqué
+        // escrito debajo de la tabla. Un hueco de guiones sin explicación deja al
+        // lector creyendo que la pantalla se rompió.
+        const notaSinEmitir = filasUmbral
+          .filter(fila => !fila.emitido && fila.detalle)
+          .map(fila => `<b>${esc(fila.etiqueta)}</b>: ${esc(fila.detalle)}`)
+          .join("<br>");
         const columnas = `<col class="ml-pb-col-umbral">${fechasTabla.map(() =>
           '<col class="ml-pb-col-fecha">').join("")}<col class="ml-pb-col-spacer">`;
         const estadoProb = estadoProbabilidad(
@@ -2405,7 +2600,9 @@
         probsEl.innerHTML = filasUmbral.some(fila => fila.valores.some(esFinito))
           ? `<div class="ml-pb-tit">Probabilidad de lluvia por umbral<span class="ml-pb-tit-nota">${esc(estadoProb)}</span></div>
            <div class="ml-pb-wrap"><table class="ml-pb-tabla"><colgroup>${columnas}</colgroup><thead><tr><th class="ml-pb-esq">Umbral</th>${cabFechas}<th class="ml-pb-spacer" aria-hidden="true"></th></tr></thead>
-           <tbody>${filasU}</tbody></table></div>${hayNoAcreditados
+           <tbody>${filasU}</tbody></table></div>${notaSinEmitir
+             ? `<div class="ml-pb-nota ml-pb-nota-falta" role="note">${notaSinEmitir}</div>`
+             : ""}${hayNoAcreditados
              ? `<div class="ml-pb-nota" role="note">° Umbral sin destreza acreditada en la verificación fuera de muestra.</div>`
              : ""}`
           : `<div class="ml-pb-estado" role="status"><b>Sin probabilidades en esta ventana.</b></div>`;
@@ -2624,6 +2821,8 @@
     rotuloVariableSerie,
     rotuloAgregacionSerie,
     notaObservacionSerie,
+    motivoQC,
+    partirObservacionQC,
     entradaLeyendaSerie,
     fechaCorta,
     seleccionarModelosVisiblesSerie,
@@ -2631,5 +2830,7 @@
     indiceRecomendadoModelos,
     aliasModeloPNG,
     aliasModeloCompleto,
+    filasProbabilidadUmbral,
+    estadoProbabilidad,
   });
 })();

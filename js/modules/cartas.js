@@ -18,6 +18,14 @@
   const esc = v => String(v ?? "").replace(/[&<>"']/g,
     c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const api = (r) => "/api" + r;                       // ruta directa para <img src>
+  // Fecha local (GMT-5) en ISO a partir de un epoch en segundos. La usan las
+  // ocho cabeceras de carta que llevan fecha (pronóstico, calibrado, hidro,
+  // alertas, umbrales y el cantonal). Vivía dentro del bloque del indicador FFR
+  // y se fue con él el 2026-09-17; sus otros ocho usos se quedaron, así que el
+  // panel de Advertencias reventaba con «fechaLocalISO is not defined». No lo
+  // vio `node --check`, que comprueba sintaxis y no referencias: lo destapó la
+  // prueba de Node de las funciones puras.
+  const fechaLocalISO = ts => new Date((ts - 5 * 3600) * 1000).toISOString().slice(0, 10);
   // TÁCTIL: en pantallas de puntero grueso (teléfonos/tablets) las cartas se renderizan
   // ESTÁTICAS (Plotly no captura el toque) → un dedo NO hace pan/deforma el mapa (la página se
   // desplaza normal) y el zoom es el PELLIZCO NATIVO del navegador (dos dedos, sin deformar).
@@ -34,7 +42,6 @@
     { id: "hidro",        etiqueta: "Hidroestimadores",      cuerpo: "grid" },
     { id: "alertas",      etiqueta: "⚠ Alertas", danger: true, cuerpo: "alertas" },
     { id: "heladas",      etiqueta: "Heladas / Calor",       cuerpo: "grid" },
-    { id: "ffgs",         etiqueta: "FFGS",                  cuerpo: "grid" },
   ];
 
   /* ---------- ETIQUETAS HUMANAS (centralizado) ----------
@@ -486,7 +493,6 @@
   const _CACHE_DATOS_MAX = 240;
   function limpiarCacheDatos() {
     _cacheDatos.clear();
-    _ffrFechas = null; _ffrEstado = "desconocido"; _ffrZonas.clear();
     _hvDatos = null;                          // §P9: resumen de validación hidro
     _cantonal = null;                         // cantonal del subsistema nuevo (Cantones)
   }
@@ -502,11 +508,11 @@
     return d;
   }
   // Tipos cuyo lienzo es PAPEL FIJO (blanco SIEMPRE): las pestañas grilladas del
-  // módulo Pronóstico. El resto (alertas de Advertencias, FFGS bajo Hidrología y
-  // los mapas de cruce/FFR/crecida) TEMATIZA: claro = papel blanco + contorno negro;
+  // módulo Pronóstico. El resto (alertas de Advertencias) TEMATIZA:
+  // claro = papel blanco + contorno negro;
   // oscuro = fondo del tema + contorno claro con halo oscuro.
   // Papel BLANCO fijo SOLO para pronóstico / calibrado / hidroestimadores (mapas de campo
-  // denso). El resto —heladas/calor, alertas, FFGS, cruce/FFR— TEMATIZA: en oscuro el mar
+  // denso). El resto —heladas/calor y alertas— TEMATIZA: en oscuro el mar
   // fuera de Ecuador toma el fondo del tema, no blanco (pedido del usuario).
   const TIPOS_PAPEL_FIJO = new Set(["pronostico", "calibrado", "hidro"]);
   const papelFijo = () => !!(E && TIPOS_PAPEL_FIJO.has(E.tipo));
@@ -576,51 +582,6 @@
     return mask;
   }
 
-  /* §P18a — INDICADOR DE SUSCEPTIBILIDAD FFR como overlay sobre las cartas de alerta
-     de PRECIPITACIÓN (nunca temperatura). Ya no son una carta aparte: se dibujan
-     punteadas y discretas sobre cada mapa de alerta de lluvia cuya FECHA tenga
-     zona FFR. Fechas y anillos se cachean (una petición por sesión / por record). */
-  const FFR_BUFFER = "ambos";
-  let _ffrFechas = null;                      // [{record, fecha}] | false
-  let _ffrEstado = "desconocido";             // disponible | sin_dato | error
-  const _ffrZonas = new Map();                // record -> {anillos, color} | false
-  async function asegurarFFRFechas() {
-    if (_ffrFechas !== null) return;
-    try {
-      const r = await App.api("/cartas/riesgo_ffr/fechas");
-      _ffrFechas = Array.isArray(r.fechas) ? r.fechas : [];
-      _ffrEstado = r.estado_dato || (_ffrFechas.length ? "disponible" : "sin_dato");
-    } catch (e) { _ffrFechas = false; _ffrEstado = "error"; }
-  }
-  // Fecha local (GMT-5) ISO de un epoch en segundos — para casar carta ↔ zona FFR.
-  const fechaLocalISO = ts => new Date((ts - 5 * 3600) * 1000).toISOString().slice(0, 10);
-  async function trazasFFRSobreCarta(fecha) {
-    await asegurarFFRFechas();
-    if (!_ffrFechas || !_ffrFechas.length) return null;
-    const hit = _ffrFechas.find(f => String(f.fecha) === String(fecha));
-    if (!hit) return null;                    // el FFR no cubre esta fecha → sin overlay (honesto)
-    const rec = hit.record;
-    if (!_ffrZonas.has(rec)) {
-      try {
-        const d = await App.api("/cartas/riesgo_ffr/datos?" + qs({ buffer: FFR_BUFFER, record: rec }));
-        _ffrZonas.set(rec, (d && d.anillos && d.anillos.length) ? d : false);
-      } catch (e) { _ffrZonas.set(rec, false); }
-    }
-    const d = _ffrZonas.get(rec);
-    if (!d) return null;
-    const xs = [], ys = [];
-    for (const an of d.anillos) { for (const [lo, la] of an) { xs.push(lo); ys.push(la); } xs.push(null); ys.push(null); }
-    if (!xs.length) return null;
-    const col = d.color || "#009AF2";
-    const c = _hexRgb(col);
-    return [{
-      type: "scatter", mode: "lines", x: xs, y: ys, fill: "toself", meta: "ffr-overlay",
-      fillcolor: `rgba(${c[0]},${c[1]},${c[2]},.14)`,
-      line: { color: col, width: 1.2, dash: "dot" },
-      name: "Indicador de susceptibilidad FFR", hoverinfo: "skip", showlegend: false,
-    }];
-  }
-
   /* CANTONAL del subsistema nuevo (hidromet/alertas/cantonal.py) como overlay sobre la
      carta CONSENSO de Advertencias cuando el toggle "Cantones" está activo. Una sola
      petición por sesión (el producto trae los 222 cantones × generadores × leads). */
@@ -675,36 +636,6 @@
       showlegend: false });
     return { traces, resumen: { lead, n: pol.n, nAlerta: pol.nAlerta, nPoligonos: pol.nPoligonos,
       fecha_emision: _cantonal.fecha_emision || null, phi: _cantonal.phi } };
-  }
-
-  // Microcuencas operativas del FFGS (NWSAFFGS, 1682 subcuencas): contorno que se
-  // dibuja sobre las cartas FFGS para ver el dato por subcuenca.
-  let geoMicro = null;                         // FeatureCollection microcuencas (cache)
-  async function asegurarMicrocuencas() {
-    if (geoMicro !== null) return;
-    try { geoMicro = await App.api("/datos/capas/ffgs_microcuencas.geojson"); }
-    catch (e) { geoMicro = false; }
-  }
-  function trazaMicrocuencas(osc) {
-    if (!geoMicro || !geoMicro.features) return null;
-    const xs = [], ys = [];
-    const empuja = ring => { for (const [lo, la] of ring) { xs.push(lo); ys.push(la); } xs.push(null); ys.push(null); };
-    for (const f of geoMicro.features) {
-      const g = f.geometry; if (!g) continue;
-      if (g.type === "Polygon") g.coordinates.forEach(empuja);
-      else if (g.type === "MultiPolygon") g.coordinates.forEach(p => p.forEach(empuja));
-    }
-    if (!xs.length) return null;
-    // scatter SVG, NO scattergl: Plotly pinta los trazos WebGL en un canvas que queda
-    // SIEMPRE DEBAJO de la capa SVG (fills por banda, heatmap, contorno), así que con
-    // scattergl las microcuencas quedaban tapadas por el campo opaco y no se veían.
-    // Son ~39k vértices en una sola traza de líneas: SVG las dibuja sin lag y respeta
-    // el orden del array (sobre el campo, bajo el contorno provincial). Línea fina
-    // y tenue para que el COLOR del campo siga siendo lo dominante. FFGS es TEMÁTICO:
-    // trazo oscuro sobre papel claro, claro sobre el fondo oscuro del tema.
-    return { type: "scatter", mode: "lines", x: xs, y: ys, hoverinfo: "skip", meta: "microcuencas",
-      line: { color: osc ? "rgba(174,187,208,.38)" : "rgba(35,49,77,.32)", width: 0.6 },
-      showlegend: false };
   }
 
   // Estaciones (toggle "Estaciones"): catálogo cacheado + traza de puntos dentro de un bbox.
@@ -769,108 +700,6 @@
   // Gris "con dato, pero sin amenaza": el MISMO en el relleno vectorial por cuenca y
   // en el raster de respaldo, para que las dos vistas digan lo mismo.
   const GRIS_SIN_AMENAZA = "rgba(176,186,201,.55)";
-  // Pura: escala del RASTER cuando el FFGS publica un campo de amenaza en CERO.
-  // El campo cero es dato ("sin amenaza en el dominio"), pero con zmin = primer umbral
-  // Plotly lo recortaría al color MÁS BAJO de la escala oficial → amenaza falsa. Aquí
-  // la escala se extiende hasta 0 y todo lo que no llega al umbral sale del gris "sin
-  // amenaza", igual que el relleno por cuenca. Devuelve null si no aplica.
-  function escalaSinAmenazaFFGS(d) {
-    const cs = (d || {}).colorscale, niv = (d || {}).niveles || [];
-    if (!d || !d.malla || !Array.isArray(cs) || !cs.length || niv.length < 2) return null;
-    const vmin = +d.vmin, vmax = +d.vmax, u0 = +niv[0];
-    if (!isFinite(vmin) || !isFinite(vmax) || !isFinite(u0)) return null;
-    if (!(u0 > 0) || Math.abs(vmin - u0) > 1e-9 || !(vmax > u0)) return null;
-    const t = u0 / vmax;                       // posición del umbral en la escala nueva
-    const out = [[0, GRIS_SIN_AMENAZA], [Math.max(0, t - 1e-6), GRIS_SIN_AMENAZA]];
-    for (const par of cs) out.push([t + (+par[0]) * (1 - t), par[1]]);
-    return { colorscale: out, zmin: 0, zmax: vmax };
-  }
-  // RELLENO VECTORIAL FFGS: agrupa las microcuencas por BANDA de la escala (niveles)
-  // y devuelve una traza de relleno por banda (fill:"toself", subpolígonos separados
-  // por null). Cuencas por debajo del primer umbral quedan SIN pintar (transparentes,
-  // p.ej. FFT sin amenaza). Pocas trazas (≈nº de bandas) → rápido y nítido.
-  function trazasCuencasFFGS(d) {
-    if (!d.cuencas || !geoMicro || !geoMicro.features) return null;
-    const niv = d.niveles || [], cs = d.colorscale || [];
-    const vmin = d.vmin, vmax = d.vmax;
-    if (niv.length < 2 || !cs.length || vmin == null || vmax == null) return null;
-    const val = new Map();
-    const ids = d.cuencas.ids, vals = d.cuencas.valores;
-    for (let i = 0; i < ids.length; i++) val.set(ids[i], vals[i]);
-    const nb = niv.length - 1, span = (vmax - vmin) || 1;
-    const colorBanda = [];
-    for (let k = 0; k < nb; k++) colorBanda.push(_colorEn(((niv[k] + niv[k + 1]) / 2 - vmin) / span, cs));
-    const binDe = v => { if (v < niv[0]) return -1; for (let k = nb - 1; k >= 0; k--) if (v >= niv[k]) return k; return 0; };
-    const xs = Array.from({ length: nb }, () => []), ys = Array.from({ length: nb }, () => []);
-    const grisX = [], grisY = [];                 // cuencas CON dato pero sin amenaza (v < primer umbral)
-    const empuja = (X, Y, ring) => { for (const [lo, la] of ring) { X.push(lo); Y.push(la); } X.push(null); Y.push(null); };
-    for (const f of geoMicro.features) {
-      const cod = f.properties && f.properties.codigo; if (cod == null) continue;
-      const v = val.get(cod); if (v == null) continue;
-      const k = binDe(v);
-      const g = f.geometry; if (!g) continue;
-      const X = k < 0 ? grisX : xs[k], Y = k < 0 ? grisY : ys[k];
-      if (g.type === "Polygon") empuja(X, Y, g.coordinates[0]);
-      else if (g.type === "MultiPolygon") g.coordinates.forEach(p => empuja(X, Y, p[0]));
-    }
-    const traces = [];
-    // Sin amenaza pero CON dato → relleno GRIS (contraste con el fondo; antes salían transparentes).
-    if (grisX.length) {
-      traces.push({ type: "scatter", mode: "lines", x: grisX, y: grisY, fill: "toself",
-        fillcolor: GRIS_SIN_AMENAZA,
-        line: { width: 0 }, hoverinfo: "skip", showlegend: false });
-    }
-    for (let k = 0; k < nb; k++) {
-      if (!xs[k].length) continue;
-      traces.push({ type: "scatter", mode: "lines", x: xs[k], y: ys[k], fill: "toself",
-        fillcolor: colorBanda[k], line: { width: 0, color: colorBanda[k] },
-        hoverinfo: "skip", showlegend: false });
-    }
-    return traces;
-  }
-
-  // VISTA DINÁMICA FFGS: marcadores INVISIBLES en el centroide de cada microcuenca con
-  // su valor exacto, para que al pasar el cursor (hovermode "closest") se vea el valor
-  // de la cuenca — como un popup. Una sola traza (rápido) y no tapa el relleno.
-  function trazaHoverCuencasFFGS(d) {
-    if (!d.cuencas || !geoMicro || !geoMicro.features) return null;
-    const val = new Map();
-    const ids = d.cuencas.ids, vals = d.cuencas.valores;
-    for (let i = 0; i < ids.length; i++) val.set(ids[i], vals[i]);
-    const unidad = d.unidad || "";
-    const fmt = v => App.fmtNum(v, Math.abs(v) < 10 ? 2 : 1);
-    const centroide = ring => {
-      let sx = 0, sy = 0, n = 0;
-      for (const [lo, la] of ring) { sx += lo; sy += la; n++; }
-      return n ? [sx / n, sy / n] : null;
-    };
-    const hx = [], hy = [], ht = [];
-    for (const f of geoMicro.features) {
-      const cod = f.properties && f.properties.codigo; if (cod == null) continue;
-      const v = val.get(cod); if (v == null) continue;
-      const g = f.geometry; if (!g) continue;
-      let ring = null;
-      if (g.type === "Polygon") ring = g.coordinates[0];
-      else if (g.type === "MultiPolygon") {
-        let bn = -1; for (const p of g.coordinates) if (p[0] && p[0].length > bn) { bn = p[0].length; ring = p[0]; }
-      }
-      if (!ring) continue;
-      const c = centroide(ring); if (!c) continue;
-      hx.push(c[0]); hy.push(c[1]);
-      ht.push(`Microcuenca ${esc(String(cod))}<br><b>${fmt(v)} ${esc(unidad)}</b>`);
-    }
-    if (!hx.length) return null;
-    const oscuro = !!(App.tema && App.tema() === "oscuro");
-    // scatter SVG (markers transparentes, solo hover): sin trazas WebGL en las cartas.
-    // Con scattergl cada panel abría un contexto WebGL y el navegador los limita (~16):
-    // en la grilla FFGS los contextos viejos se perdían y esas trazas desaparecían.
-    return { type: "scatter", mode: "markers", x: hx, y: hy, text: ht,
-      marker: { size: 13, color: "rgba(0,0,0,0)" },
-      hovertemplate: "%{text}<extra></extra>",
-      hoverlabel: { bgcolor: oscuro ? "#0B1322" : "#ffffff", bordercolor: oscuro ? "#46597A" : "#c7cfdb",
-        font: { color: oscuro ? "#fff" : "#1c2433", size: 11 } },
-      showlegend: false };
-  }
 
   // Parámetros de DATOS de carta_datos (lo que carta.png necesita salvo toggles).
   function baseParams(params) {
@@ -886,56 +715,6 @@
     // con los productos ya congelados sin modo).
     if (params.modo && params.modo !== "fija") b.modo = params.modo;
     return b;
-  }
-
-  const FFGS_SHP_AVAILABILITY_SCHEMA = "hidromet.ffgs-shp-availability.v1";
-
-  // Contrato de artefactos FFGS congelados en el visor. La presencia del schema
-  // nuevo cambia el comportamiento a fail-closed: un contrato mal formado no
-  // puede habilitar por accidente un ZIP distinto del (archivo, record) mostrado.
-  // Los catálogos antiguos (sin este schema) conservan el fallback histórico.
-  function contratoShpFFGS(productos) {
-    const raw = productos && productos.disponibilidad && productos.disponibilidad.ffgs_shp;
-    if (!raw || raw.schema !== FFGS_SHP_AVAILABILITY_SCHEMA) return null;
-    const identidad = raw.identity;
-    const valido = (raw.mode === "all" || raw.mode === "selected")
-      && Array.isArray(identidad) && identidad.length === 2
-      && identidad[0] === "archivo" && identidad[1] === "record"
-      && raw.available_by_file && typeof raw.available_by_file === "object"
-      && !Array.isArray(raw.available_by_file);
-    return { raw, valido };
-  }
-
-  function shpFFGSDisponible(productos, archivo, record, esVisor) {
-    // En escritorio el backend genera el SHP dinámicamente. En un build legacy
-    // del visor no existe inventario y se conserva el intento al ZIP histórico.
-    if (!esVisor) return true;
-    const contrato = contratoShpFFGS(productos);
-    if (!contrato) return true;
-    if (!contrato.valido || !Number.isSafeInteger(record)) return false;
-    const entrada = contrato.raw.available_by_file[String(archivo || "")];
-    return !!(entrada && Array.isArray(entrada.records)
-      && entrada.records.some(r => Number.isSafeInteger(r) && r === record));
-  }
-
-  function botonShpFFGS(params, productos, esVisor) {
-    const record = params && params.record;
-    const archivo = params && params.archivo;
-    const disponible = shpFFGSDisponible(productos, archivo, record, esVisor);
-    if (!disponible) {
-      return `<a class="ct-dl ct-dl-shp" role="button" tabindex="-1" aria-disabled="true"
-        title="Shapefile no publicado para este producto y ciclo" aria-label="Shapefile no disponible">SHP</a>`;
-    }
-    const query = { archivo, record };
-    // La referencia esperada permite verificar el ciclo en el endpoint vivo. El
-    // mapeo del visor la elimina del slug, por lo que el artefacto público sigue
-    // identificado exclusivamente por archivo+record.
-    if (Number.isSafeInteger(params.reference_time))
-      query.esperado_reference_time = params.reference_time;
-    const ruta = "/cartas/ffgs_shp?" + qs(query);
-    // Las cuencas del FFGS no salen de una malla contorneada: la simplificada no
-    // aplica y se dice, en su sitio, en vez de esconder la segunda opción.
-    return controlDescargaShp({ ruta, familia: "ffgs" });
   }
 
   /* ============================================================
@@ -1069,8 +848,6 @@
      cuando no, para enseñarlo en la propia entrada. Nunca afecta a la exacta. */
   function estadoSimplificada(ctx) {
     const c = ctx || {};
-    if (c.familia === "ffgs")
-      return { puede: false, motivo: "Las cuencas del FFGS ya vienen dibujadas una a una: aquí no hay malla que redondear." };
     if (c.esVisor && !c.publicadaEnVisor)
       return { puede: false, motivo: "El visor lleva congelada solo la descarga exacta. La simplificada se arma en la aplicación." };
     const r = c.resumen;
@@ -1090,7 +867,7 @@
   }
 
   // ¿El visor tiene congelado el zip simplificado de esta carta? Contrato aditivo
-  // del catálogo, igual que el de FFGS: si no lo declara, no está.
+  // del catálogo: si no lo declara, no está.
   function simplificadaEnVisor(productos) {
     const raw = productos && productos.disponibilidad && productos.disponibilidad.alerta_shp_simplificada;
     return !!(raw && raw.publicada === true);
@@ -1098,7 +875,7 @@
 
   let _nDesc = 0;
   /* El control entero, en HTML. `o`: {ruta, nombreDl, familia, esVisor,
-     publicadaEnVisor, resumen}. Sin `ruta` (el FFGS que el visor no publica) sale
+     publicadaEnVisor, resumen}. Sin `ruta` sale
      el botón inerte de siempre: no hay nada que elegir. */
   function controlDescargaShp(o) {
     const c = o || {};
@@ -1165,15 +942,12 @@
     // Botón SHP: SOLO en cartas de alerta por nivel → zip con .shp + .qml de QGIS de la
     // advertencia EXACTA mostrada (misma variable, modelo y instante).
     const esAlertaNivel = /^alerta_(lluvia|tmin|tmax)_/.test(String(params.capa || ""));
-    const esFFGS = /^ffgs_/.test(String(params.archivo || ""));
     const shpRuta = esAlertaNivel
       ? "/cartas/alerta_shp?" + qs({ capa: params.capa, record: params.record,
                                      modo: (E && E.alerta && E.alerta.modo) || "fija" })
       : "";
     // §DESCARGA-GEOM: el mismo sitio de siempre, con las DOS geometrías dentro.
-    const shpBtn = esFFGS
-      ? botonShpFFGS(params, E && E.productos, !!window.HIDROMET_VISOR)
-      : esAlertaNivel
+    const shpBtn = esAlertaNivel
       ? controlDescargaShp({
           ruta: shpRuta,
           nombreDl: nombreDescargaAlerta(params.capa, params.esperado_inicio),
@@ -1182,16 +956,13 @@
           publicadaEnVisor: simplificadaEnVisor(E && E.productos),
         })
       : "";
-    // §P18a: data-ffr = fecha (ISO) de la carta cuando es ALERTA DE LLUVIA → el
-    // overlay del indicador de susceptibilidad FFR se dibuja encima en pintarMapaCarta.
-    const ffrAttr = params.ffr ? ` data-ffr="${esc(params.ffr)}"` : "";
     // Toggle Cantones (Advertencias): clave `${generador}|CONSENSO|${variable}` + fecha
     // local y record de la carta → pintarMapaCarta dibuja el cantonal encima.
     const cantAttr = params.cantonal
       ? ` data-cantonal="${esc(params.cantonal)}" data-cantonal-fecha="${esc(params.cantonalFecha || "")}" data-cantonal-record="${esc(params.cantonalRecord == null ? "" : params.cantonalRecord)}"`
       : "";
     return `
-      <div class="ct-lienzo${papelFijo() ? " ct-lienzo-fijo" : ""}" data-datos="${esc(datosUrl)}"${ffrAttr}${cantAttr}>
+      <div class="ct-lienzo${papelFijo() ? " ct-lienzo-fijo" : ""}" data-datos="${esc(datosUrl)}"${cantAttr}>
         <a class="ct-dl ct-dl-jpg" role="button" tabindex="0" data-jpg="${esc(jpgRuta)}" data-nombre="${esc(slugNombre)}"
            title="Descargar carta (imagen)" aria-label="Descargar carta">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -1369,7 +1140,7 @@
        · sin ellos     → EXACTAMENTE el heatmap de siempre, con su escala y su
          zsmooth (`opc.suave`).
      No es una compuerta: no hay nada que encender, solo un dato que está o no está.
-     `opc` = {escSA, ejeX, ejeY, bbox, suave} (escSA = escala «sin amenaza» del FFGS;
+     `opc` = {ejeX, ejeY, bbox, suave}
      bbox = recuadro del inset, para no mandarle piezas que no puede llegar a ver). */
   function trazasCampoCarta(d, PR, zCampo, hov, opc) {
     const o = opc || {};
@@ -1388,7 +1159,7 @@
     return polTr ? [hm].concat(polTr) : [hm];
   }
 
-  // Leyenda de una carta (por tarjeta en Advertencias/FFGS/heladas; compartida bajo la
+  // Leyenda de una carta (por tarjeta en Advertencias/heladas; compartida bajo la
   // grilla en pronóstico/calibrado/hidro). Distingue escala DISCRETA (bandas iguales,
   // tick en su frontera real derivada del colorscale) de CONTINUA (gradiente, tick
   // por valor normalizado). Así no amontona ni desborda las etiquetas.
@@ -1495,7 +1266,7 @@
   // ×2/×3 hasta paso ≤0.06°): recupera la suavidad de la app viva (0.05°, refinado
   // bicúbico ×5 del backend en carta_datos) sin aumentar un KB el peso publicado.
   // En la app viva el paso ya es fino → factor 1 (no toca nada). No aplica a mallas
-  // por celda (FFGS, d.malla) ni a campos vacíos. Las esquinas null (máscara del
+  // por celda (d.malla) ni a campos vacíos. Las esquinas null (máscara del
   // contorno) entran como promedio ponderado de las finitas → el borde queda suave.
   function refinarMalla(P) {
     const lon = P && P.lon, lat = P && P.lat, z = P && P.campo;
@@ -1625,23 +1396,14 @@
 
     const ext = P.extension || d.extension || [-81.3, -75.0, -5.1, 1.6];
     const cap = (E && E.capas) || {};
-    // Módulo Pronóstico = papel blanco SIEMPRE (fijo); alertas y FFGS tematizan.
+    // Módulo Pronóstico = papel blanco SIEMPRE (fijo); las alertas tematizan.
     const fijo = papelFijo();
     const oscuro = !fijo && temaOscuro();
     const traces = [];
-    // FFGS: RELLENO VECTORIAL POR SUBCUENCA. Cada microcuenca se pinta con su valor
-    // exacto (d.cuencas), igual que el MAPSERVER oficial — NÍTIDO, sin el pixelado
-    // del raster 0.05°. Se agrupan las cuencas por banda de la escala (pocas trazas).
-    let cuencasOk = false;
-    if (hayCuencas && d.malla) {
-      await asegurarMicrocuencas();
-      const fills = trazasCuencasFFGS(d);
-      if (fills && fills.length) {
-        traces.push(...fills); cuencasOk = true;
-        const hov = trazaHoverCuencasFFGS(d);   // hover por cuenca: valor exacto al pasar el cursor
-        if (hov) traces.push(hov);
-      }
-    }
+    // El relleno vectorial por subcuenca era del FFGS y se fue a Hidrología el
+    // 2026-09-17. Queda la constante porque el raster de abajo la consulta; no hay
+    // ningún producto que la ponga en true.
+    const cuencasOk = false;
     // §POLI: ¿trae la carta los polígonos suaves del motor? Es la ÚNICA condición
     // (presencia del dato); sin ellos todo sigue exactamente como estaba.
     const hayPoligonos = !!(d.poligonos && d.poligonos.niveles);
@@ -1671,9 +1433,8 @@
       // Continuo (precip/temp/HR/CAPE) Y alertas/heladas (campo YA refinado en backend
       // y re-refinado aquí si venía decimado, escala de color en degradado) → suavizado
       // de ALTA CALIDAD ("best": suave, sin bloques).
-      // FFGS (d.malla): lo NÍTIDO es el relleno vectorial por subcuenca de arriba; si ese
-      // falló (cuencasOk=false) llegamos a este raster de RESPALDO → también lo suavizamos,
-      // porque pintarlo con zsmooth:false son los cuadrados duros 0.10° (el pixelado real).
+      // Un campo por celda (d.malla) se suaviza igual: pintarlo con zsmooth:false son
+      // los cuadrados duros 0.10° (el pixelado real).
       // §POLI: cuando el motor publica la geometría, el color lo ponen LOS MISMOS
       // polígonos del PNG y del shapefile. El heatmap NO se quita —es lo que sostiene
       // el hover celda a celda— pero se queda PLANO: un único color, el del nivel 0
@@ -1683,10 +1444,9 @@
         ? { text: PR.campo.map(row => (row || []).map(v => etiq(v) || "")),
             hovertemplate: `%{y:.2f}°, %{x:.2f}°<br><b>%{text}</b><extra></extra>` }
         : { hovertemplate: `%{y:.2f}°, %{x:.2f}°<br><b>%{z:.2f} ${esc(d.unidad || "")}</b><extra></extra>` };
-      // FFGS con el dominio ENTERO en cero: el cero se pinta gris "sin amenaza", nunca
+      // Dominio ENTERO en cero: el cero se pinta gris "sin amenaza", nunca
       // recortado al color más bajo de la escala oficial (eso sería amenaza inventada).
-      const escSA = d.vacio === "sin_amenaza" ? escalaSinAmenazaFFGS(d) : null;
-      traces.push(...trazasCampoCarta(d, PR, _zCampo, hov, { escSA, suave: "best" }));
+      traces.push(...trazasCampoCarta(d, PR, _zCampo, hov, { suave: "best" }));
     }
     // TOGGLE Isolíneas: contornos sobre el campo (aplican a las cartas raster CONTINUAS:
     // pronóstico, calibrado, hidroestimadores, heladas/calor). Traza encima del relleno,
@@ -1712,25 +1472,11 @@
         ncontours: 12, showscale: false, hoverinfo: "skip",
       });
     }
-    // Contorno de las MICROCUENCAS encima (define los bordes de subcuenca, FFGS).
-    if (d.malla) {
-      await asegurarMicrocuencas();
-      const mc = trazaMicrocuencas(oscuro);
-      if (mc) traces.push(mc);
-    }
     // §P10: en Heladas/Calor el contorno provincial iba MUY GRUESO y tapaba los
     // colores del riesgo (pedido del dueño) → grosor por-tipo: fino en heladas,
     // el spec de grillas (1.5/3.4) intacto para el resto.
     const esHeladas = !!(E && E.tipo === "heladas");
     traces.push(...trazasOutline("x", "y", null, esHeladas ? 0.8 : 1.5, esHeladas ? 1.8 : 3.4, fijo));
-    // §P18a: INDICADOR DE SUSCEPTIBILIDAD FFR sobre alertas de PRECIPITACIÓN
-    // (solo lluvia, nunca temperatura): overlay discreto punteado, si el FFR tiene
-    // zona para la FECHA de la carta. data-ffr la pone cuerpoAlertas.
-    if (div.dataset.ffr) {
-      const zf = await trazasFFRSobreCarta(div.dataset.ffr);
-      if (!vivo()) return;
-      if (zf) traces.push(...zf);
-    }
     // Toggle Cantones (Advertencias): nivel cantonal del subsistema nuevo SOBRE la carta
     // Consenso (relleno por nivel + borde + popup por cantón). data-cantonal la pone
     // cuerpoAlertas solo en la tarjeta CONSENSO. La nota bajo la grilla confiesa emisión
@@ -1760,7 +1506,7 @@
     if (cap.estaciones) { await asegurarEstaciones(); const te = trazaEstaciones(ext, "x", "y", oscuro, _muestra); if (te) traces.push(te); }
 
     // §P2: marco = extensión oficial recortada a la cobertura real del heatmap (sin
-    // franja blanca en el borde). FFGS vectorial (cuencasOk) conserva la extensión.
+    // franja blanca en el borde).
     const marco = (!cuencasOk && PR && PR.campo && PR.campo.length) ? rangoCubierto(ext, PR) : ext.slice();
     // Zoom SOLO de acercamiento: minallowed/maxallowed fijan el extent como tope.
     // TOGGLE Grilla: rejilla lat/lon punteada y tenue (ejes ocultos si está apagada).
@@ -1774,7 +1520,7 @@
       yaxis: Object.assign({ range: [marco[2], marco[3]], minallowed: marco[2], maxallowed: marco[3], scaleanchor: "x", scaleratio: 1, fixedrange: false }, _ejeGr),
       dragmode: "pan",
     });
-    layout.hovermode = "closest";   // hover por cuenca FFGS (y por celda en raster): muestra el valor más cercano
+    layout.hovermode = "closest";   // hover por celda: muestra el valor exacto
 
     // TOGGLE Galápagos: inset en la esquina inferior izquierda. Los modelos globales
     // traen d.galapagos (recorte del archipiélago); los regionales no → se omite.
@@ -1822,7 +1568,7 @@
     }
     // Panel VACÍO: rótulo claro en vez de un mapa en blanco. "sin_datos" = el modelo
     // no llega a esta fecha (su corrida no la cubre); "sin_alerta" = sí hay pronóstico
-    // pero ninguna celda alcanza nivel Medio; "sin_amenaza" = el FFGS midió TODO el
+    // pero ninguna celda alcanza nivel Medio; "sin_amenaza" = se midió TODO el
     // dominio y dio cero — hay dato, y el dato es que no hay amenaza.
     if (d.vacio) {
       layout.annotations = (layout.annotations || []).concat([{
@@ -1856,7 +1602,7 @@
     }
 
     // UNA LEYENDA POR GRÁFICO (orden del dueño, 2026-09-03): TODAS las grillas de
-    // cartas —Advertencias, Pronóstico, Calibrado, Hidroestimadores, FFGS y heladas—
+    // cartas —Advertencias, Pronóstico, Calibrado, Hidroestimadores y heladas—
     // pintan la leyenda dentro de su propia tarjeta. Ya no existe barra compartida
     // bajo la grilla, ni siquiera cuando todos los modelos comparten escala.
     const carta = div.closest(".ct-carta");
@@ -1870,7 +1616,7 @@
   }
 
   // Purga TODAS las instancias Plotly vivas de la vista (no solo .ct-mapa-plot:
-  // también series, cruces, crecidas, FFR y mini-mapas — Plotly engancha listeners
+  // también series, cruces y mini-mapas — Plotly engancha listeners
   // de window por instancia y sin purge se acumulan al navegar).
   function purgarCartas() {
     if (!window.Plotly) return;
@@ -1920,7 +1666,7 @@
   }
 
   /* ============================================================
-     CUERPO C — TIPOS GRILLADOS (Pronóstico/Calibrado/Hidro/Heladas/FFGS)
+     CUERPO C — TIPOS GRILLADOS (Pronóstico/Calibrado/Hidro/Heladas)
      Barra: Variable · Período · navegador. Grilla de 3 columnas con las primeras
      4 fuentes del período (cada una su carta.png real).
      ============================================================ */
@@ -2360,222 +2106,8 @@
   }
 
   /* ============================================================
-     CUERPO C-FFGS — TODOS los productos del PASO HORARIO elegido
-     A diferencia del grid normal (una variable × fuentes), FFGS muestra TODAS
-     las cartas disponibles para el período+instante elegido (cada producto su
-     carta y su leyenda). Selector: Período + Instante (sin Variable).
-     ============================================================ */
-  function ffgsPeriodos(t) {
-    const s = new Set();
-    (t.variables || []).forEach(v => (v.periodos || []).forEach(p => s.add(p.horas)));
-    return [...s].sort((a, b) => a - b);
-  }
-
-  function ffgsProductosPeriodo(t, horas) {
-    return ((t && t.variables) || []).filter(v =>
-      (v.periodos || []).some(p => p.horas === horas));
-  }
-
-  // Resuelve el descriptor por la identidad meteorológica del ciclo. Nunca usa
-  // la posición de otro producto: si ese producto no tiene el ciclo, devuelve
-  // null y su tarjeta muestra «Sin dato».
-  function descriptorFFGSPorReferencia(p, referenceTime) {
-    if (!p || !Number.isSafeInteger(referenceTime)) return null;
-    let encontrada = null;
-    for (const it of (p.instantes || [])) {
-      for (const f of fuentesVista(p)) {
-        const descriptor = descriptorCarta(p, it, f);
-        if (!descriptor || !Number.isSafeInteger(descriptor.reference_time)
-            || descriptor.reference_time !== referenceTime) continue;
-        if (encontrada) {
-          const anterior = encontrada.descriptor;
-          if (anterior.archivo !== descriptor.archivo || anterior.capa !== descriptor.capa
-              || anterior.record !== descriptor.record)
-            return null; // referencia ambigua: nunca escoger el primer record al azar
-          continue;
-        }
-        encontrada = { instante: it, descriptor };
-      }
-    }
-    return encontrada;
-  }
-
-  function ciclosReferenciaFFGS(t, horas) {
-    const refs = new Set();
-    for (const v of ffgsProductosPeriodo(t, horas)) {
-      const p = v.periodos.find(pp => pp.horas === horas);
-      for (const it of (p && p.instantes) || []) {
-        for (const f of fuentesVista(p)) {
-          const d = descriptorCarta(p, it, f);
-          if (d && Number.isSafeInteger(d.reference_time)) refs.add(d.reference_time);
-        }
-      }
-    }
-    return [...refs].sort((a, b) => a - b);
-  }
-
-  function ffgsUsaReferencia(t, horas, productos) {
-    // Un contrato v1 reconocido prohíbe volver a índices aunque estuviera
-    // incompleto: mezclar posiciones sería peor que mostrar «Sin dato».
-    return !!contratoShpFFGS(productos) || ciclosReferenciaFFGS(t, horas).length > 0;
-  }
-
-  function coberturaCicloFFGS(t, horas, referenceTime) {
-    return ffgsProductosPeriodo(t, horas).reduce((n, v) => {
-      const p = v.periodos.find(pp => pp.horas === horas);
-      return n + (descriptorFFGSPorReferencia(p, referenceTime) ? 1 : 0);
-    }, 0);
-  }
-
-  function referenciaDefectoFFGS(t, horas, productos, ciclos) {
-    if (!ciclos.length) return null;
-    const contrato = contratoShpFFGS(productos);
-    const porPeriodo = contrato && contrato.raw.default_by_period;
-    const entrada = porPeriodo && porPeriodo[String(horas)];
-    const propuesta = entrada && entrada.reference_time;
-    if (Number.isSafeInteger(propuesta) && ciclos.includes(propuesta)) return propuesta;
-    // Mismo criterio del contrato: máxima cobertura y, en empate, ciclo más
-    // reciente. No depende de Date.now ni de la ventana particular del producto.
-    let mejor = ciclos[0], cobertura = -1;
-    for (const ref of ciclos) {
-      const n = coberturaCicloFFGS(t, horas, ref);
-      if (n > cobertura || (n === cobertura && ref > mejor)) {
-        mejor = ref; cobertura = n;
-      }
-    }
-    return mejor;
-  }
-
-  function etiquetaCicloFFGS(referenceTime) {
-    if (!Number.isSafeInteger(referenceTime)) return "Ciclo sin referencia";
-    const iso = new Date((referenceTime - 5 * 3600) * 1000).toISOString();
-    return `${iso.slice(0, 10)} · ${iso.slice(11, 16)} GMT-5`;
-  }
-
-  function ffgsState() {
-    const t = tipoNodo("ffgs");
-    const g = (E.grid.ffgs = E.grid.ffgs || {});
-    if (!t || !(t.variables || []).length) return g;
-    const pers = ffgsPeriodos(t);
-    if (g.horas == null || !pers.includes(g.horas)) g.horas = pers.includes(6) ? 6 : pers[0];
-    if (ffgsUsaReferencia(t, g.horas, E.productos)) {
-      const ciclos = ciclosReferenciaFFGS(t, g.horas);
-      if (!ciclos.includes(g.referenceTime))
-        g.referenceTime = referenciaDefectoFFGS(t, g.horas, E.productos, ciclos);
-      g.inst = ciclos.indexOf(g.referenceTime);
-    } else {
-      const rep = t.variables.find(v => v.periodos.some(p => p.horas === g.horas));
-      const pr = rep && rep.periodos.find(p => p.horas === g.horas);
-      const nInst = pr ? pr.instantes.length : 0;
-      if (g.inst == null || g.inst >= nInst) g.inst = pr ? instanteDefecto(pr.instantes) : nInst - 1;
-      if (g.inst < 0) g.inst = 0;
-    }
-    return g;
-  }
-  function cuerpoGridFFGS() {
-    const t = tipoNodo("ffgs");
-    if (!t || !(t.variables || []).length) {
-      return `<div class="vacio"><div class="icono">🗺️</div>
-        <strong>Sin productos FFGS publicados</strong>
-        <span>El motor todavía no ha generado cartas FFGS.</span></div>`;
-    }
-    const g = ffgsState();
-    const pers = ffgsPeriodos(t);
-    const prods = ffgsProductosPeriodo(t, g.horas);
-    const rep = prods[0];
-    const pr = rep && rep.periodos.find(p => p.horas === g.horas);
-    const porReferencia = ffgsUsaReferencia(t, g.horas, E.productos);
-    const ciclos = porReferencia ? ciclosReferenciaFFGS(t, g.horas) : [];
-    const posicion = porReferencia ? ciclos.indexOf(g.referenceTime) : g.inst;
-    const totalCiclos = porReferencia ? ciclos.length : ((pr && pr.instantes) || []).length;
-    const optsPer = pers.map(h =>
-      `<option value="${h}" ${h === g.horas ? "selected" : ""}>${String(h).padStart(2, "0")} h</option>`).join("");
-    const optsInst = porReferencia
-      ? (ciclos.length ? ciclos.map(ref => {
-          const n = coberturaCicloFFGS(t, g.horas, ref);
-          const parcial = n < prods.length ? ` · ${n}/${prods.length}` : "";
-          return `<option value="${ref}" ${ref === g.referenceTime ? "selected" : ""}>${esc(etiquetaCicloFFGS(ref))}${parcial}</option>`;
-        }).join("") : `<option disabled selected>Sin ciclos con referencia válida</option>`)
-      : ((pr && pr.instantes) || []).map((x, i) =>
-          `<option value="${i}" ${i === g.inst ? "selected" : ""}>${esc(x.etiqueta)}</option>`).join("");
-    const cartas = prods.map(v => {
-      const p = v.periodos.find(pp => pp.horas === g.horas);
-      const resuelta = porReferencia ? descriptorFFGSPorReferencia(p, g.referenceTime) : null;
-      const it = porReferencia
-        ? resuelta && resuelta.instante
-        : p.instantes[Math.min(g.inst, p.instantes.length - 1)];
-      const f = (p.fuentes || [])[0] || {};
-      const descriptor = porReferencia
-        ? resuelta && resuelta.descriptor
-        : descriptorCarta(p, it, f);
-      const partes = (v.etiqueta || "").split(" — ");
-      const sigla = partes[0] || v.id;
-      const desc = partes[1] || "";
-      // Jerarquía invertida (pedido del dueño: nada de siglas como rótulo principal):
-      // la descripción en castellano es el TÍTULO y la sigla queda detrás, pequeña
-      // y en gris, como referencia técnica. Sin descripción, la sigla sigue de título.
-      const cabecera = `<span class="titulo">${esc(desc || sigla)}${desc ? ` <span class="ct-sigla mono">${esc(sigla)}</span>` : ""}</span>`;
-      if (!it || !descriptor) {
-        return `<figure class="ct-carta"><div class="ct-carta-cab">${cabecera}
-          <span class="meta" title="${esc(p.figcap || "")}">${esc(p.figcap || "")}</span></div>
-          <div class="ct-lienzo"><div class="fallo"><div class="icono">🗺️</div>Sin dato</div></div></figure>`;
-      }
-      const params = paramsDescriptor(descriptor);
-      return `<figure class="ct-carta">
-        <div class="ct-carta-cab">${cabecera}</div>
-        ${lienzoCarta(params, (desc || sigla) + " · " + fechaLocalISO(it.inicio) + (desc ? " · " + sigla : ""))}
-        <div class="ct-ley-card" data-rol="ley-card"></div>
-      </figure>`;
-    }).join("");
-    return `
-      <div class="ct-barra cols compacta">
-        <label class="bloque"><span class="et">Período</span>
-          <select data-rol="fper">${optsPer}</select></label>
-        <div class="ct-inst-nav">
-          <button class="ct-nav" data-rol="fprev" title="Ciclo anterior" aria-label="Ciclo anterior" ${posicion <= 0 ? "disabled" : ""}>◀</button>
-          <select class="ct-instante" data-rol="finst" aria-label="Fecha y hora">${optsInst}</select>
-          <button class="ct-nav" data-rol="fnext" title="Ciclo siguiente" aria-label="Ciclo siguiente" ${posicion < 0 || posicion >= totalCiclos - 1 ? "disabled" : ""}>▶</button>
-        </div>
-        ${capasHTML()}
-      </div>
-      <div class="ct-grid cuencas">${cartas}</div>`;
-  }
-  function conectarGridFFGS(cont) {
-    const g = ffgsState();
-    const t = tipoNodo("ffgs");
-    if (!t || !(t.variables || []).length) return;
-    const rep = t.variables.find(v => v.periodos.some(p => p.horas === g.horas));
-    const pr = rep && rep.periodos.find(p => p.horas === g.horas);
-    const porReferencia = ffgsUsaReferencia(t, g.horas, E.productos);
-    const ciclos = porReferencia ? ciclosReferenciaFFGS(t, g.horas) : [];
-    const nInst = porReferencia ? ciclos.length : (pr ? pr.instantes.length : 0);
-    const posicion = porReferencia ? ciclos.indexOf(g.referenceTime) : g.inst;
-    const re = () => pintarCuerpo();
-    const q = s => cont.querySelector(s);
-    if (q('[data-rol="fper"]')) q('[data-rol="fper"]').onchange = e => {
-      g.horas = +e.target.value; g.inst = null; g.referenceTime = null; re();
-    };
-    if (q('[data-rol="finst"]')) q('[data-rol="finst"]').onchange = e => {
-      if (porReferencia) g.referenceTime = +e.target.value;
-      else g.inst = +e.target.value;
-      re();
-    };
-    if (q('[data-rol="fprev"]')) q('[data-rol="fprev"]').onclick = () => {
-      if (posicion <= 0) return;
-      if (porReferencia) g.referenceTime = ciclos[posicion - 1]; else g.inst--;
-      re();
-    };
-    if (q('[data-rol="fnext"]')) q('[data-rol="fnext"]').onclick = () => {
-      if (posicion < 0 || posicion >= nInst - 1) return;
-      if (porReferencia) g.referenceTime = ciclos[posicion + 1]; else g.inst++;
-      re();
-    };
-    cont.querySelectorAll('.ct-toggle[data-capa]').forEach(b => b.onclick = () => { E.capas[b.dataset.capa] = !E.capas[b.dataset.capa]; re(); });
-  }
-
-  /* ============================================================
      CUERPO HELADAS/CALOR — TODAS las variables × fuentes por fecha
-     (sin selector de variable; selector de Período + Instante, como FFGS).
+     (sin selector de variable; selector de Período + Instante).
      ============================================================ */
   function heladasPeriodos(t) {
     const s = new Set();
@@ -2764,9 +2296,6 @@
       // tres variables; fija = archivo activo, sin parámetro). En la app el POST ya
       // intercambió el .nc y no hace falta.
       if (window.HIDROMET_VISOR) { const _m = modoParaCarta(a.modo, a.varId); if (_m) params.modo = _m; }
-      // §P18a: SOLO en precipitación (nunca temperatura) el indicador FFR
-      // (FFR) se dibujan SOBRE la carta si el FFR cubre la fecha de este instante.
-      if (a.varId === "alerta_lluvia" && inst) params.ffr = fechaLocalISO(inst.inicio);
       // Toggle Cantones: el cantonal del subsistema nuevo se dibuja SOLO sobre la carta
       // CONSENSO (clave `${generador}|CONSENSO|${variable}`, lead por fecha/record).
       if (E.capas.cantones && fuente === "CONSENSO" && inst) {
@@ -2785,16 +2314,6 @@
 
     const sinArbol = tieneArbol ? "" :
       `<div class="vacio" style="padding:24px"><span class="suave">No hay advertencias vigentes. Abajo sigue el desempeño de las que ya se emitieron.</span></div>`;
-
-    // §P18a: la nota del overlay FFR SOLO aplica a precipitación.
-    const esLluvia = a.varId === "alerta_lluvia";
-    const notaFFR = esLluvia
-      ? `<p class="ct-nota" style="margin:-4px 0 14px"
-             title="Cortes operativos provisionales, todavía sin calibrar contra desbordamientos observados.">
-           <b>Susceptibilidad a crecida</b>: trama <span style="color:#009AF2;font-weight:700">punteada</span>
-           sobre las cartas de lluvia. Donde no hay trama puede faltar el dato, no el riesgo.</p>`
-      : "";
-
     // Nota del overlay cantonal (el resumen real lo rellena pintarMapaCarta al cargarlo).
     const notaCantonal = E.capas.cantones
       ? `<p class="ct-nota ct-nota-cantonal" data-rol="nota-cantonal" style="margin:-4px 0 14px">
@@ -2854,7 +2373,6 @@
     const vistaAlertas = `
       ${sinArbol}
       <div class="ct-grid">${cartas}</div>
-      ${notaFFR}
       ${notaCantonal}
       <div class="ct-panel" id="ct-desempeno">
         <div class="ct-panel-cab">
@@ -3154,13 +2672,6 @@
       montarMapasCarta(cont);
       return;
     }
-    // FFGS: rejilla propia (TODOS los productos del paso horario, leyenda por carta).
-    if (E.tipo === "ffgs") {
-      cont.innerHTML = cuerpoGridFFGS();
-      conectarGridFFGS(cont);
-      montarMapasCarta(cont);
-      return;
-    }
     if (E.tipo === "heladas") {
       cont.innerHTML = cuerpoGridHeladas();
       conectarGridHeladas(cont);
@@ -3196,7 +2707,7 @@
   }
 
   /* ---- Estado compartido entre los módulos Pronóstico/Advertencias y el panel
-     FFGS (que vive bajo Hidrología). Idempotente: carga el árbol una vez. ---- */
+     Idempotente: carga el árbol una vez. ---- */
   async function asegurarEstado() {
     if (!E) {
       E = { tipo: "pronostico", productos: { tipos: [] }, grid: {},
@@ -3217,28 +2728,11 @@
       } catch (e) { App.aviso("No se pudo cargar el catálogo de cartas: " + e.message, "error"); }
     }
   }
-
-  // Paneles reutilizables (cada uno asegura el estado + libera Plotly previo).
-  function panelGrid(tipoId) {
-    return async (cont) => {
-      await asegurarEstado(); purgarCartas(); E.tipo = tipoId;
-      cont.innerHTML = cuerpoGrid(tipoId); conectarGrid(cont, tipoId); montarMapasCarta(cont);
-    };
-  }
-  async function panelAlertas(cont) {
-    await asegurarEstado(); purgarCartas(); E.tipo = "alertas";
-    cont.innerHTML = cuerpoAlertas(); conectarAlertas(cont); montarMapasCarta(cont);
-  }
-  async function panelFFGS(cont) {
-    await asegurarEstado(); purgarCartas(); E.tipo = "ffgs";
-    cont.innerHTML = cuerpoGridFFGS(); conectarGridFFGS(cont); montarMapasCarta(cont);
-  }
   async function panelHeladas(cont) {
     await asegurarEstado(); purgarCartas(); E.tipo = "heladas";
     cont.innerHTML = cuerpoGridHeladas(); conectarGridHeladas(cont); montarMapasCarta(cont);
   }
-  App.panel("ffgs", panelFFGS);   // lo reusa el módulo Hidrología
-  App.panel("cartas:purgar", purgarCartas);   // para que Hidrología libere los Plotly de FFGS
+  App.panel("cartas:purgar", purgarCartas);
 
   // Bus de refresco: al terminar CUALQUIER actualización, invalida el catálogo
   // cacheado (no más cartas/alertas viejas tras "Actualizar"). Si la vista está
@@ -3246,14 +2740,14 @@
   document.addEventListener("datos-actualizados", () => {
     if (!E) return;
     if (E.alerta) { E.alerta._desClave = null; E.alerta._verClave = null; }
-    limpiarCacheDatos();   // §P14/§P9/§P18: mallas, resumen hidro, zonas FFR y cantonal caducan
+    limpiarCacheDatos();   // §P14/§P9/§P18: mallas, resumen hidro y cantonal caducan
     if (vp) recargar();
-    else E._stale = true;   // NO destruir E.productos: rompería un panel FFGS montado bajo Hidrología; re-fetch perezoso en asegurarEstado
+    else E._stale = true;   // NO destruir E.productos: rompería un panel montado fuera; re-fetch perezoso en asegurarEstado
   });
 
   // Cambio de tema: los mapas Plotly eligen sus colores AL DIBUJAR (contornos,
   // tooltip, grilla), así que hay que redibujar. Con vp se re-pinta la pestaña
-  // visible; sin vp (p.ej. panel FFGS montado bajo Hidrología) se re-montan los
+  // visible; sin vp se re-montan los
   // lienzos ya dibujados con la paleta del tema nuevo.
   document.addEventListener("temacambiado", () => {
     if (!E) return;
@@ -3372,7 +2866,7 @@
          + ". Para analizar y medir, la exacta.";
   }
 
-  // Descarga de shapefile (alertas / FFGS) O carta JPG: se GUARDA en la carpeta Descargas desde el
+  // Descarga de shapefile (alertas) O carta JPG: se GUARDA en la carpeta Descargas desde el
   // servidor (el <a download> de WebView2 no descarga) y se avisa, como el resto de exports.
   document.addEventListener("click", async (ev) => {
     const b = ev.target && ev.target.closest && ev.target.closest("[data-shp],[data-jpg],[data-dlimg]");
@@ -3384,7 +2878,7 @@
     if (_menu) cerrarMenusDescarga(null);
     b.dataset.busy = "1"; b.style.opacity = ".45";
     try {
-      // IMAGEN del mapa: FFR (data-dlimg) siempre, y las cartas (data-jpg) cuando
+      // IMAGEN del mapa: data-dlimg siempre, y las cartas (data-jpg) cuando
       // estamos en el VISOR en línea (sin backend que renderice la carta formal).
       if (b.dataset.dlimg || (b.dataset.jpg && window.HIDROMET_VISOR)) {
         await descargarImagenMapa(b);
@@ -3393,7 +2887,7 @@
         App.aviso(`Carta guardada en Descargas: ${r.archivo}`, "ok", 6000);
       } else if (b.dataset.shp) {
         if (window.HIDROMET_VISOR) {
-          await _descargarShpVisor(b.dataset.shp, b.dataset.dl);   // ZIP directo o FFGS reconstruido
+          await _descargarShpVisor(b.dataset.shp, b.dataset.dl);
         } else {
           const r = await App.api(b.dataset.shp);
           App.aviso(`Shapefile guardado en Descargas: ${r.archivo}`, "ok", 6000);
@@ -3414,27 +2908,13 @@
     }
   });
 
-  // VISOR: descarga un ZIP directo (alertas/FFR) o recompone FFGS desde bloques
-  // compartidos. No hay motor que genere el shapefile en vivo.
+  // VISOR: descarga el ZIP directo de la advertencia. No hay motor que genere el
+  // shapefile en vivo.
   async function _descargarShpVisor(rutaApi, nombrePreferido) {
     const prod = App.rutaAProducto(rutaApi).replace(/\.json$/, ".zip");
     // El nombre FÍSICO del producto es la ruta congelada, nunca el nombre visible:
     // se pide por `prod` y se baja con el rótulo que trae el botón (data-dl).
     let blob = null, nombre = nombrePreferido || prod.split("/").pop() || "shapefile.zip";
-    // Los FFGS comparten una geometría grande entre variables/records. El visor
-    // publica una sola copia de cada bloque y recompone localmente el mismo ZIP.
-    // El fallback mantiene compatibles builds anteriores durante la transición.
-    if (/^\/cartas\/ffgs_shp(?:\?|$)/.test(String(rutaApi))) {
-      const manifestProd = App.rutaAProducto(rutaApi).replace(/\.json$/, ".manifest.json");
-      try {
-        const mr = await fetch(manifestProd, { cache: "no-cache" });
-        if (mr.ok) {
-          const reconstruido = await App.zipDesdeManifest(await mr.json(), manifestProd);
-          blob = reconstruido.blob;
-          if (!nombrePreferido) nombre = reconstruido.nombre;   // el manifiesto solo gana si el botón no trajo rótulo
-        }
-      } catch (e) { /* intentar el ZIP legado debajo */ }
-    }
     if (!blob) {
       const resp = await fetch(prod, { cache: "no-cache" });
       if (!resp.ok) throw new Error("El shapefile de esta advertencia aún no está publicado en el visor");
@@ -3460,7 +2940,7 @@
     const w = Math.max(1000, Math.round((bb.width || 520) * 2));
     const h = Math.max(680, Math.round((bb.height || 360) * 2));
     // Carta de pronóstico/alerta (tiene datos guardados) → imagen FORMAL con título + leyenda.
-    // Los mapas FFR ya llevan su leyenda dentro de la figura → se capturan tal cual.
+    // Los mapas que ya llevan su leyenda dentro de la figura se capturan tal cual.
     const dataUrl = plot._carta
       ? await _imagenCartaFormal(plot, w, h)
       : await _imagenMapaBlanco(plot, w, h);
@@ -3518,7 +2998,7 @@
     return async () => { for (const [i, prev] of revertir) await window.Plotly.restyle(plot, prev, [i]); };
   }
 
-  // PNG (dataURL) de un mapa FFR (leyenda ya incluida en la figura):
+  // PNG (dataURL) de un mapa con la leyenda ya incluida en la figura:
   // se captura tal cual pero con papel blanco y tinta fija, revertidos después.
   async function _imagenMapaBlanco(plot, w, h) {
     const prev = _fondoPrevio(plot);
@@ -3636,6 +3116,12 @@
           { id: "calibrado", etiqueta: "Pronóstico calibrado", render: panelGrid("calibrado"), alSalir: purgarCartas },
           { id: "hidro", etiqueta: "Hidroestimadores", render: panelGrid("hidro"), alSalir: purgarCartas },
           { id: "heladas", etiqueta: "Heladas / Calor", render: panelHeladas, alSalir: purgarCartas },
+          // IUV: pronóstico CAMS D0..D5 por estación. Vivía en Climatología hasta el
+          // 2026-09-17; es un pronóstico a cinco días y su sitio es este. Lo monta
+          // ui/js/modules/iuv.js, que se registra como panel.
+          { id: "iuv", etiqueta: "Índice UV",
+            render: (c) => { const p = App.panel("iuv"); return p ? p(c) : (c.innerHTML = "IUV no disponible"); },
+            alSalir: () => { const p = App.panel("iuv:purgar"); if (p) p(); } },
         ],
       });
       _wireActualizar(vista);
@@ -3841,18 +3327,9 @@
     }
   }
 
-  // Superficie pura para las pruebas Node del contrato FFGS. En navegador no se
-  // expone ningún global adicional; la UI consume exactamente estas funciones.
+  // Superficie pura para las pruebas Node. En navegador no se expone ningún global
+  // adicional; la UI consume exactamente estas funciones.
   if (typeof module === "object" && module.exports) module.exports = Object.freeze({
-    FFGS_SHP_AVAILABILITY_SCHEMA,
-    contratoShpFFGS,
-    shpFFGSDisponible,
-    botonShpFFGS,
-    descriptorFFGSPorReferencia,
-    ciclosReferenciaFFGS,
-    coberturaCicloFFGS,
-    referenciaDefectoFFGS,
-    ffgsUsaReferencia,
     MODO_UMBRAL_BOTON,
     UMBRAL_SELECTOR,
     procedenciaUmbrales,
@@ -3904,7 +3381,6 @@
     variantesParaVariable,
     modoParaCarta,
     modoDeRepliegue,
-    escalaSinAmenazaFFGS,
     claveCantonal,
     leadDeRecord,
     leadPorFecha,

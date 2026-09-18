@@ -1,7 +1,48 @@
 {
   "esquema": "hidromet.degradado.v1",
   "etiqueta": "DEGRADADO — se publicó igual, sin acreditar; el dato va etiquetado",
-  "generado_utc": "2026-09-10T23:41:46+00:00",
-  "total": 0,
-  "degradado": []
+  "generado_utc": "2026-09-18T17:05:06+00:00",
+  "total": 10,
+  "degradado": [
+    {
+      "area": "Cartas (cómputo)",
+      "motivo": "Histórico grillado (alertas) (código 1)"
+    },
+    {
+      "area": "cartas:F2",
+      "motivo": "Cartas y alertas · cómputo falló: Histórico grillado (alertas) (código 1)"
+    },
+    {
+      "area": "clima:F2",
+      "motivo": "clima:F2: national_0707/tmax/2026 no incorpora las observaciones que la base canónica ya tiene hasta 2026-09-17 (la malla llega a 2026-09-10)"
+    },
+    {
+      "area": "clima:F2",
+      "motivo": "clima:F2: national_0707/tmin/2026 no incorpora las observaciones que la base canónica ya tiene hasta 2026-09-18 (la malla llega a 2026-09-10)"
+    },
+    {
+      "area": "clima:F2",
+      "motivo": "clima:F2: national_0707/pet/2026 no incorpora las observaciones que la base canónica ya tiene hasta 2026-09-17 (la malla llega a 2026-09-10)"
+    },
+    {
+      "area": "clima:F2",
+      "motivo": "clima:F2: epmaps_0024/prcp/2026 obsoleto (14 días de rezago) sin que la fuente lo justifique (última fecha publicada: 2026-09-17)"
+    },
+    {
+      "area": "clima:F2",
+      "motivo": "clima:F2: epmaps_0024/tmax/2026 no incorpora las observaciones que la base canónica ya tiene hasta 2026-09-17 (la malla llega a 2026-09-10)"
+    },
+    {
+      "area": "clima:F2",
+      "motivo": "clima:F2: epmaps_0024/tmin/2026 no incorpora las observaciones que la base canónica ya tiene hasta 2026-09-17 (la malla llega a 2026-09-10)"
+    },
+    {
+      "area": "clima:F2",
+      "motivo": "clima:F2: epmaps_0024/pet/2026 no incorpora las observaciones que la base canónica ya tiene hasta 2026-09-17 (la malla llega a 2026-09-10)"
+    },
+    {
+      "area": "cartas:F1",
+      "motivo": "cartas:F1: FFGS sin manifiesto ECU operativo en [ruta interna] personales/HidroMet/ffgs_descargas"
+    }
+  ]
 }

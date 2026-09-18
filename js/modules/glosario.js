@@ -1,8 +1,8 @@
 /* ============================================================
    HidroMet — Glosario. Referencia TEÓRICA: una pestaña por tipo de glosario.
    Reutiliza el glosario de modelos (App.panel "glosario:modelos", de mlnwp) y
-   sirve el resto desde /cartas/glosario?familia=ffgs|metricas|hydro, más los
-   glosarios ya publicados de caudales (/geoglows/glosario) y climatología
+   sirve el resto desde /cartas/glosario?familia=metricas|hydro, más el
+   glosario ya publicado de climatología
    (/clima/glosario), y una pestaña propia de eventos y avisos en lenguaje llano.
 
    ✔ UNIFICACIÓN APLICADA (HALLAZGO 7): los dos patrones comparten ahora el
@@ -10,10 +10,10 @@
      · Pestaña "Modelos NWP y ML": LISTA con borde de familia, en 3 .tarjeta
        (App.panel "glosario:modelos" → mlnwp.js pintarGlosario; clases ml-gloss y fam).
        Datos anidados de /mlnwp/glosario; panel REUTILIZADO por ML-NWP (intacto).
-     · Pestañas FFGS / Métricas / Hidroestimadores: TABLA dentro de una .tarjeta
+     · Pestañas Métricas / Hidroestimadores: TABLA dentro de una .tarjeta
        (.glo-vista > .tarjeta.glo-card, ver tablaGlosario). Datos planos de
        /cartas/glosario?familia=...
-     Se CONSERVA la tabla donde el dato es tabular (FFGS = 5 columnas
+     Se CONSERVA la tabla donde el dato es tabular (métricas = 5 columnas
      Sigla/Carta/Descripción/Unidad/Tipo); NO se fuerza a "lista con borde de
      familia" (esas familias solo existen en los modelos). Cohesión por marco +
      tipografía compartidos, SIN tocar el backend ni pintarGlosario.
@@ -56,7 +56,7 @@
   }
 
   /* Glosarios ya publicados con forma {titulo, intro, secciones:[{titulo, texto}]}
-     (caudales GEOGLOWS y metodología climática). Se pintan con el mismo marco
+     (metodología climática). Se pintan con el mismo marco
      de tabla que el resto de pestañas. Defensivo: si el dato no está publicado
      o llega sin secciones, se explica en llano en vez de romper. */
   async function tablaSecciones(cont, ruta, tituloDefecto) {
@@ -167,7 +167,7 @@
     titulo: "Glosario", orden: 5,
     async render(vista) {
       vista.dataset.screenLabel = "Glosario";
-      const ids = ["modelos", "ffgs", "metricas", "hidro", "caudales", "clima", "eventos"];
+      const ids = ["modelos", "metricas", "hidro", "clima", "eventos"];
       let inicial = (_pendiente && _pendiente.pestana) || pestanaGuardada();
       if (!ids.includes(inicial)) inicial = "modelos";
       // cada render guarda su pestaña y reaplica el filtro del buscador
@@ -184,11 +184,8 @@
         pestanas: [
           { id: "modelos", etiqueta: "Modelos NWP y ML",
             render: con("modelos", (c) => { const p = App.panel("glosario:modelos"); return p ? p(c) : tablaGlosario(c, "forecast"); }) },
-          { id: "ffgs", etiqueta: "FFGS", render: con("ffgs", (c) => tablaGlosario(c, "ffgs")) },
           { id: "metricas", etiqueta: "Métricas de validación", render: con("metricas", (c) => tablaGlosario(c, "metricas")) },
           { id: "hidro", etiqueta: "Hidroestimadores y variables", render: con("hidro", (c) => tablaGlosario(c, "hydro")) },
-          { id: "caudales", etiqueta: "Caudales y ríos",
-            render: con("caudales", (c) => tablaSecciones(c, "/geoglows/glosario", "Caudales de ríos")) },
           { id: "clima", etiqueta: "Climatología",
             render: con("clima", (c) => tablaSecciones(c, "/clima/glosario", "Climatología")) },
           { id: "eventos", etiqueta: "Eventos y avisos", render: con("eventos", tablaEventos) },

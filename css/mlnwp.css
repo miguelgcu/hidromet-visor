@@ -215,6 +215,11 @@ html[data-tema="oscuro"] .ml-tabla-modelos tbody tr { border-bottom-color: var(-
 .ml-obs-estado.sin-datos { color: var(--warn); }
 .ml-obs-estado.sin-datos .ml-obs-punto { background: none;
   box-shadow: inset 0 0 0 1.5px currentColor; }
+/* Hay días marcados por el control de calidad en esta ventana. El pie habla
+   igual que la curva: aro hueco, no punto macizo. El dato NO se retira —solo
+   se distingue—, así que esto no enciende ningún color de alarma. */
+.ml-obs-estado.con-marca .ml-obs-punto { background: none;
+  box-shadow: inset 0 0 0 2px var(--ink); }
 .ml-serie-acciones { display: flex; align-items: center; gap: 6px; margin-left: auto; }
 .ml-serie-acciones .ml-descarga-png { display: inline-flex; align-items: center;
   gap: 6px; height: 28px; padding: 0 10px; border: 1px solid var(--line-2);
@@ -290,6 +295,13 @@ html[data-tema="oscuro"] .ml-serie-plot .annotation-text {
   border-radius: 999px; background: var(--surface-2); color: var(--muted);
   font: 600 9.5px var(--mono); letter-spacing: .02em; }
 .ml-serie-leyenda .sw-linea { flex: 0 0 auto; width: 14px; height: 0; border-top: 2px dashed var(--ink); }
+/* El dato marcado por el control de calidad se distingue por FORMA, no por
+   color: un aro hueco entre puntos macizos se lee a un metro de la pantalla y
+   no depende de ver bien los colores. Mismo trazo del observado, sin relleno. */
+.ml-serie-leyenda span.it.es-observado-qc .ml-leyenda-nombre { color: var(--muted);
+  font-weight: 600; }
+.ml-serie-leyenda .sw-anillo { flex: 0 0 auto; width: 11px; height: 11px;
+  border: 2px solid var(--ink); border-radius: 50%; background: none; }
 .ml-serie-leyenda .sw-caja { flex: 0 0 auto; width: 12px; height: 10px; border-radius: 2px; }
 .ml-serie-leyenda .sw-banda { width: 14px; height: 10px;
   background: linear-gradient(rgba(27,58,107,.10), rgba(27,58,107,.10)) padding-box,
@@ -337,6 +349,11 @@ html[data-tema="oscuro"] .ml-serie-plot .annotation-text {
 /* Borde punteado que marca el inicio del pronóstico (mismo criterio que la franja de la serie) */
 .ml-pb-hoy { border-left: 1.8px dotted #6B8CB4 !important; }
 .ml-pb-nota { font-size: 12px; color: var(--muted-2); margin-top: 6px; line-height: 1.5; }
+/* Por qué una fila de la tabla no trae cifras. Es una explicación, no una
+   alarma: el mismo gris de las demás notas, con un filete que la ata a la
+   tabla de la que habla. */
+.ml-pb-nota-falta { border-left: 2px solid var(--line-2); padding-left: 8px; }
+.ml-pb-nota-falta b { color: var(--ink-2); font-weight: 600; }
 .ml-pb-estado { margin-top: 12px; padding: 10px 12px; border: 1px dashed var(--line-2);
   border-radius: 8px; color: var(--muted); font-size: 11px; line-height: 1.45; }
 .ml-pb-estado b, .ml-pb-estado span { display: block; }

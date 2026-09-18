@@ -1,21 +1,19 @@
 {
   "schema": "hidromet.frontend.v1",
   "source": "ui/",
-  "source_sha256": "9967e41ab5aca404b4d00f2703a504a5e0fafed58d9b5b3660696d28ac95b9f0",
-  "cache_version": "9967e41ab5ac",
+  "source_sha256": "f833e138e2fef9491baa38c13725ffaeded0356ac3b5217dd9ed4808353bfe9a",
+  "cache_version": "f833e138e2fe",
   "mode": "readonly-static",
   "included_modules": [
     "mlnwp",
     "decisiones",
     "cartas",
-    "sngr",
-    "geoglows",
     "clima",
+    "iuv",
     "glosario"
   ],
   "desktop_only_modules": [
     "configuracion",
     "datos"
-  ],
-  "auth_backend": false
+  ]
 }
