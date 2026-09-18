@@ -1,0 +1,4 @@
+# Basura de macOS: el visor se desarrolla tambien en Mac y estos ficheros no
+# tienen nada que hacer en un sitio publicado.
+.DS_Store
+**/.DS_Store

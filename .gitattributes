@@ -1,0 +1,40 @@
+# ============================================================================
+# POR QUE EXISTE ESTE FICHERO
+# ============================================================================
+# Este repositorio publica el visor en GitHub Pages y lo reescribe `exportar_web`
+# en cada corrida. Sin normalizar el fin de linea, git veia CAMBIADO todo fichero
+# que el build volvia a escribir, aunque su contenido fuese identico: los ultimos
+# commits tocan 29.441, 9.476 y 29.711 ficheros para cambiar unos pocos miles de
+# lineas, y `git diff --ignore-cr-at-eol` sobre el arbol sucio daba VACIO.
+#
+# Ese es el motor real del crecimiento: 134 commits y 5,0 GB de .git, ~1 GB al
+# mes, para un sitio cuyo contenido util son unas decenas de MB. No es que se
+# publiquen muchos datos: es que se reescriben enteros ficheros que no cambiaron.
+#
+# Con esto, git guarda SIEMPRE LF y solo registra lo que de verdad cambio.
+# Es el mismo remedio que el .gitattributes de HidroMet, que el 2026-09-17 quito
+# 309 ficheros fantasma y 286.797 lineas de ruido.
+# ============================================================================
+
+* text=auto eol=lf
+
+# Binarios: ni normalizar ni intentar diferenciar.
+*.png binary
+*.ico binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.zip binary
+*.gz binary
+*.pdf binary
+*.nc  binary
+*.parquet binary
+
+# Mapas y datos congelados: texto, pero enormes y generados. LF y sin diff.
+*.geojson text eol=lf -diff
+*.json    text eol=lf
