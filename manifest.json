@@ -5,8 +5,7 @@
   "parcial": true,
   "productos_con_fallback": 0,
   "fallos": [
-    "Cartas (cómputo)",
-    "cartas:F2"
+    "publicacion_no_confirmada"
   ],
   "areas_degradadas": [
     "Cartas (cómputo)",
@@ -15,5 +14,6 @@
     "clima:F2"
   ],
   "productos_retenidos_qc_fisico": [],
-  "aviso_degradacion": "DEGRADADO POR ORDEN DEL DUEÑO — respaldo físico etiquetado, no acreditado"
+  "aviso_degradacion": "DEGRADADO POR ORDEN DEL DUEÑO — respaldo físico etiquetado, no acreditado",
+  "publicacion_confirmada": false
 }

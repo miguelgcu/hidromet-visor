@@ -2728,6 +2728,21 @@
       } catch (e) { App.aviso("No se pudo cargar el catálogo de cartas: " + e.message, "error"); }
     }
   }
+  // Las tres pestañas de cartas grilladas (pronóstico, calibrado, hidroestimadores)
+  // comparten cuerpo y conexión; solo cambia el tipo. Se perdió el 2026-09-17 al
+  // retirar Hidrología —vivía pegada a panelFFGS y se fue con ella—, y el módulo
+  // Pronóstico entero dejó de cargar con «panelGrid is not defined». La pestaña
+  // inicial es "pronostico", así que el visor mostraba el error nada más abrirse.
+  function panelGrid(tipoId) {
+    return async (cont) => {
+      await asegurarEstado(); purgarCartas(); E.tipo = tipoId;
+      cont.innerHTML = cuerpoGrid(tipoId); conectarGrid(cont, tipoId); montarMapasCarta(cont);
+    };
+  }
+  async function panelAlertas(cont) {
+    await asegurarEstado(); purgarCartas(); E.tipo = "alertas";
+    cont.innerHTML = cuerpoAlertas(); conectarAlertas(cont); montarMapasCarta(cont);
+  }
   async function panelHeladas(cont) {
     await asegurarEstado(); purgarCartas(); E.tipo = "heladas";
     cont.innerHTML = cuerpoGridHeladas(); conectarGridHeladas(cont); montarMapasCarta(cont);
