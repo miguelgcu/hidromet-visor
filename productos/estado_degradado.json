@@ -1,0 +1,7 @@
+{
+  "esquema": "hidromet.degradado.v1",
+  "etiqueta": "DEGRADADO — se publicó igual, sin acreditar; el dato va etiquetado",
+  "generado_utc": "2026-09-19T13:04:00+00:00",
+  "total": 0,
+  "degradado": []
+}
