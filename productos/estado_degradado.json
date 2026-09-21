@@ -1,8 +1,8 @@
 {
   "esquema": "hidromet.degradado.v1",
   "etiqueta": "DEGRADADO — se publicó igual, sin acreditar; el dato va etiquetado",
-  "generado_utc": "2026-09-21T15:19:15+00:00",
-  "total": 6,
+  "generado_utc": "2026-09-21T18:07:05+00:00",
+  "total": 3,
   "degradado": [
     {
       "area": "clima:F2",
@@ -10,23 +10,11 @@
     },
     {
       "area": "clima:F2",
-      "motivo": "clima:F2: national_0707/tmin/2026 no incorpora las observaciones que la base canónica ya tiene hasta 2026-09-20 (la malla llega a 2026-09-18)"
+      "motivo": "clima:F2: national_0707/tmin/2026 no incorpora las observaciones que la base canónica ya tiene hasta 2026-09-21 (la malla llega a 2026-09-18)"
     },
     {
       "area": "clima:F2",
       "motivo": "clima:F2: national_0707/pet/2026 no incorpora las observaciones que la base canónica ya tiene hasta 2026-09-20 (la malla llega a 2026-09-18)"
-    },
-    {
-      "area": "clima:F2",
-      "motivo": "clima:F2: epmaps_0024/tmax/2026 no incorpora las observaciones que la base canónica ya tiene hasta 2026-09-20 (la malla llega a 2026-09-18)"
-    },
-    {
-      "area": "clima:F2",
-      "motivo": "clima:F2: epmaps_0024/tmin/2026 no incorpora las observaciones que la base canónica ya tiene hasta 2026-09-20 (la malla llega a 2026-09-18)"
-    },
-    {
-      "area": "clima:F2",
-      "motivo": "clima:F2: epmaps_0024/pet/2026 no incorpora las observaciones que la base canónica ya tiene hasta 2026-09-20 (la malla llega a 2026-09-18)"
     }
   ]
 }

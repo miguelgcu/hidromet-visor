@@ -1374,6 +1374,39 @@
     };
   }
 
+  // La grilla del CONTINENTE se dibuja sobre TODO el lienzo (sus ejes ocupan el
+  // dominio [0,1]) y el inset de Galápagos vive DENTRO de ese lienzo. Sin fondo
+  // propio, dentro del recuadro se veían dos retículas superpuestas con
+  // espaciados sin relación: la continental (−81,5…−75) y la del archipiélago
+  // (−92,6…−88,4). Plotly pinta el fondo de cada subgráfico DESPUÉS de la grilla
+  // del anterior, así que basta con que el inset tenga fondo opaco: tapa la
+  // retícula de debajo y conserva la suya.
+  //
+  // Pura (probada en Node): ¿el recuadro del inset cae dentro del área que pinta
+  // la grilla principal? Si cae, necesita tapa. Es la condición REAL del defecto,
+  // no «siempre que haya inset».
+  function insetNecesitaFondo(domPrincipal, domInset, grillaPrincipal) {
+    if (!grillaPrincipal) return false;
+    const [px0, px1, py0, py1] = domPrincipal;
+    const [ix0, ix1, iy0, iy1] = domInset;
+    const solapaX = !(ix1 < px0 || ix0 > px1);
+    const solapaY = !(iy1 < py0 || iy0 > py1);
+    return solapaX && solapaY;
+  }
+
+  // Color de fondo REAL detrás de un elemento: el primer ancestro que pinta algo.
+  // Se lee del DOM en vez de cablearse para que siga al tema —y a cualquier
+  // retoque del CSS— sin poder quedarse desfasado.
+  function fondoEfectivo(el, respaldo) {
+    try {
+      for (let n = el; n && n !== document.documentElement; n = n.parentElement) {
+        const c = getComputedStyle(n).backgroundColor;
+        if (c && c !== "transparent" && c.replace(/\s+/g, "") !== "rgba(0,0,0,0)") return c;
+      }
+    } catch (e) { /* sin DOM vivo: se usa el respaldo */ }
+    return respaldo;
+  }
+
   async function pintarMapaCarta(div, datosUrl, gen) {
     // §P14: la traza solo sigue viva si el div sigue en el DOM y NINGUNA tanda de
     // montaje más nueva ha arrancado (gen === _genMapas). Sin el token, respuestas
@@ -1543,6 +1576,10 @@
         ? { showticklabels: false, showline: false, zeroline: false, ticks: "", showgrid: true,
             gridcolor: oscuro ? "rgba(223,230,247,.13)" : "rgba(70,89,122,.16)", griddash: "dot", dtick: _gdt }
         : { visible: false };
+      // §GALÁPAGOS-2026-09-21: tapa del inset. Ver `insetNecesitaFondo`.
+      if (insetNecesitaFondo([0, 1, 0, 1], [gx0, gx1, gy0, gy1], !!cap.grilla)) {
+        layout.plot_bgcolor = fondoEfectivo(div, oscuro ? "#141F38" : "#ffffff");
+      }
       layout.xaxis2 = Object.assign({ domain: [gx0, gx1], anchor: "y2", range: [gMarco[0], gMarco[1]], fixedrange: true }, _ejeGrG);
       layout.yaxis2 = Object.assign({ domain: [gy0, gy1], anchor: "x2", range: [gMarco[2], gMarco[3]], scaleanchor: "x2", scaleratio: 1, fixedrange: true }, _ejeGrG);
       // borde del recuadro (rect por encima de todo, siempre visible)
@@ -3348,6 +3385,8 @@
     MODO_UMBRAL_BOTON,
     UMBRAL_SELECTOR,
     procedenciaUmbrales,
+    // §GALÁPAGOS: la condición que obliga a taparle el fondo al inset.
+    insetNecesitaFondo,
     // §POLI: una sola geometría del riesgo ordinal (contrato carta-poligonos.v1) y
     // los avisos de geometría de la advertencia; espejo del slug del motor.
     anillosPoligonoNivel,
