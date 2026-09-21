@@ -493,7 +493,15 @@
   const _CACHE_DATOS_MAX = 240;
   function limpiarCacheDatos() {
     _cacheDatos.clear();
-    _hvDatos = null;                          // §P9: resumen de validación hidro
+    // Aquí vivía `_hvDatos = null` (§P9, resumen de validación hidro). Al sacar
+    // Hidrología a su propio proyecto el 2026-09-17 se fue la DECLARACIÓN y se
+    // quedó la asignación: en `"use strict"` eso es un ReferenceError, no una
+    // variable global silenciosa. Y esta función la llama `fijarModo`, así que
+    // CAMBIAR DE CRITERIO DE UMBRAL reventaba — el desplegable ofrecía los tres
+    // y al elegir uno no pasaba nada. Misma familia que `panelGrid` y
+    // `panelAlertas`: lo que se borra deja referencias colgando y la sintaxis
+    // sigue siendo válida. La validación hidro que queda tiene su propio
+    // `_hvCache` con su propio ciclo de vida; aquí no hay nada que limpiar.
     _cantonal = null;                         // cantonal del subsistema nuevo (Cantones)
   }
   async function apiDatosCarta(url) {

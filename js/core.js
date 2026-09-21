@@ -704,11 +704,20 @@ const App = (() => {
       });
       Plotly.setPlotConfig({ locale: "es" });
     } catch (e) { return; /* la librería seguirá en inglés */ }
-    const s = document.createElement("script");
-    s.src = "lib/plotly/plotly-locale-es.js";
-    s.onload = () => { try { Plotly.setPlotConfig({ locale: "es" }); } catch (e) {} };
-    s.onerror = () => { try { s.remove(); } catch (e) {} };
-    document.head.appendChild(s);
+    // Aqui se pedia ademas `lib/plotly/plotly-locale-es.js`, el fichero de
+    // localizacion oficial de Plotly. Nunca se empaqueto —`ui/lib/plotly/` solo
+    // tiene `plotly.min.js`—, asi que la peticion daba 404 en CADA carga de
+    // pagina. El `onerror` lo tragaba sin romper nada, pero el 404 se quedaba en
+    // la consola del navegador, y esa consola es justo donde se ven los fallos
+    // que importan: el 2026-09-21 fue ella la que destapo `_hvDatos is not
+    // defined`, que llevaba dias tumbando el cambio de criterio de umbral. Un
+    // error garantizado y sin efecto tapa los que si lo tienen.
+    //
+    // No se pierde nada que funcionara: el registro de arriba ya fija los
+    // formatos de numero y fecha en espaniol, que es lo que se ve en los
+    // graficos. Si algun dia se quieren tambien los rotulos de la barra de
+    // herramientas y los nombres de los meses traducidos, hay que empaquetar
+    // ese fichero a proposito en `ui/lib/plotly/` — no pedirlo a ver si suena.
   }
 
   async function iniciar() {
