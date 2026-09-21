@@ -218,10 +218,32 @@
   // Pura: ZPH solo existe para precipitación; el resto de variantes vale para las tres.
   const variantesParaVariable = (lista, varId) =>
     (lista || []).filter(m => m !== "zph" || varId === "alerta_lluvia");
-  // Pura: ¿hace falta pedir la carta congelada con &modo=<m> en el visor? 'fija' es el
-  // archivo activo (sin parámetro) y zph solo tiene variante en lluvia.
-  const modoParaCarta = (modo, varId) =>
-    (modo && modo !== "fija" && (modo !== "zph" || varId === "alerta_lluvia")) ? modo : null;
+  // Pura: ¿con qué &modo=<m> se pide la carta congelada en el visor?
+  //
+  // DEFECTO MEDIDO 2026-09-21. Esto decía «'fija' es el archivo activo (sin
+  // parámetro)» y devolvía null para fija. Era cierto cuando el catálogo nacía
+  // en fija; hoy nace en `pctl` (el sello del archivo servido es «propio»). El
+  // resultado, comprobado en el visor publicado: al elegir «Umbrales
+  // regionales» se pedían las cartas SIN sufijo —que son las del modo activo,
+  // es decir PCTL— y la pantalla mostraba las advertencias del percentil local
+  // bajo el rótulo de los regionales. En un sistema de avisos nacional eso no
+  // es una molestia de interfaz: es publicar un criterio con el nombre de otro.
+  //
+  // Ya no se supone cuál es el activo. Se pide el sufijo del criterio elegido
+  // siempre que ESE criterio esté congelado, que es justo lo que el exportador
+  // declara en `fuentes_alerta_por_modo`. Si no lo está, se cae al archivo
+  // activo (sin sufijo), que es el comportamiento antiguo y sigue valiendo para
+  // los builds viejos, donde solo fija existía sin parámetro.
+  const modoParaCarta = (modo, varId, productos) => {
+    if (!modo) return null;
+    if (modo === "zph" && varId !== "alerta_lluvia") return null;
+    const congelados = (productos && productos.fuentes_alerta_por_modo) || null;
+    if (congelados && typeof congelados === "object" && !Array.isArray(congelados)) {
+      return Object.prototype.hasOwnProperty.call(congelados, modo) ? modo : null;
+    }
+    // Sin catálogo que consultar se conserva el contrato histórico.
+    return modo === "fija" ? null : modo;
+  };
   // Pura: modo al que se REPLIEGA el panel cuando el actual deja de valer para la
   // variable elegida (ZPH solo existe en lluvia). No puede ser la constante 'fija':
   // el exportador congela SOLO los modos ofrecidos y el 2026-09-05 esos eran zph y
@@ -718,10 +740,12 @@
                      "esperado_registro_inicio", "esperado_registro_fin"]) {
       if (params[k] !== undefined && params[k] !== null && params[k] !== "") b[k] = params[k];
     }
-    // Variante ZPH en el VISOR: el exportador congela las capas de alerta de lluvia
-    // también con &modo=zph; con modo fija se pide SIN el parámetro (compatibilidad
-    // con los productos ya congelados sin modo).
-    if (params.modo && params.modo !== "fija") b.modo = params.modo;
+    // El sufijo lo decide `modoParaCarta` mirando lo que el exportador congeló
+    // de verdad. Aquí se copia y punto: hasta el 2026-09-21 esta línea volvía a
+    // descartar `fija` por su cuenta —«fija = archivo activo»— y anulaba
+    // cualquier arreglo hecho arriba. Dos sitios suponiendo lo mismo, y los dos
+    // equivocados desde que el catálogo pasó a nacer en `pctl`.
+    if (params.modo) b.modo = params.modo;
     return b;
   }
 
@@ -2340,7 +2364,7 @@
       // VISOR: pedir la variante congelada &modo=<m> (zph solo en lluvia; pctl en las
       // tres variables; fija = archivo activo, sin parámetro). En la app el POST ya
       // intercambió el .nc y no hace falta.
-      if (window.HIDROMET_VISOR) { const _m = modoParaCarta(a.modo, a.varId); if (_m) params.modo = _m; }
+      if (window.HIDROMET_VISOR) { const _m = modoParaCarta(a.modo, a.varId, E.productos); if (_m) params.modo = _m; }
       // Toggle Cantones: el cantonal del subsistema nuevo se dibuja SOLO sobre la carta
       // CONSENSO (clave `${generador}|CONSENSO|${variable}`, lead por fecha/record).
       if (E.capas.cantones && fuente === "CONSENSO" && inst) {
@@ -2379,7 +2403,7 @@
       // Mismo contrato que las cartas de advertencia: en el VISOR se pide la
       // variante congelada con &modo=<m>; en la app el archivo activo ya es el del
       // criterio elegido (el POST lo intercambió).
-      if (window.HIDROMET_VISOR) { const _m = modoParaCarta(a.modo, a.varId); if (_m) params.modo = _m; }
+      if (window.HIDROMET_VISOR) { const _m = modoParaCarta(a.modo, a.varId, E.productos); if (_m) params.modo = _m; }
       return `<figure class="ct-carta ct-carta-umbral">${cab}
         ${lienzoCarta(params, "Umbral " + u.etiqueta + " · " + fechaLocalISO(inst.inicio))}
         <div class="ct-ley-card" data-rol="ley-card"></div>
