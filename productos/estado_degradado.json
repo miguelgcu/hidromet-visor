@@ -1,20 +1,7 @@
 {
   "esquema": "hidromet.degradado.v1",
   "etiqueta": "DEGRADADO — se publicó igual, sin acreditar; el dato va etiquetado",
-  "generado_utc": "2026-09-21T19:38:41+00:00",
-  "total": 3,
-  "degradado": [
-    {
-      "area": "clima:F2",
-      "motivo": "clima:F2: national_0707/tmax/2026 no incorpora las observaciones que la base canónica ya tiene hasta 2026-09-20 (la malla llega a 2026-09-18)"
-    },
-    {
-      "area": "clima:F2",
-      "motivo": "clima:F2: national_0707/tmin/2026 no incorpora las observaciones que la base canónica ya tiene hasta 2026-09-21 (la malla llega a 2026-09-18)"
-    },
-    {
-      "area": "clima:F2",
-      "motivo": "clima:F2: national_0707/pet/2026 no incorpora las observaciones que la base canónica ya tiene hasta 2026-09-20 (la malla llega a 2026-09-18)"
-    }
-  ]
+  "generado_utc": "2026-09-21T21:19:56+00:00",
+  "total": 0,
+  "degradado": []
 }

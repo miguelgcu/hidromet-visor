@@ -1,13 +1,10 @@
 {
-  "generado": "2026-09-21 14:38",
+  "generado": "2026-09-21 16:19",
   "fuente": "Actualización operativa",
   "ok": true,
-  "parcial": true,
+  "parcial": false,
   "productos_con_fallback": 0,
   "fallos": [],
-  "areas_degradadas": [
-    "clima:F2"
-  ],
-  "productos_retenidos_qc_fisico": [],
-  "aviso_degradacion": "DEGRADADO POR ORDEN DEL DUEÑO — respaldo físico etiquetado, no acreditado"
+  "areas_degradadas": [],
+  "productos_retenidos_qc_fisico": []
 }
