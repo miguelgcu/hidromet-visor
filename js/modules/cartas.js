@@ -961,6 +961,28 @@
     if (txt) txt.textContent = frasePreviaSimplificada(res, conteo);
   }
 
+  /* Una carta de alerta sin advertencia no tiene shapefile que bajar: el motor no
+     congela ZIP cuando el modelo no llega a ese instante ("sin_datos") o cuando
+     ninguna celda alcanza el nivel Medio ("sin_alerta"). Antes el botón SHP salía
+     igual y la descarga fallaba (71 casos en la exportación del 2026-09-24).
+     Devuelve el motivo para apagarlo, o "" si hay advertencia. */
+  function shpSinAdvertencia(d) {
+    const v = d && d.vacio;
+    if (v === "sin_datos") return "Sin pronóstico de este modelo para este instante: no hay advertencia que descargar.";
+    if (v === "sin_alerta") return "Ninguna zona alcanza el nivel Medio: no hay advertencia que descargar.";
+    return "";
+  }
+
+  function apagarShpSinAdvertencia(div, d) {
+    const motivo = shpSinAdvertencia(d);
+    const disp = motivo && div && div.querySelector && div.querySelector(".ct-dl-shp");
+    if (!disp) return;
+    disp.setAttribute("aria-disabled", "true");
+    disp.setAttribute("tabindex", "-1");
+    disp.setAttribute("title", motivo);
+    disp.setAttribute("aria-label", motivo);
+  }
+
   function lienzoCarta(params, alt) {
     const base = baseParams(params);
     const datosUrl = "/cartas/carta_datos?" + qs(base);
@@ -1452,6 +1474,7 @@
     // afina la frase de la opción de descarga; el mapa no la usa para NADA —
     // dibuja siempre la exacta, con o sin esta clave.
     anotarSimplificadaEnLienzo(div, d);
+    apagarShpSinAdvertencia(div, d);
     const P = d.principal || d;
     const hayCuencas = !!(d.cuencas && d.cuencas.ids && d.cuencas.ids.length);
     if ((!P || !P.campo || !P.campo.length) && !hayCuencas) { falloLienzo(div, "Sin datos para este instante"); return; }
@@ -2896,6 +2919,7 @@
     const t = ev.target;
     if (!t || !t.closest) return;
     const disp = t.closest(".ct-dl-desc > .ct-dl-shp");
+    if (disp && disp.getAttribute("aria-disabled") === "true") { ev.preventDefault(); return; }
     if (disp) { ev.preventDefault(); alternarMenuDescarga(disp); return; }
     if (!t.closest(".ct-dl-menu")) cerrarMenusDescarga(null);
   });
@@ -2904,6 +2928,7 @@
     const t = ev.target;
     if (!t || !t.closest) return;
     const disp = t.closest(".ct-dl-desc > .ct-dl-shp");
+    if (disp && disp.getAttribute("aria-disabled") === "true") return;
     if (disp) {
       if (ev.key === "Enter" || ev.key === " " || ev.key === "ArrowDown") {
         ev.preventDefault();
@@ -3414,6 +3439,7 @@
   // Superficie pura para las pruebas Node. En navegador no se expone ningún global
   // adicional; la UI consume exactamente estas funciones.
   if (typeof module === "object" && module.exports) module.exports = Object.freeze({
+    shpSinAdvertencia,
     MODO_UMBRAL_BOTON,
     UMBRAL_SELECTOR,
     procedenciaUmbrales,

@@ -196,6 +196,7 @@ html[data-tema="oscuro"] .ct-toggle.activo { color: #101B33; }
    control no la toca porque no vive en ella. */
 .ct-dl-desc { position: absolute; top: 8px; right: 44px; z-index: 4; line-height: 0; }
 .ct-dl-desc > .ct-dl-shp { position: static; }
+.ct-dl-shp[aria-disabled="true"] { opacity: .4; cursor: not-allowed; }
 /* El menú se ancla al BORDE de la carta (right: -36px = los 44 del botón menos los
    8 del margen), no al botón: así cabe entero en la columna más estrecha en que la
    grilla sigue a 3 columnas (~285 px de tarjeta a 1181 px de ventana). */
