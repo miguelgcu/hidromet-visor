@@ -1,72 +1,7 @@
 {
   "esquema": "hidromet.degradado.v1",
   "etiqueta": "DEGRADADO — se publicó igual, sin acreditar; el dato va etiquetado",
-  "generado_utc": "2026-09-28T03:28:19+00:00",
-  "total": 16,
-  "degradado": [
-    {
-      "area": "cartas:F2",
-      "motivo": "cartas:F2: cobertura inválida en alerta_lluvia_AIFS (0.0%)"
-    },
-    {
-      "area": "cartas:F2",
-      "motivo": "cartas:F2: cobertura inválida en alerta_lluvia_GFS (0.0%)"
-    },
-    {
-      "area": "cartas:F2",
-      "motivo": "cartas:F2: cobertura inválida en alerta_lluvia_IFS-ENS (0.0%)"
-    },
-    {
-      "area": "cartas:F2",
-      "motivo": "cartas:F2: cobertura espacial desigual entre capas de lluvia (alerta_lluvia_AIFS=0.0%, alerta_lluvia_GFS=0.0%, alerta_lluvia_IFS-ENS=0.0%)"
-    },
-    {
-      "area": "cartas:F2",
-      "motivo": "cartas:F2: cobertura inválida en alerta_tmin_AIFS (0.0%)"
-    },
-    {
-      "area": "cartas:F2",
-      "motivo": "cartas:F2: cobertura inválida en alerta_tmin_GFS (0.0%)"
-    },
-    {
-      "area": "cartas:F2",
-      "motivo": "cartas:F2: cobertura inválida en alerta_tmin_IFS-ENS (0.0%)"
-    },
-    {
-      "area": "cartas:F2",
-      "motivo": "cartas:F2: cobertura inválida en alerta_tmin_IFS (0.0%)"
-    },
-    {
-      "area": "cartas:F2",
-      "motivo": "cartas:F2: cobertura inválida en alerta_tmin_MONAN (0.0%)"
-    },
-    {
-      "area": "cartas:F2",
-      "motivo": "cartas:F2: cobertura espacial desigual entre capas de tmin (alerta_tmin_AIFS=0.0%, alerta_tmin_GFS=0.0%, alerta_tmin_IFS-ENS=0.0%, alerta_tmin_IFS=0.0%, alerta_tmin_MONAN=0.0%)"
-    },
-    {
-      "area": "cartas:F2",
-      "motivo": "cartas:F2: cobertura inválida en alerta_tmax_AIFS (0.0%)"
-    },
-    {
-      "area": "cartas:F2",
-      "motivo": "cartas:F2: cobertura inválida en alerta_tmax_GFS (0.0%)"
-    },
-    {
-      "area": "cartas:F2",
-      "motivo": "cartas:F2: cobertura inválida en alerta_tmax_IFS-ENS (0.0%)"
-    },
-    {
-      "area": "cartas:F2",
-      "motivo": "cartas:F2: cobertura inválida en alerta_tmax_IFS (0.0%)"
-    },
-    {
-      "area": "cartas:F2",
-      "motivo": "cartas:F2: cobertura inválida en alerta_tmax_MONAN (0.0%)"
-    },
-    {
-      "area": "cartas:F2",
-      "motivo": "cartas:F2: cobertura espacial desigual entre capas de tmax (alerta_tmax_AIFS=0.0%, alerta_tmax_GFS=0.0%, alerta_tmax_IFS-ENS=0.0%, alerta_tmax_IFS=0.0%, alerta_tmax_MONAN=0.0%)"
-    }
-  ]
+  "generado_utc": "2026-09-28T15:16:06+00:00",
+  "total": 0,
+  "degradado": []
 }
