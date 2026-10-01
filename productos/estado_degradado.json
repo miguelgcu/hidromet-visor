@@ -1,24 +1,7 @@
 {
   "esquema": "hidromet.degradado.v1",
   "etiqueta": "DEGRADADO — se publicó igual, sin acreditar; el dato va etiquetado",
-  "generado_utc": "2026-09-30T20:50:27+00:00",
-  "total": 4,
-  "degradado": [
-    {
-      "area": "Cartas (descarga)",
-      "motivo": "PERSIANN-PDIR (resolución nativa) (código 1)"
-    },
-    {
-      "area": "cartas:F1",
-      "motivo": "Cartas y alertas falló: PERSIANN-PDIR (resolución nativa) (código 1)"
-    },
-    {
-      "area": "cartas:F2",
-      "motivo": "Cartas y alertas · cómputo omitida por dependencias fallidas: cartas:F1"
-    },
-    {
-      "area": "cartas:F1",
-      "motivo": "cartas:F1: PDIR 07-07 producto obsoleto: 56.6 h (máximo 48 h)"
-    }
-  ]
+  "generado_utc": "2026-10-01T15:22:34+00:00",
+  "total": 0,
+  "degradado": []
 }
