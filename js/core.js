@@ -394,7 +394,7 @@ const App = (() => {
   }
 
   // Grupos de la barra lateral (rediseño v9): PRINCIPAL · MÓDULOS · SISTEMA.
-  const GRUPO_NAV = { pronostico: "MÓDULOS", validacion: "MÓDULOS",
+  const GRUPO_NAV = { monitoreo: "MÓDULOS", pronostico: "MÓDULOS", validacion: "MÓDULOS",
                       advertencias: "MÓDULOS", clima: "MÓDULOS", glosario: "MÓDULOS",
                       cartas: "MÓDULOS", mlnwp: "MÓDULOS",
                       datos: "SISTEMA", configuracion: "SISTEMA", config: "SISTEMA" };
@@ -411,6 +411,8 @@ const App = (() => {
   ICONOS_NAV.validacion = ICONOS_NAV.mlnwp;
   ICONOS_NAV.advertencias = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"><path d="M12 3.5 22 20H2z"/><path d="M12 10v4.5M12 17.4v.1"/></svg>';
   ICONOS_NAV.glosario = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M4 4.5h6.5a2 2 0 0 1 2 2V20a2 2 0 0 0-2-1.8H4z"/><path d="M20 4.5h-6.5a2 2 0 0 0-2 2V20a2 2 0 0 1 2-1.8H20z"/></svg>';
+  // Monitoreo: satélite (cuerpo, paneles y señal)
+  ICONOS_NAV.monitoreo = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="6" height="6" rx="1" transform="rotate(45 12 12)"/><path d="M6.3 6.3 3.5 3.5M17.7 17.7l2.8 2.8M5 11 2.5 8.5 8.5 2.5 11 5M13 19l2.5 2.5 6-6L19 13"/><path d="M15.5 4.5a4 4 0 0 1 4 4"/></svg>';
   ICONOS_NAV.clima = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="11" r="3.4"/><path d="M12 3.2v2M12 17v1.4M3.8 11h2M18.2 11h2M6.2 5.2l1.4 1.4M16.4 15.4l1.4 1.4M17.8 5.2l-1.4 1.4M7.6 15.4l-1.4 1.4"/></svg>';
 
   function pintarNav() {
