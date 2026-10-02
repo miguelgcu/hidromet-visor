@@ -1119,21 +1119,19 @@
       && (proc.ml_consenso_autorizado || proc.ml_selector_autorizado));
     return !(hayML || autorizado);
   }
-  function aplicarEstadoML(fuera) {
-    if (fuera === null) return;   // sin datos aún: no se afirma nada
-    S.mlFuera = fuera;
+  // Retirado el aviso «fuera de servicio» (pedido del dueño, 2026-10-02): salía aunque el
+  // pronóstico por aprendizaje automático sí estaba publicado. Las opciones quedan activas
+  // siempre; si una estación no trae curvas de esa familia, lo dice el aviso de la serie.
+  function aplicarEstadoML() {
+    S.mlFuera = false;
     const sel = document.getElementById("ml-sel-fam");
     if (sel) [...sel.options].forEach(op => {
       if (!FAMILIAS_ML.includes(op.value)) return;
-      op.disabled = fuera;
-      const base = op.dataset.etiqueta || (op.dataset.etiqueta = op.textContent);
-      op.textContent = fuera ? `${base} · fuera de servicio` : base;
+      op.disabled = false;
+      if (op.dataset.etiqueta) op.textContent = op.dataset.etiqueta;
     });
     const aviso = document.getElementById("ml-aviso-ml");
-    if (aviso) {
-      aviso.hidden = !fuera;
-      if (fuera) aviso.innerHTML = "<b>El pronóstico por aprendizaje automático está fuera de servicio:</b> no hay productos de ese tipo publicados. Las curvas y calificaciones de esta pantalla corresponden a los modelos meteorológicos habituales.";
-    }
+    if (aviso) aviso.hidden = true;
   }
   const filtrarModelosFamilia = (modelos, familia) => {
     const lista = Array.isArray(modelos) ? modelos : [];
