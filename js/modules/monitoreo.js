@@ -495,8 +495,19 @@
     }
     if (!E.capas.has(id)) return;   // la desactivaron mientras llegaba la lista
     if (!a.instantes.length) a.instantes = [null];
+    let k = a.instantes.length - 1;
+    // NASA pone el día de hoy en la lista antes de que el satélite pase sobre Ecuador
+    // (2026-10-02: VIIRS de hoy 0 % lleno, ayer 100 %): se mide y, si no cubre, se usa el anterior.
+    if (p.tipo === "gibs" && esDiario(p) && k >= 1) {
+      const [cu, ca] = await Promise.all([coberturaGibs(p, a.instantes[k]), coberturaGibs(p, a.instantes[k - 1])]);
+      if (!E.capas.has(id)) return;
+      if (cu !== null && ca !== null && ca > 0.02 && cu < 0.5 * ca) {
+        k -= 1;
+        a.nota = "La imagen del día más reciente todavía no cubre Ecuador: se muestra la del día anterior.";
+      }
+    }
     a.cargando = false;
-    await ponerInstante(a, a.instantes.length - 1);
+    await ponerInstante(a, k);
     pintarPanel(); guardarPrefs();
   }
 
@@ -527,6 +538,91 @@
     else { pintarControl(); activarCapa(id, opacidad); }
   }
 
+  /* ---------------- paneles flotantes en la esquina libre ---------------- */
+  function anillosDe(geo) {
+    const out = [];
+    for (const f of (geo.features || [geo])) {
+      const g = f.geometry || f;
+      // el contorno que publica el motor es un MultiLineString (cada borde, una línea cerrada):
+      // cada línea sirve de anillo para la prueba par-impar
+      const polys = g.type === "Polygon" || g.type === "MultiLineString" ? [g.coordinates]
+        : g.type === "MultiPolygon" ? g.coordinates : g.type === "LineString" ? [[g.coordinates]] : [];
+      for (const poly of polys) for (const r of poly) out.push(r);
+    }
+    return out;
+  }
+  function dentroDe(anillos, x, y) {   // par-impar sobre todos los anillos: respeta los huecos
+    let dentro = false;
+    for (const r of anillos) {
+      for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+        const xi = r[i][0], yi = r[i][1], xj = r[j][0], yj = r[j][1];
+        if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) dentro = !dentro;
+      }
+    }
+    return dentro;
+  }
+  const ESQUINAS = ["ii", "si", "sd", "id"];
+  function rectEsquina(esq, w, h, W, H) {
+    if (esq === "ii") return [10, H - 24 - h, 10 + w, H - 24];
+    if (esq === "si") return [52, 10, 52 + w, 10 + h];
+    if (esq === "sd") return [W - 10 - w, 40, W - 10, 40 + h];
+    return [W - 10 - w, H - 24 - h, W - 10, H - 24];
+  }
+  function paisBajo(r) {
+    if (!E.contorno || !E.mapa) return 0;
+    let n = 0;
+    for (let i = 0; i < 12; i++) for (let j = 0; j < 8; j++) {
+      const ll = E.mapa.containerPointToLatLng([r[0] + (r[2] - r[0]) * (i + 0.5) / 12, r[1] + (r[3] - r[1]) * (j + 0.5) / 8]);
+      if (dentroDe(E.contorno, ll.lng, ll.lat)) n++;
+    }
+    return n / 96;
+  }
+  function ubicarControles() {
+    if (E.ubicando) return;
+    E.ubicando = requestAnimationFrame(() => {
+      E.ubicando = 0;
+      const caja = document.querySelector(".mon-mapa-caja");
+      if (!caja || !E.mapa) return;
+      const W = caja.clientWidth, H = caja.clientHeight, usadas = new Set();
+      for (const id of ["mon-ctl", "mon-leyenda"]) {
+        const el = document.getElementById(id);
+        if (!el || el.hidden || !el.offsetWidth) continue;
+        let mejor = null;
+        for (const esq of ESQUINAS) {
+          if (usadas.has(esq)) continue;
+          const t = paisBajo(rectEsquina(esq, el.offsetWidth, el.offsetHeight, W, H));
+          if (!mejor || t < mejor.t - 0.005) mejor = { esq, t };
+        }
+        if (mejor) { usadas.add(mejor.esq); el.dataset.esq = mejor.esq; }
+      }
+    });
+  }
+  // Fracción de píxeles con dato en las dos teselas (z ≤ 5) que cubren Ecuador; null si no se pudo medir.
+  function coberturaGibs(p, t) {
+    const z = Math.min(5, p.nivel || 5), n = 2 ** z;
+    const tx = (lon) => Math.floor(((lon + 180) / 360) * n);
+    const ty = (lat) => Math.floor((1 - Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360)) / Math.PI) / 2 * n);
+    const teselas = [...new Set([tx(-80.5), tx(-77)])].map(x => [x, ty(-1.5)]);
+    const una = ([x, y]) => new Promise(res => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      const fin = v => { clearTimeout(reloj); res(v); };
+      const reloj = setTimeout(() => fin(null), 7000);
+      img.onload = () => {
+        try {
+          const cv = document.createElement("canvas"); cv.width = cv.height = 64;
+          const g = cv.getContext("2d"); g.drawImage(img, 0, 0, 64, 64);
+          const d = g.getImageData(0, 0, 64, 64).data; let lleno = 0;
+          for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 8 && d[i] + d[i + 1] + d[i + 2] > 6) lleno++;
+          fin(lleno / 4096);
+        } catch (e) { fin(null); }
+      };
+      img.onerror = () => fin(0);
+      img.src = `${p.url}/${p.capa}/default/${parametroTiempo(p, t)}/GoogleMapsCompatible_Level${p.nivel}/${z}/${y}/${x}.${p.ext || "png"}`;
+    });
+    return Promise.all(teselas.map(una)).then(v => (v.some(x => x === null) ? null : v.reduce((a, b) => a + b, 0) / v.length));
+  }
+
   /* ---------------- pintado ---------------- */
   function fichaHTML(p) {
     const cob = p.cobertura ? `${p.cobertura.archivos} de ${p.cobertura.esperados} archivos` : "";
@@ -553,29 +649,17 @@
       return `<section class="mon-grupo"><h3>${esc(g.nombre)}<small>${esc(g.sub)}</small></h3>${prods.map(p => {
         const anim = esAnimable(p);
         const a = anim ? (animId === p.id ? E.anim : null) : E.capas.get(p.id);
-        const op = a ? Math.round(a.opacidad * 100) : 0;
         return `<div class="mon-prod${a ? " activa" : ""}" data-id="${p.id}">
           <label><input type="radio" name="mon-capa" ${a ? "checked" : ""} data-elegir="${p.id}">
             <span class="nom">${esc(p.nombre)}${anim ? ` <i class="mon-anima" title="Se anima">▶</i>` : ""}</span>
             <span class="res">${esc(p.resolucion)}</span></label>
           <button class="mon-info" data-info="${p.id}" title="Qué es y cómo leerlo" aria-label="Ficha de ${esc(p.nombre)}">i</button>
-          ${a ? `<div class="mon-op"><input type="range" min="10" max="100" step="5" value="${op}"
-                   data-op="${p.id}" aria-label="Opacidad de ${esc(p.nombre)}"><span>${op} %</span></div>` : ""}
         </div>`;
       }).join("")}</section>`;
     }).join("");
     // una sola capa: tocar otra la cambia; tocar la activa la apaga
     caja.querySelectorAll("[data-elegir]").forEach(c => c.onclick = () => elegir(c.dataset.elegir));
     caja.querySelectorAll("[data-info]").forEach(b => b.onclick = () => mostrarFicha(b.dataset.info));
-    caja.querySelectorAll("[data-op]").forEach(r => r.oninput = () => {
-      const id = r.dataset.op;
-      const a = E.anim && E.anim.p.id === id ? E.anim : E.capas.get(id);
-      if (!a) return;
-      a.opacidad = Number(r.value) / 100;
-      if (a.capa) a.capa.setOpacity(a.opacidad);
-      r.nextElementSibling.textContent = `${r.value} %`;
-      guardarPrefs();
-    });
   }
 
   function mostrarFicha(id) {
@@ -587,7 +671,7 @@
     caja.querySelector(".mon-cerrar").onclick = () => { caja.hidden = true; };
   }
 
-  /* --- control compacto de la animación (abajo a la izquierda, como el monitor hidrometeorológico) --- */
+  /* --- control compacto de la animación (en la esquina libre del mapa, ver ubicarControles) --- */
   // Leyenda de GIBS; «leyenda_recorte» deja solo la parte de arriba (IMERG trae también la escala de nieve).
   function imgLeyenda(p, clase) {
     const img = `<img class="${clase}" src="${esc(p.leyenda)}" alt="Escala de ${esc(p.nombre)}" loading="lazy">`;
@@ -608,14 +692,19 @@
     const A = E.anim;
     const opciones = E.cat.productos.filter(esAnimable)
       .map(p => `<option value="${p.id}" ${A && A.p.id === p.id ? "selected" : ""}>${esc(p.nombre)}</option>`).join("");
+    if (E.ctlPlegado === undefined) E.ctlPlegado = !!(window.matchMedia && window.matchMedia("(max-width: 900px)").matches);
     caja.innerHTML = `<div class="mon-ctl-fila">
         <select id="mon-anim-sel" aria-label="Producto animado"><option value="">Sin animación</option>${opciones}</select>
         ${A ? `<button id="mon-play" class="mon-ctl-b" aria-label="Animar o detener"></button>
                <button id="mon-prev" class="mon-ctl-b" title="Anterior" aria-label="Imagen anterior">◀</button>
                <button id="mon-next" class="mon-ctl-b" title="Siguiente" aria-label="Imagen siguiente">▶</button>
-               <b id="mon-hora" class="mon-ctl-hora">—</b>` : ""}
+               <b id="mon-hora" class="mon-ctl-hora">—</b>
+               <button id="mon-ctl-mas" class="mon-ctl-b mon-ctl-mas" aria-expanded="${!E.ctlPlegado}" aria-label="Mostrar u ocultar el detalle">${E.ctlPlegado ? "▸" : "▾"}</button>` : ""}
       </div>
-      ${A ? `<div id="mon-sub" class="mon-ctl-sub"></div>${escalaAnim(A.p)}` : ""}`;
+      ${A ? `<div id="mon-sub" class="mon-ctl-sub" ${E.ctlPlegado ? "hidden" : ""}></div>${E.ctlPlegado ? "" : escalaAnim(A.p)}` : ""}`;
+    const mas = caja.querySelector("#mon-ctl-mas");
+    if (mas) mas.onclick = () => { E.ctlPlegado = !E.ctlPlegado; pintarControl(); };
+    ubicarControles();
     caja.querySelector("#mon-anim-sel").onchange = ev => {
       const id = ev.target.value;
       if (id) elegir(id); else { apagarTodo(); pintarPanel(); pintarControl(); pintarLeyendas(); guardarPrefs(); }
@@ -678,7 +767,7 @@
     const caja = document.getElementById("mon-leyenda");
     if (!caja) return;
     const capas = [...E.capas.values()].reverse();
-    if (!capas.length) { caja.hidden = true; return; }
+    if (!capas.length) { caja.hidden = true; ubicarControles(); return; }
     caja.hidden = false;
     const cuerpo = capas.map(a => {
       const p = a.p;
@@ -695,15 +784,16 @@
         ? `<span class="mon-dias"><button data-dia="${p.id}" data-d="-1" ${a.i <= 0 ? "disabled" : ""} aria-label="Fecha anterior">◀</button>
            <button data-dia="${p.id}" data-d="1" ${a.i >= a.instantes.length - 1 ? "disabled" : ""} aria-label="Fecha siguiente">▶</button></span>` : "";
       return `<div class="mon-ley-item"><div class="mon-ley-tit">${esc(p.nombre)}${p.unidad ? ` <small>(${esc(p.unidad)})</small>` : ""}</div>
-        <div class="mon-ley-t"><span>${a.cargando ? "…" : esc(rotuloTiempo(p, t))}</span>${dias}</div>${ley}${fallos}</div>`;
+        <div class="mon-ley-t"><span>${a.cargando ? "…" : esc(rotuloTiempo(p, t))}</span>${dias}</div>${a.nota ? `<div class="mon-nota-capa">${esc(a.nota)}</div>` : ""}${ley}${fallos}</div>`;
     }).join("");
     caja.innerHTML = `<button class="mon-ley-cab" aria-expanded="${E.leyendaAbierta}">Capas (${capas.length}) ${E.leyendaAbierta ? "▾" : "▸"}</button>
       ${E.leyendaAbierta ? `<div class="mon-ley-cuerpo">${cuerpo}</div>` : ""}`;
     caja.querySelector(".mon-ley-cab").onclick = () => { E.leyendaAbierta = !E.leyendaAbierta; pintarLeyendas(); };
     caja.querySelectorAll("[data-dia]").forEach(b => b.onclick = () => {
       const a = E.capas.get(b.dataset.dia);
-      if (a) ponerInstante(a, a.i + Number(b.dataset.d));
+      if (a) { a.nota = ""; ponerInstante(a, a.i + Number(b.dataset.d)); }
     });
+    ubicarControles();
   }
 
   /* ---------------- mapa ---------------- */
@@ -742,6 +832,8 @@
     let pais = null;
     try { pais = await (await fetch(urlArchivo(c.archivo))).json(); } catch (e) { pais = null; }
     if (!pais || !E.mapa || E.limites !== grupo) return;
+    E.contorno = anillosDe(pais);
+    ubicarControles();
     L.geoJSON(pais, { pane: "mon-limites", interactive: false,
       style: { color: "#0A1220", weight: 5.5, opacity: 0.55, fill: false, lineJoin: "round" } }).addTo(grupo);
     L.geoJSON(pais, { pane: "mon-limites", interactive: false,
@@ -798,6 +890,7 @@
       if (nombre !== "mon-puntos") pane.style.pointerEvents = "none";
     }
     L.control.scale({ imperial: false, position: "topright" }).addTo(E.mapa);
+    E.mapa.on("moveend zoomend resize", () => ubicarControles());
     const prefs = leerPrefs();
     ponerBase(prefs.base || baseSegunTema());
     document.getElementById("mon-base").onchange = ev => ponerBase(ev.target.value);

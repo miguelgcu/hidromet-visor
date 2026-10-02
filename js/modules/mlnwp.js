@@ -1361,6 +1361,15 @@
   // filtradas por red y ordenadas por región → dependencia → nombre.
   let comboEsts = [];
   const normTxt = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  // Búsqueda por palabras, sin puntos y con las abreviaturas del catálogo desplegadas:
+  // «santa rosa», «sta rosa» y «rosa» encuentran «Sta. Rosa» (antes, «santa rosa» no la hallaba).
+  const ABREV = { sta: "santa", sto: "santo", s: "san", sn: "san", gral: "general", pto: "puerto", cdla: "ciudadela",
+                  hda: "hacienda", mcal: "mariscal", aerop: "aeropuerto", cnel: "coronel", sra: "senora" };
+  const palabras = s => normTxt(s).replace(/[.,;:()\-_/]+/g, " ").split(/\s+/).filter(Boolean).map(w => ABREV[w] || w);
+  const coincide = (texto, consulta) => {
+    const t = palabras(texto), q = palabras(consulta);
+    return q.every(w => t.some(x => x.startsWith(w)));
+  };
   const redEst = e => e ? (e.red_etiqueta || App.redEtiqueta(e.dependencia || e.red_id || "")) : "";
 
   function estacionesSelector(contexto, validadas, variable = S.variable) {
@@ -1396,7 +1405,7 @@
   function opcionesComboHTML(q) {
     const nq = normTxt(q);
     const visibles = comboEsts.filter(e => !nq ||
-      normTxt(`${e.codigo} ${e.nombre} ${e.region} ${redEst(e)}`).includes(nq));
+      coincide(`${e.codigo} ${e.nombre} ${e.region} ${redEst(e)}`, q));
     if (!visibles.length) return `<div class="ml-combo-vacia">Sin coincidencias.</div>`;
     let html = "", region = null;
     for (const e of visibles) {

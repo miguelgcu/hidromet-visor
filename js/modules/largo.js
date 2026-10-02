@@ -228,11 +228,13 @@
       margin: { l: 0, r: 0, t: 0, b: 0 }, hovermode: "closest", dragmode: opts.mini ? false : "pan",
       xaxis: { visible: false, range: [CAJA_C[0], CAJA_C[1]], domain: [0, 1], fixedrange: !!opts.mini },
       yaxis: { visible: false, range: [CAJA_C[2], CAJA_C[3]], scaleanchor: "x", scaleratio: 1, domain: [0, 1], fixedrange: !!opts.mini },
-      xaxis2: { visible: false, range: [CAJA_G[0], CAJA_G[1]], domain: [0.02, 0.3], anchor: "y2", fixedrange: true },
+      // Galápagos abajo a la DERECHA: esa esquina del recuadro cae sobre Perú (0 % de territorio
+      // ecuatoriano medido con el contorno oficial); abajo a la izquierda tapaba El Oro y Guayas.
+      xaxis2: { visible: false, range: [CAJA_G[0], CAJA_G[1]], domain: [0.70, 0.98], anchor: "y2", fixedrange: true },
       yaxis2: { visible: false, range: [CAJA_G[2], CAJA_G[3]], domain: [0.03, 0.3], anchor: "x2", scaleanchor: "x2", fixedrange: true },
-      shapes: [{ type: "rect", xref: "paper", yref: "paper", x0: 0.02, x1: 0.3, y0: 0.03, y1: 0.3,
+      shapes: [{ type: "rect", xref: "paper", yref: "paper", x0: 0.70, x1: 0.98, y0: 0.03, y1: 0.3,
         line: { color: oscuro() ? "#33435F" : "#C9D3E1", width: 1 }, fillcolor: "rgba(0,0,0,0)" }],
-      annotations: opts.mini ? [] : [{ xref: "paper", yref: "paper", x: 0.02, y: 0.305, xanchor: "left", yanchor: "bottom",
+      annotations: opts.mini ? [] : [{ xref: "paper", yref: "paper", x: 0.98, y: 0.305, xanchor: "right", yanchor: "bottom",
         text: "Galápagos", showarrow: false, font: { size: 10, color: ink } }],
     });
     // Sin zoom con la rueda: la rueda desplaza la página (atraparla sobre un mapa grande

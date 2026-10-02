@@ -151,3 +151,19 @@
   .mon-leyenda { right: 8px; top: 8px; bottom: auto; width: 220px; max-height: 45%; }
   .mon-ficha { left: 8px; right: 8px; width: auto; top: 8px; }
 }
+
+/* Paneles flotantes compactos. ubicarControles() los pone en la esquina del mapa donde menos
+   tapan a Ecuador (mide el contorno nacional en pantalla) y los recoloca al mover o acercar.
+   2026-10-02: abajo a la izquierda tapaban El Oro y Loja; una barra fija quitaba demasiado mapa. */
+.mon-ctl { width: 300px; padding: 6px 8px; }
+.mon-ctl[data-esq], .mon-leyenda[data-esq] { left: auto; right: auto; top: auto; bottom: auto; }
+.mon-ctl[data-esq="ii"], .mon-leyenda[data-esq="ii"] { left: 10px; bottom: 24px; }
+.mon-ctl[data-esq="si"], .mon-leyenda[data-esq="si"] { left: 52px; top: 10px; }
+.mon-ctl[data-esq="sd"], .mon-leyenda[data-esq="sd"] { right: 10px; top: 40px; }
+.mon-ctl[data-esq="id"], .mon-leyenda[data-esq="id"] { right: 10px; bottom: 24px; }
+.mon-ctl-mas { width: 24px; }
+.mon-nota-capa { font-size: var(--fs-micro); color: var(--muted); margin-top: 4px; line-height: 1.35; }
+@media (max-width: 900px) {
+  .mon-ctl { width: min(300px, calc(100% - 20px)); }
+  .mon-leyenda { width: min(240px, calc(100% - 20px)); }
+}
