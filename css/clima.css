@@ -8,7 +8,11 @@
 
 /* Acento del módulo: teal (clima/agua/vegetación), distinto del azul de Cartas
    y el púrpura de ML. Se usa en pestaña activa, marcadores de sección y foco. */
-.vista-clima, .cl-wrap { --cl-acc: var(--cyan); --cl-acc-bd: var(--cyan-bd); --cl-acc-bg: var(--cyan-50); }
+/* v30: el acento es el del módulo activo (--acc, verde en Climatología); dentro de
+   Pronóstico (índice UV) toma el azul de ese módulo. */
+.vista-clima, .cl-wrap { --cl-acc: var(--acc, var(--cyan));
+  --cl-acc-bd: color-mix(in srgb, var(--acc, var(--cyan)) 38%, var(--line));
+  --cl-acc-bg: color-mix(in srgb, var(--acc, var(--cyan)) 11%, var(--surface)); }
 
 .cl-wrap{display:flex;flex-direction:column;gap:14px}
 
@@ -22,8 +26,8 @@
 .cl-grupo:last-child{border-right:0}
 /* el grupo de meses puede envolver sus celdas si el ancho aprieta, sin cortar controles */
 .cl-grupo:has(.cl-meses){flex-wrap:wrap}
-.cl-grupo>span{font:600 9.5px var(--mono);letter-spacing:.09em;text-transform:uppercase;
-  color:var(--faint);white-space:nowrap}
+.cl-grupo>span{font:600 11.5px var(--fuente);
+  color:var(--muted);white-space:nowrap}
 
 /* Pills de variable — con swatch de color (--pc = color de esa variable en el mapa) */
 .cl-pills{display:flex;flex-wrap:nowrap;gap:5px}
@@ -46,16 +50,16 @@
 
 /* Selector de escala (Anual + 12 meses): celdas compactas segmentadas */
 .cl-meses{display:flex;flex-wrap:nowrap;gap:3px}
-.cl-mes{min-width:26px;text-align:center;border:1px solid var(--line);background:var(--surface-2);
+.cl-mes{min-width:28px;text-align:center;border:1px solid var(--line-2);background:var(--surface-2);
   color:var(--muted);border-radius:var(--r-ctrl,8px);padding:5px 6px;font:600 10.5px var(--mono);
   cursor:pointer;white-space:nowrap;transition:background .13s,border-color .13s,color .13s}
 .cl-mes:hover{border-color:var(--cl-acc);color:var(--ink)}
-.cl-mes.on{background:var(--navy-700);border-color:var(--navy-700);color:#fff}
+.cl-mes.on{background:color-mix(in srgb,var(--cl-acc) 18%,var(--surface));border-color:var(--cl-acc);color:var(--ink);box-shadow:inset 0 0 0 1px var(--cl-acc)}
 .cl-mes:focus-visible{outline:none;box-shadow:var(--focus-ring)}
 
 /* ── Tarjetas ── */
-.cl-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card,13px);
-  padding:15px 17px;box-shadow:var(--shadow-card)}
+.cl-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card,14px);
+  padding:16px;box-shadow:var(--shadow-card)}
 .cl-maptit{display:flex;align-items:center;gap:8px;font:650 13.5px var(--fuente);color:var(--ink);margin:0 0 10px}
 .cl-maptit::before{content:"";width:7px;height:7px;border-radius:2px;background:var(--cl-acc);flex:0 0 auto}
 .cl-plot{width:100%}
@@ -95,8 +99,8 @@
   background:var(--kc,var(--cl-acc));border-radius:3px 0 0 3px}
 .cl-kpi .v{font:700 21px var(--mono);color:var(--ink);line-height:1.1;letter-spacing:-.01em}
 .cl-kpi .v small{font-size:11px;color:var(--muted-2);font-weight:600;letter-spacing:0}
-.cl-kpi .e{font:600 9.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;
-  color:var(--faint);margin-top:5px}
+.cl-kpi .e{font:600 11.5px var(--fuente);
+  color:var(--muted);margin-top:5px}
 
 /* ── Chip de confianza ── */
 .cl-conf{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;
@@ -106,7 +110,7 @@
 .cl-conf.baja{background:var(--danger-bg);color:var(--danger);border-color:var(--danger-bd)}
 
 /* ── Buscador y controles ── */
-.cl-buscar{border:1px solid var(--line);border-radius:var(--r-ctrl,8px);padding:8px 11px;min-width:180px;
+.cl-buscar{border:1px solid var(--ctrl-bd);border-radius:var(--r-ctrl,8px);padding:8px 11px;min-width:180px;
   font:500 13px var(--fuente);background:var(--surface);color:var(--ink)}
 .cl-buscar:focus-visible,.cl-campo input:focus-visible,select[data-rol="est"]:focus-visible{
   outline:none;border-color:var(--cl-acc);box-shadow:var(--focus-ring)}
@@ -119,7 +123,7 @@
 .cl-tabla-scroll{overflow-x:auto;margin-top:10px;
   -webkit-overflow-scrolling:touch;scrollbar-width:thin}
 .cl-tabla{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums;margin-top:6px}
-.cl-tabla th{font:600 9.5px var(--mono);letter-spacing:.05em;text-transform:uppercase;color:var(--faint);
+.cl-tabla th{font:600 11.5px var(--fuente);color:var(--muted);
   text-align:right;padding:6px 8px;border-bottom:1.5px solid var(--line);white-space:nowrap}
 .cl-tabla th:first-child{text-align:left}
 .cl-tabla td{padding:5px 8px;text-align:right;border-bottom:1px solid var(--line-3);color:var(--ink-2);white-space:nowrap}
@@ -140,10 +144,10 @@
 /* ── Consulta por coordenada ── */
 .cl-coords{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
 .cl-campo{display:flex;flex-direction:column;gap:5px}
-.cl-campo>span{font:600 9.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
-.cl-campo input{width:130px;border:1px solid var(--line);border-radius:var(--r-ctrl,8px);padding:8px 11px;
+.cl-campo>span{font:600 11.5px var(--fuente);color:var(--muted)}
+.cl-campo input{width:130px;border:1px solid var(--ctrl-bd);border-radius:var(--r-ctrl,8px);padding:8px 11px;
   font:600 13px var(--mono);background:var(--surface);color:var(--ink)}
-.cl-btn{background:var(--cl-acc);color:#fff;border:none;border-radius:var(--r-ctrl,8px);padding:9px 18px;
+.cl-btn{background:var(--cl-acc);color:#04170D;border:none;border-radius:var(--r-ctrl,8px);padding:9px 18px;
   font:600 13px var(--fuente);cursor:pointer;transition:filter .15s}
 .cl-btn:hover{filter:brightness(1.08)}
 .cl-btn:focus-visible{outline:none;box-shadow:var(--focus-ring)}
@@ -209,8 +213,8 @@
 .cl-sutil{font-weight:500;color:var(--muted-2);font-size:11px}
 .cl-mini-sel{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
 .cl-mini-sel .cl-buscar{flex:0 1 240px;min-width:150px}
-.cl-mini-select{flex:1 1 260px;min-width:200px;border:1px solid var(--line);border-radius:var(--r-ctrl,8px);
-  padding:8px 11px;font:500 13px var(--fuente);background:var(--surface);color:var(--ink)}
+.cl-mini-select{flex:1 1 260px;min-width:200px;border:1px solid var(--ctrl-bd);border-radius:var(--r-ctrl,8px);
+  padding:8px 11px;font:500 13px var(--fuente);background-color:var(--surface);color:var(--ink)}
 
 /* ===== v15.1 (captura del dueño): ANTI-BLOWOUT de los grids de clima =====
    Las celdas de grid tienen min-width:auto por defecto → un Plotly ancho (climograma)
@@ -248,8 +252,8 @@
 
 /* ── Series, relleno y mapas por rango ── */
 .cl-diario-toolbar input[type=date],.cl-diario-toolbar select,.cl-serie-controles select{
-  border:1px solid var(--line);border-radius:var(--r-ctrl,8px);padding:8px 10px;
-  font:600 12px var(--mono);background:var(--surface);color:var(--ink)}
+  border:1px solid var(--ctrl-bd);border-radius:var(--r-ctrl,8px);padding:8px 10px;
+  font:500 12.5px var(--fuente);background-color:var(--surface);color:var(--ink)}
 .cl-rango-card{min-width:0}
 .cl-rango-mapa{min-height:480px}
 /* La tarjeta ocupa todo el ancho pero la altura del mapa topa en 640px: el país quedaba
@@ -281,8 +285,8 @@
   color:var(--ink-2);font:650 10.5px var(--mono)}
 /* etiqueta honesta: la corrección Jipijapa NO está acreditada (tono de aviso, no de error) */
 .cl-iuv-badges span.no{border-color:var(--warn-bd);background:var(--warn-bg);color:var(--warn)}
-.cl-iuv-toolbar select{border:1px solid var(--line);border-radius:var(--r-ctrl,8px);padding:8px 10px;
-  font:600 12px var(--fuente);background:var(--surface);color:var(--ink)}
+.cl-iuv-toolbar select{border:1px solid var(--ctrl-bd);border-radius:var(--r-ctrl,8px);padding:8px 10px;
+  font:600 12px var(--fuente);background-color:var(--surface);color:var(--ink)}
 /* selector de día D0..D5: celdas segmentadas (reusa .cl-mes) con la fecha debajo */
 .cl-iuv-leads .cl-mes{display:inline-flex;flex-direction:column;align-items:center;gap:1px;
   min-width:56px;padding:4px 7px;line-height:1.15}

@@ -25,13 +25,13 @@
 /* overflow VISIBLE: el dropdown de estación cuelga fuera de la tarjeta (con hidden
    se recortaba en su contenedor — en pantallas anchas no se veía ninguna opción). */
 .ml-deck { display: flex; align-items: stretch; background: var(--surface); border: 1px solid var(--line);
-  border-radius: 13px; box-shadow: var(--shadow-card); overflow: visible; margin-bottom: 13px; }
+  border-radius: var(--r-panel); box-shadow: var(--shadow-card); overflow: visible; margin-bottom: 13px; }
 .ml-deck-rail { width: 4px; background: linear-gradient(180deg, #8A6BE0, #6A47CE); flex: none;
   border-radius: 13px 0 0 13px; }
 /* v11: deck en UNA fila — etiqueta AL LADO del control (160px → ~56px) */
 .ml-deck-cuerpo { flex: 1; display: flex; align-items: center; padding: 9px 16px; flex-wrap: wrap; row-gap: 8px; }
 .ml-grupo { display: flex; flex-direction: row; align-items: center; gap: 9px; }
-.ml-grupo-lab { font: 600 10px var(--mono); letter-spacing: .1em; color: var(--faint); text-transform: uppercase; }
+.ml-grupo-lab { font-size: 12px; font-weight: 600; color: var(--muted); white-space: nowrap; }
 .ml-deck-div { width: 1px; align-self: center; height: 26px; background: var(--line-4); margin: 0 12px; }
 
 /* localizador de estación */
@@ -55,8 +55,7 @@
 .ml-combo-lista { position: absolute; top: calc(100% + 5px); left: 0; right: 0; z-index: 40; max-height: 340px;
   overflow: auto; background: var(--surface); border: 1px solid var(--line-2); border-radius: 10px;
   box-shadow: var(--shadow-card); padding: 4px; }
-.ml-combo-grupo { font: 600 10px var(--mono); letter-spacing: .08em; text-transform: uppercase;
-  color: var(--faint); padding: 8px 9px 3px; }
+.ml-combo-grupo { font-size: 11.5px; font-weight: 650; color: var(--muted); padding: 9px 9px 4px; }
 .ml-combo-op { display: flex; align-items: baseline; gap: 7px; width: 100%; text-align: left; border: none;
   background: transparent; cursor: pointer; border-radius: 7px; padding: 6px 9px;
   font: 500 12.5px var(--fuente); color: var(--ink-2); }
@@ -67,8 +66,7 @@
   text-overflow: ellipsis; white-space: nowrap; }
 .ml-combo-op .dep { margin-left: auto; flex: 0 1 auto; min-width: 0; max-width: 9rem;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font: 600 9.5px var(--mono); letter-spacing: .05em;
-  text-transform: uppercase; color: var(--faint); }
+  font: 600 10.5px var(--fuente); color: var(--faint); }
 .ml-combo-vacia { padding: 10px 12px; font-size: 12px; color: var(--muted); }
 
 /* banda explicativa (Calificación vs Confianza) ------------------------- */
@@ -85,7 +83,7 @@
 .ml-pill.sin   { color: var(--muted); background: var(--surface-3); border: 1px solid var(--line-2); }
 
 /* tarjetas genéricas del módulo ----------------------------------------- */
-.ml-card { background: var(--surface); border: 1px solid var(--line); border-radius: 13px;
+.ml-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card);
   padding: 16px; box-shadow: var(--shadow-card); }
 .ml-card-cab { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 11px; }
 .ml-card-cab strong { font-size: 15px; color: var(--ink); }
@@ -98,29 +96,28 @@
   gap: 12px; flex-wrap: wrap; margin-bottom: 3px; }
 .ml-detalle-cab .ml-titulo { margin-bottom: 0; }
 .ml-horizonte-control { display: inline-flex; align-items: center; gap: 8px;
-  color: var(--faint); font: 600 10px var(--mono); letter-spacing: .07em;
-  text-transform: uppercase; }
+  color: var(--muted); font-size: 12px; font-weight: 600; }
 .ml-horizonte-control select { min-width: 142px; padding: 6px 28px 6px 9px;
-  border: 1px solid var(--line-2); border-radius: 8px; background: var(--surface);
+  border: 1px solid var(--line-2); border-radius: 8px; background-color: var(--surface);
   color: var(--ink); font: 600 12px var(--mono); text-transform: none; cursor: pointer; }
 /* Cabecera honesta de la tabla: contra qué se compara, cuántos días exige y
    cuántos modelos lo consiguen. Tres datos, sin frases de lectura. */
 .ml-val-cab { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0 0 8px;
   padding-bottom: 7px; border-bottom: 1px solid var(--line-3); }
 .ml-val-dato { display: inline-flex; align-items: baseline; gap: 6px; }
-.ml-val-dato > span { font: 600 9.5px var(--mono); letter-spacing: .07em;
-  text-transform: uppercase; color: var(--faint); }
+.ml-val-dato > span { font-size: 11.5px; font-weight: 600; color: var(--muted); }
 .ml-val-dato > b { font: 600 12px var(--mono); color: var(--ink-2);
   font-variant-numeric: tabular-nums; }
 
 /* PODIO: la respuesta primero y grande. Solo se puebla con modelos comparables;
    si no hay ninguno, queda la línea sobria y nada más. */
 .ml-podio { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; }
-.ml-podio-it { display: flex; align-items: center; gap: 9px; flex: 1 1 260px;
-  padding: 8px 12px; border: 1px solid var(--line-2); border-radius: 10px;
+/* flex-wrap: la etiqueta ocupa su propia línea (flex 0 0 100%) y lo demás va
+   debajo; sin él, modelo y nota se salían de la tarjeta por la derecha. */
+.ml-podio-it { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 9px; flex: 1 1 260px;
+  min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-panel);
   background: var(--surface-2); }
-.ml-podio-lab { flex: 0 0 100%; font: 600 9.5px var(--mono); letter-spacing: .07em;
-  text-transform: uppercase; color: var(--faint); }
+.ml-podio-lab { flex: 0 0 100%; font-size: 11.5px; font-weight: 600; color: var(--muted); }
 .ml-podio-mod { font: 700 14px var(--fuente); color: var(--ink); line-height: 1.2;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ml-podio-mod + .ml-lead { color: var(--ml-purple); font: 700 11px var(--mono); }
@@ -137,11 +134,11 @@
 
 /* tabla de modelos: badge calificación con color tipo semáforo ---------- */
 .ml-tabla-modelos { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-.ml-tabla-modelos thead th { padding: 7px 9px; font: 600 10px var(--mono); letter-spacing: .05em;
-  color: var(--faint); text-transform: uppercase; border-bottom: 1px solid var(--line); text-align: left; }
+.ml-tabla-modelos thead th { padding: 8px 9px; font: 650 11.5px var(--fuente);
+  color: var(--muted); border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
 .ml-tabla-modelos thead th.der { text-align: right; }
 .ml-tabla-modelos tbody { font-variant-numeric: tabular-nums; }
-.ml-tabla-modelos tbody tr { border-bottom: 1px solid #F0F3F7; }
+.ml-tabla-modelos tbody tr { border-bottom: 1px solid var(--line-3); }
 html[data-tema="oscuro"] .ml-tabla-modelos tbody tr { border-bottom-color: var(--line-3); }
 .ml-tabla-modelos td { padding: 7px 9px; color: var(--ink-2); }
 .ml-tabla-modelos td.num { text-align: right; font-family: var(--mono); }
@@ -159,8 +156,7 @@ html[data-tema="oscuro"] .ml-tabla-modelos tbody tr { border-bottom-color: var(-
    filas de abajo quedan atenuadas y sin puesto — ninguna desaparece. */
 .ml-val-corte td { padding: 9px 9px 5px !important; border-top: 1px solid var(--line-2);
   background: transparent; }
-.ml-val-corte span { display: inline-block; font: 600 9.5px var(--mono);
-  letter-spacing: .07em; text-transform: uppercase; color: var(--faint); }
+.ml-val-corte span { display: inline-block; font-size: 11.5px; font-weight: 600; color: var(--muted); }
 .ml-tabla-modelos tr.ml-fuera td { opacity: .58; }
 .ml-tabla-modelos tr.ml-fuera td.ml-dias { opacity: 1; color: var(--muted-2); font-weight: 600; }
 /* Procedencia y método: un desplegable discreto bajo la tabla, nunca al lado del dato. */
@@ -177,7 +173,7 @@ html[data-tema="oscuro"] .ml-tabla-modelos tbody tr { border-bottom-color: var(-
    pedido del dueño): sub-cabecera compacta con acento púrpura por sección. */
 .ml-clasif-sec { margin-top: 12px; }
 .ml-clasif-sec:first-of-type { margin-top: 8px; }
-.ml-clasif-cab { font: 600 11px var(--mono); letter-spacing: .07em; text-transform: uppercase;
+.ml-clasif-cab { font: 650 12px var(--fuente); letter-spacing: 0;
   color: var(--ml-purple); border-left: 3px solid var(--ml-purple); padding-left: 8px; margin-bottom: 6px; }
 .ml-clasif-cab .ml-sutil { font: 500 11px var(--fuente); letter-spacing: 0; text-transform: none;
   color: var(--muted-2); }
@@ -426,8 +422,7 @@ html[data-tema="oscuro"] .ml-serie-plot .annotation-text {
   box-shadow: inset -1px 0 0 var(--line-2); min-width: 170px; max-width: 230px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ml-tabla-modelos.ml-uni thead th { background: var(--surface); }
-.ml-uni-grp { text-align: center; font: 650 10px var(--mono); letter-spacing: .06em;
-  text-transform: uppercase; color: var(--muted); }
+.ml-uni-grp { text-align: center; font: 650 11.5px var(--fuente); color: var(--muted); }
 /* El rótulo del corte acompaña al dedo cuando la tabla ancha se desliza en X. */
 .ml-tabla-modelos.ml-uni .ml-val-corte span { position: sticky; left: 0; }
 /* Separación entre grupos por CLASE, no por posición: la columna Plazo aparece y

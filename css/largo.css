@@ -1,0 +1,117 @@
+/* ============================================================
+   HidroMet — Largo plazo (ui/js/modules/largo.js). Acento violeta (--acc).
+   Lógica de la página: primero las cifras clave, luego el mapa del periodo con
+   su leyenda y, al lado, el resumen por provincia; debajo, la evolución mes a
+   mes con la MISMA escala.
+   ============================================================ */
+.lp { display: flex; flex-direction: column; gap: 14px; }
+.lp-kpis { margin: 0; }
+.lp-barra { margin: 0; }
+.lp-et { font-size: 12px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.lp-seg button:disabled { opacity: .4; cursor: not-allowed; }
+/* Los grupos de la barra parten línea si no caben y cada bloque de botones se
+   desliza: ningún botón queda fuera de la barra. */
+.lp-barra .campo-inline { flex-wrap: wrap; flex: 0 1 auto; min-width: 0; max-width: 100%; row-gap: 8px; }
+.lp-seg { max-width: 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.lp-seg::-webkit-scrollbar { display: none; }
+
+.lp-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card);
+  box-shadow: var(--shadow-card); padding: 14px 16px; min-width: 0; }
+.lp-card-cab { display: flex; align-items: baseline; justify-content: space-between; gap: 6px 14px;
+  flex-wrap: wrap; margin: 0 0 10px; }
+.lp-card-cab h2 { margin: 0; font-size: 15px; font-weight: 650; color: var(--ink); letter-spacing: -.01em; }
+.lp-card-cab span { font-size: 12px; color: var(--muted); }
+.lp-card h2 { margin: 0 0 8px; font-size: 15px; font-weight: 650; color: var(--ink); }
+.lp-card p, .lp-card li { font-size: 13px; line-height: 1.6; color: var(--ink-2); }
+.lp-card ul { margin: 0; padding-left: 18px; }
+.lp-card li + li { margin-top: 6px; }
+
+/* mapa grande + provincias */
+.lp-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, 1fr); gap: 14px; align-items: start; }
+.lp-mapa { width: 100%; aspect-ratio: 62 / 68; max-height: 640px; border-radius: 10px; overflow: hidden;
+  background: var(--sea-bottom); isolation: isolate; }
+.lp-fuente { margin: 10px 0 0; font-size: 11.5px; color: var(--muted-2); line-height: 1.5; }
+.lp-nota { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.55; }
+
+/* leyenda por clases: celdas iguales, rótulos en los bordes */
+.lp-ley { margin-top: 12px; }
+.lp-ley-cab { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.lp-ley-cab b { font-size: 12.5px; font-weight: 650; color: var(--ink); }
+.lp-ley-cab span { font-size: 11.5px; color: var(--muted); }
+.lp-ley-barra { display: flex; height: 11px; border-radius: 6px; overflow: hidden;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 10%, transparent); }
+.lp-ley-barra span { flex: 1; }
+.lp-ley-ticks { position: relative; height: 18px; margin-top: 4px; }
+.lp-ley-ticks .t { position: absolute; top: 0; transform: translateX(-50%); font: 500 11px var(--mono);
+  color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.lp-ley-lados { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+
+/* lista por provincia */
+.lp-prov-card { max-height: 760px; display: flex; flex-direction: column; }
+.lp-prov-lista { display: flex; flex-direction: column; overflow-y: auto; margin: 0 -6px; padding: 0 6px; }
+.lp-prov { display: grid; grid-template-columns: minmax(110px, 1fr) minmax(90px, 1.2fr) auto; align-items: center;
+  gap: 10px; padding: 7px 0; border-top: 1px solid var(--line-3); }
+.lp-prov:first-child { border-top: 0; }
+.lp-prov-n { display: flex; flex-direction: column; min-width: 0; }
+.lp-prov-n b { font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lp-prov-n small { font-size: 11px; color: var(--muted-2); }
+.lp-prov-v { font: 600 12.5px var(--mono); color: var(--ink); text-align: right; white-space: nowrap;
+  font-variant-numeric: tabular-nums; display: flex; flex-direction: column; align-items: flex-end; }
+.lp-prov-v small { font: 500 11px var(--mono); color: var(--muted-2); }
+/* barra divergente desde el centro (anomalía) */
+.lp-div { position: relative; height: 10px; border-radius: 5px; background: var(--surface-3); }
+.lp-div::after { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--line-2); }
+.lp-div i { position: absolute; top: 0; bottom: 0; border-radius: 5px; }
+/* barra de terciles (probabilidad) */
+.lp-terc { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--surface-3); }
+.lp-terc i { display: block; height: 100%; }
+.lp-terc-ley { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 10px; font-size: 11.5px; color: var(--muted); }
+.lp-terc-ley i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+
+/* mes a mes */
+.lp-minis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.lp-mini { display: flex; flex-direction: column; gap: 6px; padding: 6px; border-radius: 12px; cursor: pointer;
+  background: var(--surface-2); border: 1px solid var(--line); color: var(--ink-2); font: 600 12.5px var(--fuente);
+  transition: border-color .15s, box-shadow .15s; }
+.lp-mini:hover { border-color: var(--line-2); }
+.lp-mini.activo { border-color: var(--acc); box-shadow: 0 0 0 2px color-mix(in srgb, var(--acc) 30%, transparent); color: var(--ink); }
+.lp-mini-mapa { width: 100%; aspect-ratio: 62 / 68; border-radius: 8px; overflow: hidden; background: var(--sea-bottom);
+  isolation: isolate; pointer-events: none; }
+
+.lp-avisos { padding: 10px 14px; border-radius: var(--r-panel); background: var(--warn-bg); border: 1px solid var(--warn-bd); }
+.lp-avisos p { margin: 0; font-size: 12.5px; color: var(--warn); line-height: 1.5; }
+.lp-avisos p + p { margin-top: 4px; }
+
+/* El Niño */
+.lp-nino-cab { display: grid; grid-template-columns: minmax(200px, 1fr) minmax(200px, 1fr) minmax(0, 1.6fr);
+  gap: 12px; align-items: stretch; }
+.lp-nino-dato { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-panel);
+  padding: 12px 14px; box-shadow: var(--shadow-card); display: flex; flex-direction: column; gap: 6px; }
+.lp-nino-tit { font-size: 13px; font-weight: 650; color: var(--ink); }
+.lp-nino-fila { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--muted); }
+.lp-nino-fila b { font: 650 16px var(--mono); color: var(--ink); font-variant-numeric: tabular-nums; }
+.lp-nino-cat { font-size: 12px; font-weight: 650; color: var(--danger); }
+.lp-nino-cab .lp-nota { align-self: center; }
+.lp-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.lp-pluma { width: 100%; min-height: 380px; }
+
+.lp-metodo { max-width: 920px; }
+
+@media (max-width: 1100px) {
+  .lp-grid { grid-template-columns: 1fr; }
+  .lp-prov-card { max-height: none; }
+  .lp-grid2 { grid-template-columns: 1fr; }
+  .lp-nino-cab { grid-template-columns: 1fr 1fr; }
+  .lp-nino-cab .lp-nota { grid-column: 1 / -1; }
+}
+@media (max-width: 560px) {
+  /* leyenda angosta: un rótulo sí y uno no, para que los números no se toquen */
+  .lp-ley-ticks .t:nth-child(even) { display: none; }
+  .lp-barra .campo-inline { width: 100%; flex-wrap: wrap; }
+  .lp-seg { max-width: 100%; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+  .lp-seg::-webkit-scrollbar { display: none; }
+  .lp-barra .sep { display: none; }
+  .lp-minis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lp-nino-cab { grid-template-columns: 1fr; }
+  .lp-prov { grid-template-columns: minmax(96px, 1fr) minmax(70px, 1fr) auto; }
+}

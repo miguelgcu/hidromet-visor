@@ -332,11 +332,23 @@ const App = (() => {
       localStorage.setItem("hidromet-tema", nuevo);
       // v12: theme-color sigue al tema (el chrome del navegador móvil deja de chocar)
       const mc = document.querySelector('meta[name="theme-color"]');
-      if (mc) mc.content = nuevo === "oscuro" ? "#0B1322" : "#E9EDF3";
+      if (mc) mc.content = nuevo === "oscuro" ? "#070C16" : "#EEF2F7";
       api("/config", { method: "POST", body: { tema: nuevo } }).catch(() => {});
+      pintarBotonTema();
       document.dispatchEvent(new CustomEvent("temacambiado", { detail: nuevo }));
     }
     return html.dataset.tema || "claro";
+  }
+
+  // El botón dice a qué tema LLEVA (no en cuál se está): «Tema claro» en oscuro.
+  function pintarBotonTema() {
+    const b = document.getElementById("btn-tema");
+    if (!b) return;
+    const oscuro = (document.documentElement.dataset.tema || "claro") === "oscuro";
+    const ic = b.querySelector(".bf-icono"), tx = b.querySelector(".bf-txt");
+    if (ic) ic.innerHTML = oscuro ? ICONO_SOL : ICONO_LUNA;
+    if (tx) tx.textContent = oscuro ? "Tema claro" : "Tema oscuro";
+    b.title = oscuro ? "Cambiar a tema claro" : "Cambiar a tema oscuro";
   }
 
   /* ---------------- registro y router ---------------- */
@@ -366,17 +378,20 @@ const App = (() => {
     if (!def) return;
     if (vistaActual && vistaActual.alDejar) { try { vistaActual.alDejar(); } catch (e) {} }
     vistaActual = def;
-    document.querySelectorAll(".nav-item").forEach(b => {
-      const activo = b.dataset.modulo === id;
+    const idReal = modulos.get(id) ? id : def0;
+    document.querySelectorAll(".nav-item, .bn-item[data-modulo]").forEach(b => {
+      const activo = b.dataset.modulo === idReal;
       b.classList.toggle("activo", activo);
       b.setAttribute("aria-current", activo ? "page" : "false");
     });
     document.getElementById("titulo-vista").textContent = def.titulo;
-    const bc = document.getElementById("topbar-modulo");
-    if (bc) bc.textContent = def.titulo;   // breadcrumb dinámico (antes era texto fijo falso)
+    // Identidad en la barra superior; la descripción la pone vistaPestanas (o queda vacía).
+    identidadModulo(idReal, def, def.sub || "");
     const acciones = document.getElementById("acciones-vista");
     acciones.innerHTML = "";
     const vista = document.getElementById("vista");
+    vista.dataset.modulo = idReal;
+    vista.scrollTop = 0;
     vista.innerHTML = HTML_CARGA;
     try {
       await def.render(vista, acciones);
@@ -385,19 +400,33 @@ const App = (() => {
         <strong>No se pudo cargar este módulo</strong><span>${e && e.message}</span></div>`;
     }
     // A11y: tras reemplazar todo el #vista, llevar el foco al encabezado del módulo
-    // para que el teclado y el lector de pantalla no queden perdidos en el body.
-    const _h = vista.querySelector("h1");
+    // (vive en la barra superior) para que el teclado y el lector de pantalla no
+    // queden perdidos en el body.
+    const _h = document.getElementById("topbar-modulo") || vista.querySelector("h1");
     if (_h) { _h.setAttribute("tabindex", "-1"); try { _h.focus({ preventScroll: true }); } catch (e) {} }
     // §B.8: si una tarea sigue viva, los controles recién pintados por el módulo
     // deben nacer ya bloqueados (el router reemplazó todo el #vista).
     sincronizarBloqueo();
   }
 
-  // Grupos de la barra lateral (rediseño v9): PRINCIPAL · MÓDULOS · SISTEMA.
-  const GRUPO_NAV = { monitoreo: "MÓDULOS", pronostico: "MÓDULOS", validacion: "MÓDULOS",
-                      advertencias: "MÓDULOS", clima: "MÓDULOS", glosario: "MÓDULOS",
-                      cartas: "MÓDULOS", mlnwp: "MÓDULOS",
-                      datos: "SISTEMA", configuracion: "SISTEMA", config: "SISTEMA" };
+  // Grupos del menú (rediseño v30): se leen por ESCALA DE TIEMPO — lo que pasa
+  // ahora y en los próximos días (Operación), lo que viene en meses y lo normal
+  // del clima (Perspectiva), la referencia y, en escritorio, el sistema.
+  const GRUPO_NAV = { monitoreo: "Operación", pronostico: "Operación", validacion: "Operación",
+                      advertencias: "Operación", cartas: "Operación", mlnwp: "Operación",
+                      largo: "Perspectiva", clima: "Perspectiva",
+                      glosario: "Referencia",
+                      datos: "Sistema", configuracion: "Sistema", config: "Sistema" };
+  // Color de acento por módulo: tiñe su icono, la marca del menú y el subrayado de
+  // sus pestañas. Va en variables CSS para que siga al tema.
+  const ACENTO_NAV = { monitoreo: "#22B8CF", pronostico: "#4C8DFF", validacion: "#4C8DFF",
+                       advertencias: "#F08C2B", largo: "#9D7BFF", clima: "#2BB673",
+                       glosario: "#8A9BB8", datos: "#8A9BB8", configuracion: "#8A9BB8" };
+  // Rótulo corto para la navegación inferior del teléfono (cabe en ~70 px).
+  const CORTO_NAV = { monitoreo: "Monitoreo", pronostico: "Pronóstico", advertencias: "Avisos",
+                      largo: "Largo plazo", clima: "Clima", glosario: "Glosario",
+                      datos: "Datos", configuracion: "Ajustes" };
+  function acentoModulo(id) { return ACENTO_NAV[id] || "var(--blue)"; }
 
   // Iconos SVG de línea del nav (rediseño v9, stroke:currentColor) — sustituyen a los emojis.
   const ICONOS_NAV = {
@@ -414,29 +443,93 @@ const App = (() => {
   // Monitoreo: satélite (cuerpo, paneles y señal)
   ICONOS_NAV.monitoreo = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="6" height="6" rx="1" transform="rotate(45 12 12)"/><path d="M6.3 6.3 3.5 3.5M17.7 17.7l2.8 2.8M5 11 2.5 8.5 8.5 2.5 11 5M13 19l2.5 2.5 6-6L19 13"/><path d="M15.5 4.5a4 4 0 0 1 4 4"/></svg>';
   ICONOS_NAV.clima = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="11" r="3.4"/><path d="M12 3.2v2M12 17v1.4M3.8 11h2M18.2 11h2M6.2 5.2l1.4 1.4M16.4 15.4l1.4 1.4M17.8 5.2l-1.4 1.4M7.6 15.4l-1.4 1.4"/></svg>';
+  // Largo plazo: calendario con tendencia (meses por delante)
+  ICONOS_NAV.largo = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 9.5h17M8 3.5v3M16 3.5v3"/><path d="m7.5 16.5 3-3 2.2 1.8 3.8-3.8"/></svg>';
+  // Pronóstico: nube con lluvia (antes reusaba el mapa plegado de Cartas)
+  ICONOS_NAV.pronostico = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M7 15.5h9.5a4 4 0 0 0 .4-8 5.5 5.5 0 0 0-10.6 1.6A3.3 3.3 0 0 0 7 15.5z"/><path d="M8.5 18.5l-1 2M12.5 18.5l-1 2M16.5 18.5l-1 2"/></svg>';
+
+  // Iconos de la interfaz común (tema y plegado)
+  const ICONO_SOL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.8v2.2M12 19v2.2M2.8 12H5M19 12h2.2M5.5 5.5l1.6 1.6M16.9 16.9l1.6 1.6M18.5 5.5l-1.6 1.6M7.1 16.9l-1.6 1.6"/></svg>';
+  const ICONO_LUNA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.6A8 8 0 1 1 9.4 4a6.4 6.4 0 0 0 10.6 10.6z"/></svg>';
+  const ICONO_MAS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="5.5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18.5" cy="12" r="1.2"/></svg>';
+
+  function modulosOrdenados() {
+    return [...modulos.entries()].sort((a, b) => (a[1].orden ?? 99) - (b[1].orden ?? 99));
+  }
 
   function pintarNav() {
     const nav = document.getElementById("nav-principal");
     nav.innerHTML = "";
     let grupoActual = null;
-    [...modulos.entries()]
-      .sort((a, b) => (a[1].orden ?? 99) - (b[1].orden ?? 99))
-      .forEach(([id, def]) => {
-        const g = GRUPO_NAV[id] || "MÓDULOS";
-        if (g !== grupoActual) {
-          const lbl = document.createElement("div");
-          lbl.className = "nav-grupo";
-          lbl.textContent = g;
-          nav.appendChild(lbl);
-          grupoActual = g;
-        }
+    const lista = modulosOrdenados();
+    lista.forEach(([id, def]) => {
+      const g = GRUPO_NAV[id] || "Operación";
+      if (g !== grupoActual) {
+        const lbl = document.createElement("div");
+        lbl.className = "nav-grupo";
+        lbl.textContent = g;
+        nav.appendChild(lbl);
+        grupoActual = g;
+      }
+      const b = document.createElement("button");
+      b.className = "nav-item";
+      b.type = "button";
+      b.dataset.modulo = id;
+      b.title = def.titulo;
+      b.style.setProperty("--acc", acentoModulo(id));
+      b.innerHTML = `<span class="nav-icono" aria-hidden="true">${ICONOS_NAV[id] || def.icono || "▪"}</span>`
+        + `<span class="nav-txt">${def.titulo}</span>`;
+      b.onclick = () => navegar(id);
+      nav.appendChild(b);
+    });
+    // Teléfono: navegación inferior. Caben cinco botones; con más módulos van los
+    // cuatro primeros y «Más» abre el menú completo.
+    const inf = document.getElementById("nav-inferior");
+    if (inf) {
+      inf.innerHTML = "";
+      const visibles = lista.length <= 5 ? lista : lista.slice(0, 4);
+      for (const [id, def] of visibles) {
         const b = document.createElement("button");
-        b.className = "nav-item";
+        b.className = "bn-item";
+        b.type = "button";
         b.dataset.modulo = id;
-        b.innerHTML = `<span class="nav-icono">${ICONOS_NAV[id] || def.icono || "▪"}</span>${def.titulo}`;
+        b.style.setProperty("--acc", acentoModulo(id));
+        b.setAttribute("aria-label", def.titulo);
+        b.innerHTML = `<span class="bn-icono" aria-hidden="true">${ICONOS_NAV[id] || "▪"}</span>`
+          + `<span class="bn-txt">${CORTO_NAV[id] || def.titulo}</span>`;
         b.onclick = () => navegar(id);
-        nav.appendChild(b);
-      });
+        inf.appendChild(b);
+      }
+      if (lista.length > 5) {
+        const mas = document.createElement("button");
+        mas.className = "bn-item bn-mas";
+        mas.type = "button";
+        mas.setAttribute("aria-label", "Más módulos");
+        mas.innerHTML = `<span class="bn-icono" aria-hidden="true">${ICONO_MAS}</span><span class="bn-txt">Más</span>`;
+        mas.onclick = () => {
+          const capa = document.getElementById("capa-app");
+          if (capa) capa.classList.add("nav-abierto");
+          const btn = document.getElementById("btn-menu");
+          if (btn) btn.setAttribute("aria-expanded", "true");
+        };
+        inf.appendChild(mas);
+      }
+    }
+  }
+
+  // Identidad del módulo activo en la barra superior: icono, nombre y descripción.
+  function identidadModulo(id, def, sub) {
+    const acc = acentoModulo(id);
+    document.documentElement.style.setProperty("--acc", acc);
+    const ic = document.getElementById("topbar-icono");
+    if (ic) ic.innerHTML = ICONOS_NAV[id] || "";
+    const t = document.getElementById("topbar-modulo");
+    if (t && def) t.textContent = def.titulo;
+    if (sub !== undefined) {
+      const s = document.getElementById("topbar-sub");
+      if (s) s.textContent = sub || "";
+    }
+    try { document.title = def ? `${def.titulo} · HidroMet Ecuador` : "HidroMet Ecuador"; } catch (e) { /* sin título */ }
   }
 
   // Reloj del topbar (rediseño v9): "mar 17 jun · 14:30:05".
@@ -542,6 +635,8 @@ const App = (() => {
       }
     } catch (e) { /* aún sin marca */ }
     const chip = document.querySelector("#topbar .sync");
+    // Versión corta del estado para el teléfono (la larga no cabe junto al título).
+    const corto = document.getElementById("topbar-sync-corto");
     if (chip) chip.classList.toggle("fallo", !estadoOk);
     if (chip) chip.classList.toggle("desconocido", !fecha && !!window.HIDROMET_VISOR);
     if (!fecha) {
@@ -549,6 +644,7 @@ const App = (() => {
       // que todo va bien — punto gris sin latido y texto honesto, nunca el verde.
       if (chip) chip.classList.remove("viejo");
       el.textContent = window.HIDROMET_VISOR ? "No se pudo comprobar la fecha de los datos" : "Datos locales";
+      if (corto) corto.textContent = window.HIDROMET_VISOR ? "Sin fecha" : "Local";
       if (window.HIDROMET_VISOR)
         el.title = "No se pudo leer el estado de la publicación; se desconoce de cuándo son los datos.";
       bandaEstadoDatos([]);
@@ -575,6 +671,12 @@ const App = (() => {
     const nombresDeg = [...new Set(areasDegradadas.map(nombreArea))];
     el.textContent = (estadoOk ? `Datos al ${marca}` : `Actualización incompleta · ${marca}`)
       + (antig ? ` · ${antig}` : "") + (nombresDeg.length ? " · con avisos" : "");
+    if (corto) {
+      const h = isFinite(t) ? (Date.now() - t) / 3.6e6 : NaN;
+      const breve = !isFinite(h) ? marca
+        : h < 1 ? "hace <1 h" : h < 24 ? `hace ${Math.round(h)} h` : `hace ${Math.floor(h / 24)} d`;
+      corto.textContent = estadoOk ? breve : `Incompleta · ${breve}`;
+    }
     // Explicación en LLANO: nada de códigos internos ni notas del programa
     // (el "DEGRADADO POR ORDEN DEL DUEÑO…" del manifest no se enseña tal cual).
     if (!estadoOk) el.title = `La última actualización quedó incompleta${fallosEstado.length ? ": " + fallosEstado.join(", ") : ""}`;
@@ -622,8 +724,11 @@ const App = (() => {
         position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
         z-index: 9500; display: flex; align-items: center; gap: 14px;
         background: var(--cp); color: #fff; border-radius: 999px;
-        padding: 9px 12px 9px 18px; box-shadow: 0 6px 24px rgba(8,18,38,.38);
+        padding: 8px 10px 8px 18px; box-shadow: 0 10px 30px rgba(8,18,38,.4);
         font-size: 13px; font-weight: 600; max-width: min(560px, 92vw);
+      }
+      @media (max-width: 820px) {
+        #barra-tarea { bottom: calc(var(--bn-h, 62px) + 12px + env(safe-area-inset-bottom, 0px)); }
       }
       #barra-tarea .texto { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       #barra-tarea .boton.peligro { padding: 6px 16px; }
@@ -635,9 +740,15 @@ const App = (() => {
       @keyframes girar-tarea { to { transform: rotate(360deg); } }
       /* Estado de los datos: banda fija bajo la barra superior + chip "desconocido" */
       #banda-estado-datos {
-        flex: none; background: #8a4b00; color: #fff; padding: 7px 18px;
-        font-size: 13px; line-height: 1.45; font-weight: 600;
+        flex: none; display: flex; align-items: center; gap: 10px;
+        background: var(--warn-bg); color: var(--warn); padding: 8px 24px;
+        border-bottom: 1px solid var(--warn-bd);
+        font-size: 12.5px; line-height: 1.45; font-weight: 600;
       }
+      #banda-estado-datos::before {
+        content: ""; width: 8px; height: 8px; flex: none; border-radius: 50%; background: currentColor;
+      }
+      @media (max-width: 820px) { #banda-estado-datos { padding: 7px 12px; font-size: 12px; } }
       #topbar .sync.desconocido .punto {
         background: #98A2B3 !important; box-shadow: none !important; animation: none !important;
       }`;
@@ -724,27 +835,30 @@ const App = (() => {
 
   async function iniciar() {
     inyectarEstilosBloqueo();
+    vigilarMarcaInstitucional(document.body);
     idiomaGraficos();
     const guardado = localStorage.getItem("hidromet-tema");
     if (guardado) document.documentElement.dataset.tema = guardado;
     document.getElementById("btn-tema").onclick = () =>
       tema(tema() === "claro" ? "oscuro" : "claro");
+    pintarBotonTema();
     pintarNav();
-    // Menú hamburguesa GLOBAL (P22): en móvil abre/cierra el drawer off-canvas (patrón
-    // v12 intacto); en ESCRITORIO colapsa/expande la sidebar y el contenido gana el
-    // ancho (estado recordado por dispositivo en localStorage "hm-sidebar").
+    // Menú: en el TELÉFONO el botón de la barra superior abre el cajón lateral
+    // (con la navegación inferior siempre a mano); en ESCRITORIO el menú se pliega a
+    // un riel de iconos con su propio botón, y el estado se recuerda por dispositivo.
     (function menuGlobal() {
       const capa = document.getElementById("capa-app");
       const btn = document.getElementById("btn-menu");
+      const plegar = document.getElementById("btn-plegar");
       const ov = document.getElementById("overlay-nav");
       if (!capa) return;
       const raiz = document.documentElement;
       const mvl = window.matchMedia ? window.matchMedia("(max-width: 820px)") : { matches: false };
       const SB = "hm-sidebar";
-      // Estado persistido del colapso (el index lo aplica pre-paint; aquí el fallback).
+      // Estado persistido del pliegue (el index lo aplica antes de pintar; aquí el respaldo).
       try { if (localStorage.getItem(SB) === "min") raiz.classList.add("hm-sb-min"); } catch (e) {}
-      // v12 a11y: aria-controls + devolución del foco al botón al cerrar y foco al nav
-      // al abrir (con visibility retrasada en CSS, el drawer cerrado no es tabulable).
+      // a11y: devolución del foco al botón al cerrar y foco al menú al abrir (con
+      // visibility retrasada en CSS, el cajón cerrado no es tabulable).
       const cerrar = () => {
         if (!capa.classList.contains("nav-abierto")) return;
         capa.classList.remove("nav-abierto");
@@ -752,27 +866,35 @@ const App = (() => {
       };
       if (btn) {
         btn.setAttribute("aria-controls", "sidebar");
-        const ariaSegunEstado = () => btn.setAttribute("aria-expanded",
-          mvl.matches ? (capa.classList.contains("nav-abierto") ? "true" : "false")
-                      : (raiz.classList.contains("hm-sb-min") ? "false" : "true"));
-        ariaSegunEstado();
         btn.addEventListener("click", () => {
-          if (mvl.matches) {                       // MÓVIL: drawer (patrón existente)
-            const ab = capa.classList.toggle("nav-abierto");
-            btn.setAttribute("aria-expanded", ab ? "true" : "false");
-            if (ab) { const primero = document.querySelector("#nav-principal .nav-item"); if (primero) try { primero.focus({ preventScroll: true }); } catch (e) {} }
-          } else {                                  // ESCRITORIO: colapsar/expandir
-            const min = raiz.classList.toggle("hm-sb-min");
-            try { localStorage.setItem(SB, min ? "min" : ""); } catch (e) {}
-            btn.setAttribute("aria-expanded", min ? "false" : "true");
-          }
+          const ab = capa.classList.toggle("nav-abierto");
+          btn.setAttribute("aria-expanded", ab ? "true" : "false");
+          if (ab) { const primero = document.querySelector("#nav-principal .nav-item"); if (primero) try { primero.focus({ preventScroll: true }); } catch (e) {} }
         });
-        if (mvl.addEventListener) mvl.addEventListener("change", ariaSegunEstado);
+      }
+      if (plegar) {
+        const rotulo = () => {
+          const min = raiz.classList.contains("hm-sb-min");
+          plegar.title = min ? "Desplegar el menú" : "Plegar el menú";
+          plegar.setAttribute("aria-expanded", min ? "false" : "true");
+          const tx = plegar.querySelector(".bf-txt");
+          if (tx) tx.textContent = min ? "Desplegar menú" : "Plegar menú";
+        };
+        rotulo();
+        plegar.addEventListener("click", () => {
+          if (mvl.matches) { cerrar(); return; }
+          const min = raiz.classList.toggle("hm-sb-min");
+          try { localStorage.setItem(SB, min ? "min" : ""); } catch (e) {}
+          rotulo();
+          // Mapas y gráficos se ajustan al nuevo ancho cuando termina la transición.
+          setTimeout(() => window.dispatchEvent(new Event("resize")), 280);
+        });
       }
       if (ov) ov.addEventListener("click", cerrar);
       const nav = document.getElementById("nav-principal");
       if (nav) nav.addEventListener("click", e => { if (e.target.closest(".nav-item")) cerrar(); });
       document.addEventListener("keydown", e => { if (e.key === "Escape") cerrar(); });
+      if (mvl.addEventListener) mvl.addEventListener("change", () => { if (!mvl.matches) cerrar(); });
     })();
     actualizarReloj();
     setInterval(actualizarReloj, 1000);
@@ -789,14 +911,38 @@ const App = (() => {
   /* Etiqueta institucional de red/dependencia para lo visible al usuario.
      Los VALORES internos de datos/API (deps=, columnas, claves de config) NO
      cambian: esto traduce SOLO en el momento de pintar. */
+  // La interfaz no nombra a la institución dueña de la red nacional (pedido del
+  // dueño, 2026-10-02): su red se rotula «Red nacional» y los nombres de estación
+  // pierden el sufijo institucional. Solo al PINTAR: los valores internos (deps=,
+  // columnas, filtros) no cambian. La palabra se arma por puntos de código para que
+  // no quede escrita en la interfaz publicada.
+  const SIGLA_RED = String.fromCharCode(73, 78, 65, 77, 72, 73);
+  const RED_NACIONAL = "Red nacional";
+  const RE_SIGLA = new RegExp(`\\b${SIGLA_RED}\\b`, "g");
+  function sinMarcaInstitucional(texto) {
+    const s = String(texto == null ? "" : texto);
+    if (s.indexOf(SIGLA_RED) < 0) return s;
+    return s
+      .replace(new RegExp(`\\s*\\(${SIGLA_RED}\\)`, "g"), "")
+      // sufijo de un nombre tras guion: «PEDRO VICENTE MALDONADO-‹sigla›»
+      .replace(new RegExp(`\\s*[-–—]\\s*${SIGLA_RED}\\b`, "g"), "")
+      // en una frase: «datos del ‹sigla›» → «datos de la red nacional»
+      .replace(new RegExp(`\\b([Dd])el\\s+${SIGLA_RED}\\b`, "g"), "$1e la red nacional")
+      .replace(new RegExp(`\\b([Dd])e\\s+${SIGLA_RED}\\b`, "g"), "$1e la red nacional")
+      .replace(new RegExp(`\\b([Ee])l\\s+${SIGLA_RED}\\b`, "g"), (m, e) => (e === "E" ? "La" : "la") + " red nacional")
+      // sufijo de un nombre tras espacio: «Iñaquito ‹sigla›», «Iñaquito ‹sigla› · Pichincha»
+      .replace(new RegExp(`([A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9.])\\s+${SIGLA_RED}(?=\\s*($|[·,;|)\\]\\n–—-]))`, "g"), "$1")
+      .replace(RE_SIGLA, RED_NACIONAL);
+  }
+
   function redEtiqueta(v) {
     const s = String(v == null ? "" : v).trim();
     const k = s.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase();
-    if (k === "INAMHI" || k === "PRINCIPAL") return "INAMHI";
+    if (k === SIGLA_RED || k === "PRINCIPAL") return RED_NACIONAL;
     if (k === "CELEC" || k === "ENERGETICA") return "CELEC";
     if (k === "HIDRONACION" || k === "COMPLEMENTARIA") return "Hidronación";
     if (k === "EPMAPS") return "EPMAPS";
-    return s;
+    return sinMarcaInstitucional(s);
   }
 
   function nombreEstacion(v, codigo) {
@@ -806,7 +952,52 @@ const App = (() => {
     // palabra no exista en el código fuente pero se siga limpiando en datos.
     s = s.replace(new RegExp(String.fromCharCode(112, 105, 115, 99, 111), "gi"), " ")
       .replace(/\s+/g, " ").trim();
+    s = sinMarcaInstitucional(s).replace(/\s+/g, " ").trim();
     return s || (codigo ? `Estación ${codigo}` : "Estación meteorológica");
+  }
+
+  // Red de seguridad: texto que llegue de los datos y se pinte sin pasar por las
+  // funciones de arriba (un nombre en un globo de un gráfico, una opción de una
+  // lista) se limpia al entrar en la página. Solo mira nodos nuevos o cambiados
+  // que contengan la sigla, así que no cuesta nada en el caso normal.
+  function vigilarMarcaInstitucional(raiz) {
+    if (!raiz || typeof MutationObserver !== "function" || typeof document.createTreeWalker !== "function") return;
+    const ATRS = ["title", "aria-label", "placeholder", "data-title"];
+    const limpiarNodo = n => {
+      if (n.nodeType === 3) {
+        if (n.nodeValue && n.nodeValue.indexOf(SIGLA_RED) >= 0) n.nodeValue = sinMarcaInstitucional(n.nodeValue);
+        return;
+      }
+      if (n.nodeType !== 1) return;
+      for (const a of ATRS) {
+        const v = n.getAttribute && n.getAttribute(a);
+        if (v && v.indexOf(SIGLA_RED) >= 0) n.setAttribute(a, sinMarcaInstitucional(v));
+      }
+      if (n.tagName === "INPUT" && n.value && n.value.indexOf(SIGLA_RED) >= 0) n.value = sinMarcaInstitucional(n.value);
+      const tw = document.createTreeWalker(n, 5 /* elementos + texto */);
+      let x = tw.nextNode();
+      while (x) {
+        if (x.nodeType === 3) {
+          if (x.nodeValue && x.nodeValue.indexOf(SIGLA_RED) >= 0) x.nodeValue = sinMarcaInstitucional(x.nodeValue);
+        } else {
+          for (const a of ATRS) {
+            const v = x.getAttribute(a);
+            if (v && v.indexOf(SIGLA_RED) >= 0) x.setAttribute(a, sinMarcaInstitucional(v));
+          }
+        }
+        x = tw.nextNode();
+      }
+    };
+    const obs = new MutationObserver(ms => {
+      for (const m of ms) {
+        if (m.type === "characterData") limpiarNodo(m.target);
+        else if (m.type === "attributes") limpiarNodo(m.target);
+        else for (const n of m.addedNodes) limpiarNodo(n);
+      }
+    });
+    limpiarNodo(raiz);
+    obs.observe(raiz, { childList: true, subtree: true, characterData: true,
+                        attributes: true, attributeFilter: ATRS });
   }
 
   function el(html) {
@@ -937,15 +1128,15 @@ const App = (() => {
     return Object.assign({
       paper_bgcolor: "rgba(0,0,0,0)",
       plot_bgcolor: "rgba(0,0,0,0)",
-      font: { family: "IBM Plex Sans, sans-serif", size: 12, color: oscuro ? "#e8edf6" : "#0F1B2D" },
+      font: { family: "IBM Plex Sans, sans-serif", size: 12, color: oscuro ? "#E9EFF8" : "#0B1426" },
       margin: { l: 50, r: 18, t: 30, b: 42 },
       // Hover coherente con el tema (oscuro/claro) en TODOS los gráficos
       // (mapas y series); las series lo sobre-escriben con su propio estilo.
-      hoverlabel: { bgcolor: oscuro ? "#101a2b" : "#ffffff",
-                    bordercolor: oscuro ? "#3a4a66" : "#c7cfdb",
-                    font: { color: oscuro ? "#e8edf6" : "#1c2433", size: 11 } },
-      xaxis: { gridcolor: oscuro ? "#243150" : "#e6eaf2" },
-      yaxis: { gridcolor: oscuro ? "#243150" : "#e6eaf2" },
+      hoverlabel: { bgcolor: oscuro ? "#0E1626" : "#ffffff",
+                    bordercolor: oscuro ? "#33435F" : "#C9D3E1",
+                    font: { family: "IBM Plex Sans, sans-serif", color: oscuro ? "#E9EFF8" : "#0B1426", size: 11.5 } },
+      xaxis: { gridcolor: oscuro ? "#1D2A42" : "#E6EBF2" },
+      yaxis: { gridcolor: oscuro ? "#1D2A42" : "#E6EBF2" },
     }, extra);
   }
 
@@ -953,9 +1144,9 @@ const App = (() => {
   // (ejes con línea y mirror), grillas TENUES y hover coherente con el tema.
   function plotlyLayoutSerie(titulo = "", extra = {}) {
     const oscuro = tema() === "oscuro";
-    const grid = oscuro ? "rgba(140,155,185,0.13)" : "rgba(120,130,150,0.13)";
-    const linea = oscuro ? "#3a4a66" : "#c7cfdb";
-    const txt = oscuro ? "#e8edf6" : "#1c2433";
+    const grid = oscuro ? "rgba(140,160,195,0.12)" : "rgba(110,125,150,0.14)";
+    const linea = oscuro ? "#33435F" : "#C9D3E1";
+    const txt = oscuro ? "#E9EFF8" : "#0B1426";
     const eje = {
       gridcolor: grid, griddash: "dot", zeroline: false,
       showline: true, linecolor: linea, linewidth: 1, mirror: true,
@@ -969,8 +1160,8 @@ const App = (() => {
                xref: "paper", y: 0.96, yanchor: "top", automargin: true,
                font: { size: 12.5, color: txt } },
       hovermode: "x unified",
-      hoverlabel: { bgcolor: oscuro ? "#101a2b" : "#ffffff", bordercolor: linea,
-                    font: { color: txt, size: 11 } },
+      hoverlabel: { bgcolor: oscuro ? "#0E1626" : "#ffffff", bordercolor: linea,
+                    font: { family: "IBM Plex Sans, sans-serif", color: txt, size: 11.5 } },
       // modebar VERTICAL en la esquina → no pisa el título centrado.
       modebar: { orientation: "v", bgcolor: "rgba(0,0,0,0)" },
       margin: { l: 58, r: 20, t: 50, b: 56 },
@@ -983,7 +1174,8 @@ const App = (() => {
   // PNG en alta resolución y responsive.
   function plotlyConfig(extra = {}) {
     const base = {
-      displayModeBar: true,
+      // La barra de herramientas aparece al pasar el cursor: en reposo no tapa el dato.
+      displayModeBar: "hover",
       displaylogo: false,
       responsive: true,
       modeBarButtonsToRemove: ["lasso2d", "select2d", "autoScale2d"],
@@ -994,6 +1186,56 @@ const App = (() => {
     // es por gestos (scroll/pinch) y popups por fecha.
     if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) base.displayModeBar = false;
     return Object.assign(base, extra);
+  }
+
+  /* ---------------- mapa base de Ecuador (Plotly) ----------------
+     Contorno provincial con halo según el tema y alto que sigue al ancho del
+     contenedor. Viven aquí porque los usa más de un módulo: el índice UV se
+     separó de Climatología el 2026-09-17 y se quedó llamando a funciones que solo
+     existían dentro de clima.js (la pestaña no cargaba en el visor publicado). */
+  let _geoProvincias = null;
+  async function geoProvincias() {
+    if (_geoProvincias === null) {
+      try { _geoProvincias = await api("/datos/capas/provincias.geojson"); }
+      catch (e) { _geoProvincias = false; }
+    }
+    return _geoProvincias;
+  }
+  function trazasContornoProvincias(geo) {
+    if (!geo || !geo.features) return [];
+    const xs = [], ys = [];
+    for (const f of geo.features) {
+      const g = f && f.geometry; if (!g) continue;
+      const polys = g.type === "Polygon" ? [g.coordinates] : g.type === "MultiPolygon" ? g.coordinates : [];
+      for (const poly of polys) for (const ring of poly) {
+        for (const [x, y] of ring) { xs.push(x); ys.push(y); }
+        xs.push(null); ys.push(null);
+      }
+    }
+    // claro: halo blanco + línea negra (papel); oscuro: halo del fondo + línea clara.
+    const osc = tema() === "oscuro";
+    return [
+      { type: "scatter", mode: "lines", x: xs, y: ys, hoverinfo: "skip", showlegend: false,
+        line: { color: osc ? "#0E1626" : "#ffffff", width: 2.8 } },
+      { type: "scatter", mode: "lines", x: xs, y: ys, hoverinfo: "skip", showlegend: false,
+        line: { color: osc ? "#AEBBD0" : "#000000", width: 1.2 } },
+    ];
+  }
+  function ajustarAltoMapa(host, factor = 1.08, minimo = 380, maximo = 640) {
+    if (!host || host._hmAltoMapa || typeof ResizeObserver !== "function") return;
+    let timer = null, ancho0 = Math.round(host.clientWidth || 0);
+    host._hmAltoMapa = new ResizeObserver(entradas => {
+      const ancho = Math.round((entradas[0] && entradas[0].contentRect.width) || host.clientWidth || 0);
+      if (!ancho || Math.abs(ancho - ancho0) < 3) return;
+      ancho0 = ancho;
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (!host.isConnected || !window.Plotly || !host.classList.contains("js-plotly-plot")) return;
+        const height = Math.max(minimo, Math.min(maximo, Math.round(ancho * factor)));
+        try { Plotly.relayout(host, { height }); Plotly.Plots.resize(host); } catch (e) { /* ya purgado */ }
+      }, 90);
+    });
+    host._hmAltoMapa.observe(host);
   }
 
   /* ---------------- paneles reutilizables + pestañas ----------------
@@ -1016,21 +1258,21 @@ const App = (() => {
     let activa = opts.inicial && tabs.some(t => t.id === opts.inicial)
       ? opts.inicial : (tabs[0] && tabs[0].id);
     const barra = tabs.map(p =>
-      `<button class="hm-pestana${p.id === activa ? " activa" : ""}" data-pest="${p.id}"` +
+      `<button type="button" role="tab" class="hm-pestana${p.id === activa ? " activa" : ""}" data-pest="${p.id}"` +
+      ` aria-selected="${p.id === activa ? "true" : "false"}"` +
       `${p.danger ? ' data-danger="1"' : ""}>${p.etiqueta}</button>`).join("");
+    // La identidad del módulo (nombre y descripción) va en la barra superior; aquí
+    // solo la navegación interna en UNA fila y las acciones. Con una sola pestaña
+    // la fila no aporta y se oculta (si tampoco hay acciones, la barra entera).
     vista.innerHTML =
-      `<div class="hm-modbar">
-         <div class="hm-vista-cab">
-           <div>${opts.kicker ? `<div class="hm-kicker">${opts.kicker}</div>` : ""}
-             <div class="hm-cab-tit"><span class="hm-logo" aria-hidden="true">HM</span><h1>${opts.titulo || ""}</h1></div>
-             ${opts.sub ? `<div class="hm-sub">${opts.sub}</div>` : ""}</div>
-         </div>
-         <div class="hm-pestanas">${barra}</div>
+      `<div class="hm-modbar${tabs.length < 2 ? " sin-pestanas" : ""}">
+         <div class="hm-pestanas" role="tablist" aria-label="Secciones de ${opts.titulo || "este módulo"}">${barra}</div>
          <div class="hm-vista-acc">${opts.accionesHTML || ""}</div>
        </div>
        <div id="hm-cuerpo" class="hm-cuerpo"></div>`;
-    // Acento por módulo en las pestañas (se escribe SIEMPRE, con "" cuando no hay,
-    // para no filtrar acentos entre módulos; fallback var(--blue) en CSS).
+    const sub = document.getElementById("topbar-sub");
+    if (sub) sub.textContent = opts.sub || "";
+    // Acento de las pestañas: el del módulo salvo que la vista pida otro.
     vista.style.setProperty("--tab-acc", opts.acento || "");
     const cuerpo = vista.querySelector("#hm-cuerpo");
     let saliente = null;
@@ -1039,8 +1281,10 @@ const App = (() => {
       if (!p) return;
       if (saliente && saliente.alSalir) { try { saliente.alSalir(); } catch (e) {} }
       activa = id;
-      vista.querySelectorAll(".hm-pestana").forEach(b =>
-        b.classList.toggle("activa", b.dataset.pest === id));
+      vista.querySelectorAll(".hm-pestana").forEach(b => {
+        b.classList.toggle("activa", b.dataset.pest === id);
+        b.setAttribute("aria-selected", b.dataset.pest === id ? "true" : "false");
+      });
       // móvil: si las pestañas se desbordan, trae la activa a la vista (centrada) para que
       // nunca quede oculta detrás del borde y se note que la fila se desliza.
       const _act = vista.querySelector(".hm-pestana.activa");
@@ -1055,7 +1299,13 @@ const App = (() => {
       sincronizarBloqueo();
     }
     vista.querySelectorAll(".hm-pestana").forEach(b =>
-      (b.onclick = () => { if (b.dataset.pest !== activa) pintar(b.dataset.pest); }));
+      (b.onclick = () => {
+        if (b.dataset.pest === activa) return;
+        // La pestaña nueva empieza arriba (la barra de pestañas va pegada al borde).
+        const v = document.getElementById("vista");
+        if (v && v.scrollTop > 0) v.scrollTop = 0;
+        pintar(b.dataset.pest);
+      }));
     // Máscara "hay más →" SOLO si la fila realmente desborda (si caben todas, la
     // última pestaña se veía cortada por la máscara fija). Se re-evalúa al rotar/resize.
     const fila = vista.querySelector(".hm-pestanas");
@@ -1081,7 +1331,8 @@ const App = (() => {
 
   return { api, aviso, tarea, seguirTarea, modalTarea, tema, registrar, navegar, iniciar, el, fmtFecha, plotlyLayoutBase,
            plotlyLayoutSerie, plotlyConfig, pinchZoomMapa, hayTareaActiva, cancelarTarea, cancelarTodas, panel, vistaPestanas, restaurador,
-           rutaAProducto, leerJsonGzip, hoyEC, redEtiqueta, nombreEstacion,
+           rutaAProducto, leerJsonGzip, hoyEC, redEtiqueta, nombreEstacion, sinMarcaInstitucional,
+           acentoModulo, geoProvincias, trazasContornoProvincias, ajustarAltoMapa,
            fmtNum, fmtSigno, textoServidor, textosServidor };
 })();
 
@@ -1091,6 +1342,11 @@ const App = (() => {
 if (typeof module === "object" && module.exports) module.exports = Object.freeze({
   fmtNum: App.fmtNum, fmtSigno: App.fmtSigno,
   textoServidor: App.textoServidor, textosServidor: App.textosServidor,
+  sinMarcaInstitucional: App.sinMarcaInstitucional, redEtiqueta: App.redEtiqueta,
+  nombreEstacion: App.nombreEstacion,
+  // utilidades de mapa: los módulos las llaman al montar (el banco de montaje las necesita)
+  geoProvincias: App.geoProvincias, trazasContornoProvincias: App.trazasContornoProvincias,
+  ajustarAltoMapa: App.ajustarAltoMapa,
 });
 
 /* ---------------- MODO VISOR: SOLO EXPLORACIÓN ----------------

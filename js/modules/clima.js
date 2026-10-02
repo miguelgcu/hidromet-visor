@@ -1471,7 +1471,6 @@
         kicker: "Normales 1991–2020 · grilla 0,05° de Ecuador",
         titulo: "Climatología",
         sub: "Mallas climáticas calibradas (~5 km) · Ecuador",
-        acento: "var(--cyan)",
         inicial: "mapas",
         pestanas: [
           // v14 (pedido del dueño): MENOS pestañas — "Por estación" vive DENTRO de

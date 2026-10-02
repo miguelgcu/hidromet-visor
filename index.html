@@ -5,65 +5,77 @@
 
 <meta charset="utf-8">
 <title>HidroMet Ecuador</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#0B1322">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#070C16">
 <link rel="icon" href="favicon.png">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%234C8DFF'/%3E%3Cstop offset='1' stop-color='%2312B5C9'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='9' fill='url(%23g)'/%3E%3Cpath d='M16 6.2c-3.7 4.7-6.3 8.4-6.3 11.8a6.3 6.3 0 0 0 12.6 0c0-3.4-2.6-7.1-6.3-11.8z' fill='none' stroke='%23fff' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M11.6 19.3c1.5-1.1 3-1.1 4.4 0s2.9 1.1 4.4 0' fill='none' stroke='%23fff' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E">
 <script>try{document.documentElement.dataset.tema=localStorage.getItem("hidromet-tema")||"oscuro"}catch(e){document.documentElement.dataset.tema="oscuro"}</script>
 <script>
-/* La sidebar colapsada recordada se aplica ANTES de pintar, para que no se vea
-   saltar. Aquí había además una cortina de acceso (HM_ACCESO_LIBRE / hm-prelogin):
-   se retiró el 2026-09-17 con el gestor de cuentas. Llevaba desactivada desde el
-   2026-08-06 y en un sitio estático nunca fue seguridad, solo un estorbo. */
+/* El menú plegado (riel de iconos) recordado se aplica ANTES de pintar, para que no
+   se vea saltar. Aquí había además una cortina de acceso (HM_ACCESO_LIBRE /
+   hm-prelogin): se retiró el 2026-09-17 con el gestor de cuentas. */
 (function(){try{if(localStorage.getItem("hm-sidebar")==="min")document.documentElement.classList.add("hm-sb-min");}catch(e){}})();
 </script>
 <link rel="stylesheet" href="lib/leaflet/leaflet.css">
 <link rel="stylesheet" href="lib/leaflet/MarkerCluster.css">
 <link rel="stylesheet" href="lib/leaflet/MarkerCluster.Default.css">
-<link rel="stylesheet" href="css/fonts.css?v=b8fdb9e95e3e">
-<link rel="stylesheet" href="css/base.css?v=b8fdb9e95e3e">
-<link rel="stylesheet" href="css/mlnwp.css?v=b8fdb9e95e3e">
-<link rel="stylesheet" href="css/cartas.css?v=b8fdb9e95e3e">
-<link rel="stylesheet" href="css/datos.css?v=b8fdb9e95e3e">
-<link rel="stylesheet" href="css/configuracion.css?v=b8fdb9e95e3e">
-<link rel="stylesheet" href="css/clima.css?v=b8fdb9e95e3e">
-<link rel="stylesheet" href="css/decisiones.css?v=b8fdb9e95e3e">
-<link rel="stylesheet" href="css/monitoreo.css?v=b8fdb9e95e3e">
+<link rel="stylesheet" href="css/fonts.css?v=0dc0fe9c8715">
+<link rel="stylesheet" href="css/base.css?v=0dc0fe9c8715">
+<link rel="stylesheet" href="css/mlnwp.css?v=0dc0fe9c8715">
+<link rel="stylesheet" href="css/cartas.css?v=0dc0fe9c8715">
+<link rel="stylesheet" href="css/datos.css?v=0dc0fe9c8715">
+<link rel="stylesheet" href="css/configuracion.css?v=0dc0fe9c8715">
+<link rel="stylesheet" href="css/clima.css?v=0dc0fe9c8715">
+<link rel="stylesheet" href="css/decisiones.css?v=0dc0fe9c8715">
+<link rel="stylesheet" href="css/monitoreo.css?v=0dc0fe9c8715">
+<link rel="stylesheet" href="css/largo.css?v=0dc0fe9c8715">
+<link rel="stylesheet" href="css/deslizamientos.css?v=0dc0fe9c8715">
 </head>
 <body>
 <div id="capa-app">
-  <aside id="sidebar">
+  <aside id="sidebar" aria-label="Navegación principal">
     <div class="marca">
-      <div class="marca-logo">HM</div>
-      <div class="marca-texto">
+      <span class="marca-logo" aria-hidden="true"><svg viewBox="0 0 32 32"><defs><linearGradient id="hm-logo-g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4C8DFF"/><stop offset="1" stop-color="#12B5C9"/></linearGradient></defs><rect width="32" height="32" rx="9" fill="url(#hm-logo-g)"/><path d="M16 6.2c-3.7 4.7-6.3 8.4-6.3 11.8a6.3 6.3 0 0 0 12.6 0c0-3.4-2.6-7.1-6.3-11.8z" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round"/><path d="M11.6 19.3c1.5-1.1 3-1.1 4.4 0s2.9 1.1 4.4 0" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg></span>
+      <span class="marca-texto">
         <span class="marca-nombre">HidroMet</span>
-        <span class="marca-sub">Ecuador · Operativo</span>
-      </div>
+        <span class="marca-sub">Ecuador</span>
+      </span>
     </div>
     <nav id="nav-principal"></nav>
     <div class="sidebar-pie">
       <div id="tareas-activas"></div>
-      <button id="btn-tema" class="boton-fantasma" title="Alternar tema claro / oscuro">◐ Tema</button>
+      <button id="btn-tema" class="boton-fantasma" type="button" title="Cambiar a tema claro">
+        <span class="bf-icono" aria-hidden="true"></span><span class="bf-txt">Tema claro</span>
+      </button>
+      <button id="btn-plegar" class="boton-fantasma" type="button" title="Plegar el menú" aria-controls="sidebar">
+        <span class="bf-icono" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M9.5 4.5v15M15.5 10l-2 2 2 2"/></svg></span><span class="bf-txt">Plegar menú</span>
+      </button>
     </div>
   </aside>
   <main id="contenedor-vista">
-    <div id="topbar">
+    <header id="topbar">
       <button id="btn-menu" type="button" aria-label="Abrir menú" aria-expanded="false">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
       </button>
       <div class="ruta">
-        <span class="actual">Estación de trabajo</span><span class="sep">/</span><span id="topbar-modulo">Pronóstico</span>
+        <span class="tb-icono" id="topbar-icono" aria-hidden="true"></span>
+        <div class="tb-titulos">
+          <h1 id="topbar-modulo" tabindex="-1">HidroMet</h1>
+          <span id="topbar-sub"></span>
+        </div>
       </div>
       <div class="estado">
-        <div class="sync"><span class="punto"></span><span id="topbar-sync">Datos locales</span></div>
+        <div class="sync" role="status"><span class="punto"></span><span id="topbar-sync" class="sync-largo">Datos locales</span><span id="topbar-sync-corto" class="sync-corto">—</span></div>
         <div class="reloj" id="topbar-reloj">—</div>
       </div>
-    </div>
+    </header>
     <header id="cabecera-vista">
-      <h1 id="titulo-vista">…</h1>
+      <h2 id="titulo-vista">…</h2>
       <div id="acciones-vista"></div>
     </header>
     <section id="vista"></section>
   </main>
+  <nav id="nav-inferior" aria-label="Módulos"></nav>
   <div id="overlay-nav"></div>
 </div>
 <div id="avisos"></div>
@@ -71,14 +83,16 @@
 <script src="lib/leaflet/leaflet.js"></script>
 <script src="lib/leaflet/leaflet.markercluster.js"></script>
 <script src="lib/plotly/plotly.min.js"></script>
-<script src="js/core.js?v=b8fdb9e95e3e"></script>
-<script src="js/modules/monitoreo.js?v=b8fdb9e95e3e"></script>
-<script src="js/modules/mlnwp.js?v=b8fdb9e95e3e"></script>
-<script src="js/modules/decisiones.js?v=b8fdb9e95e3e"></script>
-<script src="js/modules/cartas.js?v=b8fdb9e95e3e"></script>
-<script src="js/modules/clima.js?v=b8fdb9e95e3e"></script>
-<script src="js/modules/iuv.js?v=b8fdb9e95e3e"></script>
-<script src="js/modules/glosario.js?v=b8fdb9e95e3e"></script>
+<script src="js/core.js?v=0dc0fe9c8715"></script>
+<script src="js/modules/monitoreo.js?v=0dc0fe9c8715"></script>
+<script src="js/modules/mlnwp.js?v=0dc0fe9c8715"></script>
+<script src="js/modules/decisiones.js?v=0dc0fe9c8715"></script>
+<script src="js/modules/cartas.js?v=0dc0fe9c8715"></script>
+<script src="js/modules/largo.js?v=0dc0fe9c8715"></script>
+<script src="js/modules/deslizamientos.js?v=0dc0fe9c8715"></script>
+<script src="js/modules/clima.js?v=0dc0fe9c8715"></script>
+<script src="js/modules/iuv.js?v=0dc0fe9c8715"></script>
+<script src="js/modules/glosario.js?v=0dc0fe9c8715"></script>
 <script>App.iniciar();</script>
 </body>
 </html>

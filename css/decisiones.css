@@ -27,8 +27,8 @@
   border-right: 1px solid var(--line-3); }
 .dec-fecha-txt { font: 700 15.5px var(--mono); color: var(--ink); font-variant-numeric: tabular-nums;
   line-height: 1.2; white-space: nowrap; }
-.dec-fecha-sub { font: 600 11px var(--mono); letter-spacing: .09em; text-transform: uppercase;
-  color: var(--faint); white-space: nowrap; }
+.dec-fecha-sub { font: 600 12px var(--fuente);
+  color:var(--muted); white-space: nowrap; }
 .dec-buscador { position: relative; flex: 1; min-width: 0; max-width: 460px; }
 
 /* ---- rejilla principal (áreas → en móvil el orden es veredicto→mapa→desempeño) ---- */
@@ -38,8 +38,11 @@
 .dec-panel { grid-area: panel; min-width: 0; }
 .dec-mapa-card { grid-area: mapa; }
 .dec-desemp { grid-area: desemp; min-width: 0; }
+/* minmax(0, …) y min-width:0: la columna puede estrecharse por debajo del ancho que
+   el gráfico tenía al dibujarse (en el teléfono medía 430 px dentro de 375). */
+.dec-layout > * { min-width: 0; }
 @media (max-width: 1120px) {
-  .dec-layout { grid-template-columns: 1fr; grid-template-areas: "panel" "mapa" "desemp"; }
+  .dec-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "panel" "mapa" "desemp"; }
 }
 
 /* ---- columna del MAPA ---- */
@@ -82,8 +85,8 @@
 .dec-hero-ico { flex: none; display: flex; color: var(--muted-2); }
 .dec-hero.si .dec-hero-ico { color: var(--blue); }
 .dec-hero-main { flex: 1 1 200px; min-width: 0; }
-.dec-hero .k { font: 600 11px var(--mono); letter-spacing: .09em; text-transform: uppercase;
-  color: var(--faint); margin-bottom: 3px; }
+.dec-hero .k { font: 600 12px var(--fuente);
+  color:var(--muted); margin-bottom: 3px; }
 .dec-hero .v { font: 700 30px var(--mono); line-height: 1.05; color: var(--ink); }
 .dec-hero.si .v { color: var(--blue); }
 .dec-hero.no .v { color: var(--muted); }
@@ -100,16 +103,15 @@
 /* mini-KPIs laterales del hero (cantidad, fuerte, confianza) */
 .dec-hero-lado { flex: none; display: flex; flex-direction: column; gap: 7px; min-width: 150px; }
 .dec-hero-lado .mini { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-.dec-hero-lado .mini .k { font: 600 11px var(--mono); letter-spacing: .05em; text-transform: uppercase;
-  color: var(--faint); margin: 0; }
+.dec-hero-lado .mini .k { font: 600 12px var(--fuente);
+  color:var(--muted); margin: 0; }
 .dec-hero-lado .mini .v { font: 700 12.5px var(--mono); color: var(--ink); white-space: nowrap; }
 
 /* fila de KPIs: Tmax · Tmin · tendencia */
 .dec-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
 .dec-kpi { background: var(--surface-2); border: 1px solid var(--line-3); border-radius: 11px;
   padding: 11px 13px; min-width: 0; }
-.dec-kpi .lab { display: flex; align-items: center; gap: 6px; font: 600 11px var(--mono);
-  letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin-bottom: 6px; }
+.dec-kpi .lab { display: flex; align-items: center; gap: 6px; font: 600 12px var(--fuente); color:var(--muted); margin-bottom: 6px; }
 .dec-kpi .lab .ico { display: inline-flex; color: var(--muted-2); font-style: normal;
   font-size: 12px; line-height: 1; }
 .dec-kpi .valor { font: 700 23px var(--mono); font-variant-numeric: tabular-nums;

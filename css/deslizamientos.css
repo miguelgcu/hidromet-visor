@@ -1,0 +1,41 @@
+/* ============================================================
+   HidroMet — Deslizamientos (pestaña de Advertencias; ui/js/modules/deslizamientos.js).
+   Cifras clave arriba; mapa del peligro con su leyenda y, al lado, las
+   provincias ordenadas por la parte de su montaña en peligro alto.
+   ============================================================ */
+.dz { display: flex; flex-direction: column; gap: 14px; }
+.dz .hm-kpis, .dz .hm-controles { margin: 0; }
+.dz-et { font-size: 12px; font-weight: 600; color: var(--muted); }
+.dz-fecha { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.dz-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr); gap: 14px; align-items: start; }
+.dz-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card);
+  box-shadow: var(--shadow-card); padding: 14px 16px; min-width: 0; }
+.dz-cab { display: flex; align-items: baseline; justify-content: space-between; gap: 6px 14px; flex-wrap: wrap; margin: 0 0 10px; }
+.dz-cab h2, .dz-card h2 { margin: 0; font-size: 15px; font-weight: 650; color: var(--ink); }
+.dz-cab span { font-size: 12px; color: var(--muted); }
+.dz-mapa { width: 100%; aspect-ratio: 62 / 68; max-height: 660px; border-radius: 10px; overflow: hidden; isolation: isolate; }
+.dz-ley { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 12px; font-size: 12px; color: var(--ink-2); }
+.dz-ley span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.dz-ley i { width: 14px; height: 10px; border-radius: 3px; display: inline-block;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 12%, transparent); }
+.dz-ley-sin i { background: repeating-linear-gradient(45deg, var(--surface-3) 0 3px, var(--line-2) 3px 5px); }
+.dz-fuente { margin: 10px 0 0; font-size: 11.5px; color: var(--muted-2); line-height: 1.5; }
+.dz-nota { margin: 10px 0 0; font-size: 12px; color: var(--muted); line-height: 1.5; }
+.dz-que p { margin: 8px 0 0; font-size: 13px; line-height: 1.6; color: var(--ink-2); max-width: 90ch; }
+
+.dz-rank { display: flex; flex-direction: column; }
+.dz-fila { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(90px, 1.1fr) 48px; align-items: center;
+  gap: 10px; padding: 7px 0; border-top: 1px solid var(--line-3); }
+.dz-fila:first-child { border-top: 0; }
+.dz-n { display: flex; flex-direction: column; min-width: 0; }
+.dz-n b { font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dz-n small { font-size: 11px; color: var(--muted-2); }
+.dz-barra { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--surface-3); }
+.dz-barra i { display: block; height: 100%; }
+.dz-v { font: 650 13px var(--mono); color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 1100px) { .dz-grid { grid-template-columns: 1fr; } }
+@media (max-width: 560px) {
+  .dz-fecha { margin-left: 0; white-space: normal; }
+  .dz-fila { grid-template-columns: minmax(100px, 1fr) minmax(70px, 1fr) 42px; }
+}

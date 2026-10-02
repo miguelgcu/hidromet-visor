@@ -1,14 +1,16 @@
 {
   "schema": "hidromet.frontend.v1",
   "source": "ui/",
-  "source_sha256": "b8fdb9e95e3e0710a6d75fc37b0863c98af269db25b570f97f8976f492b7ee8d",
-  "cache_version": "b8fdb9e95e3e",
+  "source_sha256": "0dc0fe9c8715e9d148f3c7ef265c18aa0d0f7853eced45952acd922c782462c0",
+  "cache_version": "0dc0fe9c8715",
   "mode": "readonly-static",
   "included_modules": [
     "monitoreo",
     "mlnwp",
     "decisiones",
     "cartas",
+    "largo",
+    "deslizamientos",
     "clima",
     "iuv",
     "glosario"

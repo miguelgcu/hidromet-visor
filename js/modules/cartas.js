@@ -1132,13 +1132,66 @@
   }
   // Pura: la traza del hueco SIN DATO, o null. Va SIEMPRE la última para quedar
   // ENCIMA de los tres niveles: es lo que corrige lo que hay debajo.
-  function trazaSinDatoCarta(d, ejeX, ejeY, bbox) {
+  /* ============================================================ §SUAVE
+     DIBUJO SUAVE DE LOS POLÍGONOS (2026-10-02, pedido del dueño: «las alertas se ven
+     todo cuadrado»). Los polígonos salen de una malla y su borde es una escalera de
+     celdas. Para DIBUJAR, cada anillo se densifica al paso de la malla y se cambia
+     por los puntos medios de sus tramos: el escalón se vuelve diagonal y ninguna
+     esquina se recorta más de medio paso; Plotly lo traza además como curva. Es el
+     MISMO polígono, sin escalones: las descargas (PNG y shapefile) siguen con la
+     geometría exacta, y los anillos compartidos se suavizan igual en todos los
+     niveles, así que no se abren rendijas entre ellos. */
+  // Pura: el escalón más corto de los anillos = paso de la malla de la que salieron.
+  function pasoPoligonos(listas) {
+    let m = Infinity;
+    for (const piezas of (listas || [])) for (const p of (piezas || [])) {
+      if (!p) continue;
+      for (const an of [p.exterior, ...(p.huecos || [])]) {
+        if (!Array.isArray(an)) continue;
+        for (let i = 1; i < an.length; i++) {
+          const d = Math.max(Math.abs(an[i][0] - an[i - 1][0]), Math.abs(an[i][1] - an[i - 1][1]));
+          if (d > 1e-6 && d < m) m = d;
+        }
+      }
+    }
+    return isFinite(m) ? Math.round(m * 1e6) / 1e6 : null;   // sin ruido de coma flotante
+  }
+  // Pura: recorrido x/y (anillos separados por null) → el mismo recorrido suavizado.
+  function suavizarAnillos(xs, ys, paso) {
+    if (!paso || !xs || !xs.length) return { xs, ys };
+    const ox = [], oy = [];
+    let i = 0;
+    while (i < xs.length) {
+      const rx = [], ry = [];
+      while (i < xs.length && xs[i] !== null) { rx.push(xs[i]); ry.push(ys[i]); i++; }
+      i++;   // el null que cierra el anillo
+      if (!rx.length) continue;
+      const cerrado = rx.length > 1 && rx[0] === rx[rx.length - 1] && ry[0] === ry[ry.length - 1];
+      const n = cerrado ? rx.length - 1 : rx.length;
+      if (n < 3) { ox.push(...rx, null); oy.push(...ry, null); continue; }
+      const dx = [], dy = [];
+      for (let k = 0; k < n; k++) {
+        const x0 = rx[k], y0 = ry[k], x1 = rx[(k + 1) % n], y1 = ry[(k + 1) % n];
+        const tramos = Math.max(1, Math.round(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) / paso));
+        for (let t = 0; t < tramos; t++) { dx.push(x0 + (x1 - x0) * t / tramos); dy.push(y0 + (y1 - y0) * t / tramos); }
+      }
+      const m = dx.length, ini = ox.length;
+      for (let k = 0; k < m; k++) { ox.push((dx[k] + dx[(k + 1) % m]) / 2); oy.push((dy[k] + dy[(k + 1) % m]) / 2); }
+      ox.push(ox[ini]); oy.push(oy[ini]);
+      ox.push(null); oy.push(null);
+    }
+    return { xs: ox, ys: oy };
+  }
+  const LINEA_SUAVE = { shape: "spline", smoothing: 0.8 };
+
+  function trazaSinDatoCarta(d, ejeX, ejeY, bbox, paso) {
     const sd = sinDatoCarta(d);
     if (!sd) return null;
-    const a = anillosPoligonoNivel(sd.piezas.filter(p => piezaTocaBbox(p, bbox)));
-    if (!a.xs.length) return null;
+    const a0 = anillosPoligonoNivel(sd.piezas.filter(p => piezaTocaBbox(p, bbox)));
+    if (!a0.xs.length) return null;
+    const a = suavizarAnillos(a0.xs, a0.ys, paso === undefined ? pasoPoligonos([sd.piezas]) : paso);
     const t = { type: "scatter", mode: "lines", x: a.xs, y: a.ys, fill: "toself",
-      fillcolor: SIN_DATO_FONDO, line: { color: SIN_DATO_TINTA, width: 0.6 },
+      fillcolor: SIN_DATO_FONDO, line: { color: SIN_DATO_TINTA, width: 0.6, ...LINEA_SUAVE },
       fillpattern: { shape: "/", size: 7, solidity: 0.3,
         fgcolor: SIN_DATO_TINTA, bgcolor: SIN_DATO_FONDO },
       meta: "riesgo-sin-dato", name: SIN_DATO_ROTULO,
@@ -1170,11 +1223,16 @@
     const rotulos = Array.isArray(d.tick_labels) ? d.tick_labels : [];
     const colorNivel = k => (colores.length >= 4 && colores[k]) ? colores[k] : CANTONAL_COLOR_NIVEL[k];
     const traces = [];
+    // un solo paso para todos los niveles y el hueco sin dato: los bordes que
+    // comparten se suavizan igual y no se abren rendijas
+    const sd0 = sinDatoCarta(d);
+    const paso = pasoPoligonos([niveles["1"], niveles["2"], niveles["3"], sd0 && sd0.piezas]);
     for (const k of [1, 2, 3]) {
-      const a = anillosPoligonoNivel((niveles[String(k)] || []).filter(p => piezaTocaBbox(p, bbox)));
-      if (!a.xs.length) continue;
+      const a0 = anillosPoligonoNivel((niveles[String(k)] || []).filter(p => piezaTocaBbox(p, bbox)));
+      if (!a0.xs.length) continue;
+      const a = suavizarAnillos(a0.xs, a0.ys, paso);
       const t = { type: "scatter", mode: "lines", x: a.xs, y: a.ys, fill: "toself",
-        fillcolor: colorNivel(k), line: { color: colorNivel(k), width: 0 },
+        fillcolor: colorNivel(k), line: { color: colorNivel(k), width: 0, ...LINEA_SUAVE },
         meta: "riesgo-poligono", name: rotulos[k] || NIVEL_ROTULO[k],
         hoverinfo: "skip", showlegend: false };
       if (ejeX) t.xaxis = ejeX;
@@ -1183,7 +1241,7 @@
     }
     // El hueco SIN DATO, encima de todo: el agujero que dejaron los tres niveles
     // deja de leerse como «sin alerta» y pasa a leerse como lo que es.
-    const sinDato = trazaSinDatoCarta(d, ejeX, ejeY, bbox);
+    const sinDato = trazaSinDatoCarta(d, ejeX, ejeY, bbox, paso);
     if (sinDato) traces.push(sinDato);
     return traces.length ? traces : null;
   }
@@ -3238,13 +3296,10 @@
     alDejar: _alDejarCartas,
   });
 
-  // MENÚ "Advertencias": SOLO las advertencias del programa (panel único, sin
-  // barra de pestañas). Se mantiene App.vistaPestanas con una única pestaña para
-  // conservar la cabecera (kicker/título/sub/acciones) idéntica a los demás
-  // módulos y el controlador vp (recargar tras Actualizar / cambio de tema);
-  // la barra .hm-pestanas se oculta porque con una sola pestaña no aporta.
+  // MENÚ "Advertencias": las advertencias del programa (lluvia y temperatura por
+  // umbrales) y, desde el 2026-10-02, el peligro de deslizamientos de la NASA.
   App.registrar("advertencias", {
-    titulo: "Advertencias", orden: 4,
+    titulo: "Advertencias", orden: 1.5,
     async render(vista) {
       vista.dataset.screenLabel = "Advertencias";
       await asegurarEstado();
@@ -3253,11 +3308,14 @@
         sub: "Alertas por consenso con validación de desempeño",
         accionesHTML: ACC_ACTUALIZAR, inicial: "alertas",
         pestanas: [
-          { id: "alertas", etiqueta: "Advertencias", danger: true, render: panelAlertas, alSalir: purgarCartas },
+          { id: "alertas", etiqueta: "Lluvia y temperatura", danger: true, render: panelAlertas, alSalir: purgarCartas },
+          // Peligro de deslizamientos LHASA (NASA) de hoy y mañana: lo monta
+          // ui/js/modules/deslizamientos.js como panel (2026-10-02).
+          { id: "deslizamientos", etiqueta: "Deslizamientos",
+            render: (c) => { const p = App.panel("deslizamientos"); return p ? p(c) : (c.innerHTML = "Deslizamientos no disponible"); },
+            alSalir: () => { const p = App.panel("deslizamientos:purgar"); if (p) p(); } },
         ],
       });
-      const fila = vista.querySelector(".hm-pestanas");
-      if (fila) fila.style.display = "none";
       _wireActualizar(vista);
     },
     alDejar: _alDejarCartas,
@@ -3448,6 +3506,9 @@
     // §POLI: una sola geometría del riesgo ordinal (contrato carta-poligonos.v1) y
     // los avisos de geometría de la advertencia; espejo del slug del motor.
     anillosPoligonoNivel,
+    // §SUAVE: el dibujo sin escalones de esos mismos polígonos
+    pasoPoligonos,
+    suavizarAnillos,
     piezaTocaBbox,
     sinDatoCarta,
     trazaSinDatoCarta,

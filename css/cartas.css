@@ -1,291 +1,243 @@
 /* ============================================================
-   HidroMet — Cartas y Alertas (módulo). Acento azul (--blue).
-   Clases ESPECÍFICAS del módulo; el sistema (tokens, .tarjeta,
-   .chip, .segmentado, .etiqueta…) vive en base.css y NO se redefine.
-   Valores tomados literalmente del bloque data-screen-label="Cartas y
-   Alertas" de Diseño/HANDOFF/diseno/HidroMet.dc.html.
+   HidroMet — Cartas y Alertas (Pronóstico · Advertencias).
+   Clases ESPECÍFICAS del módulo; el sistema (tokens, .tarjeta, .chip,
+   .segmentado, .etiqueta…) vive en base.css y NO se redefine aquí.
+   Rediseño v30: barra de controles con el lenguaje común, botones de
+   paso con icono, interruptores de capa que se leen como interruptores
+   y tarjetas de carta con la leyenda siempre DEBAJO del mapa.
    ============================================================ */
 
-/* ---------- cabecera propia del módulo ---------- */
+/* ---------- cabecera propia del módulo (vistas que no usan vistaPestanas) ---------- */
 .ct-cabecera { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 14px; }
-.ct-cabecera h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -.01em; color: var(--ink); }
-.ct-cabecera .sub { color: var(--muted); font-size: 13.5px; margin-top: 3px; }
+.ct-cabecera h1 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -.01em; color: var(--ink); }
+.ct-cabecera .sub { color: var(--muted); font-size: 13px; margin-top: 3px; }
 
 /* ---------- chips de TIPO ---------- */
 .ct-tipos { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 14px; }
 
-/* ---------- barra de control en una fila (tarjeta) ---------- */
-.ct-barra { display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-  background: var(--surface); border: 1px solid var(--line); border-radius: 11px;
-  padding: 11px 16px; margin-bottom: 14px; box-shadow: var(--shadow-card); }
-.ct-barra.cols { align-items: flex-end; padding: 13px 15px; }
-.ct-barra label { display: flex; align-items: center; gap: 9px; }
-.ct-barra label.bloque { flex-direction: column; align-items: flex-start; gap: 6px; }
-/* v11 compacta: etiqueta AL LADO del control (anula el column de label.bloque);
-   fondo/padding/gap los pone la regla del sistema en base.css. */
+/* ---------- barra de control (tarjeta) ---------- */
+.ct-barra { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-panel);
+  padding: 10px 14px; margin-bottom: 14px; box-shadow: var(--shadow-card); }
+.ct-barra.cols { align-items: flex-end; }
+.ct-barra label { display: flex; align-items: center; gap: 8px; }
+.ct-barra label.bloque { flex-direction: column; align-items: flex-start; gap: 5px; }
+/* compacta: etiqueta AL LADO del control */
 .ct-barra.compacta, .ct-barra.cols.compacta { align-items: center; }
-.ct-barra.compacta label.bloque { flex-direction: row; align-items: center; gap: 7px; }
-.ct-barra .et { font: 600 10px var(--mono); letter-spacing: .08em; color: var(--faint); text-transform: uppercase; }
-/* Barra de ADVERTENCIAS: tiene que caber en UNA fila desde 1366 px. Hueco propio,
-   más corto que el de las demás barras; el resto del ahorro sale del marcado
-   (sin divisor, sin micro-etiquetas y con el editor en la vista de umbrales). */
+.ct-barra.compacta label.bloque { flex-direction: row; align-items: center; gap: 8px; }
+.ct-barra .et { font-size: 12px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+/* Barra de ADVERTENCIAS: cabe en UNA fila desde 1366 px (hueco propio, más corto). */
 .ct-barra.ct-barra-alertas { gap: 10px; }
 .ct-barra select { font: 500 13px var(--fuente); color: var(--ink); }
 .ct-derecha { display: flex; align-items: center; gap: 6px; margin-left: auto; }
-.ct-nav { width: 32px; height: 32px; border: 1px solid var(--line-2); background: var(--surface);
-  border-radius: 8px; cursor: pointer; color: var(--muted); font-size: 13px;
-  display: inline-flex; align-items: center; justify-content: center; }
-.ct-nav:hover { background: var(--surface-3); }
-.ct-nav:disabled { opacity: .4; cursor: not-allowed; }
-/* botones de salto de día (◀◀ ▶▶): glifo doble algo más compacto para caber en 32px */
-.ct-nav[data-rol="dprev"], .ct-nav[data-rol="dnext"] { font-size: 10px; letter-spacing: -1px; }
+/* Botones de paso: icono dibujado (sin depender del glifo ◀ ▶ de cada fuente). */
+.ct-nav { position: relative; width: 34px; height: 34px; flex: none; border: 1px solid var(--ctrl-bd);
+  background: var(--surface); border-radius: var(--r-ctrl); cursor: pointer; color: var(--ink-2);
+  font-size: 12px; display: inline-flex; align-items: center; justify-content: center;
+  transition: background .14s, border-color .14s, color .14s; }
+.ct-nav:hover:not(:disabled) { background: var(--surface-3); color: var(--ink); }
+.ct-nav:disabled { opacity: .38; cursor: not-allowed; }
+.ct-nav[data-rol="prev"], .ct-nav[data-rol="next"], .ct-nav[data-rol="aprev"], .ct-nav[data-rol="anext"],
+.ct-nav[data-rol="dprev"], .ct-nav[data-rol="dnext"] { font-size: 0; }
+.ct-nav[data-rol]::before { content: ""; width: 16px; height: 16px; background: currentColor;
+  -webkit-mask: var(--ico) center / 16px 16px no-repeat; mask: var(--ico) center / 16px 16px no-repeat; }
+.ct-nav:not([data-rol="prev"]):not([data-rol="next"]):not([data-rol="aprev"]):not([data-rol="anext"]):not([data-rol="dprev"]):not([data-rol="dnext"])::before { display: none; }
+.ct-nav[data-rol="prev"], .ct-nav[data-rol="aprev"] {
+  --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M10 3.5 5.5 8l4.5 4.5' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.ct-nav[data-rol="next"], .ct-nav[data-rol="anext"] {
+  --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M6 3.5 10.5 8 6 12.5' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.ct-nav[data-rol="dprev"] {
+  --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 3.5 3.5 8 8 12.5M12.5 3.5 8 8l4.5 4.5' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.ct-nav[data-rol="dnext"] {
+  --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 3.5 8 8l-4.5 4.5M8 3.5 12.5 8 8 12.5' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
 .ct-instante { font: 500 12.5px var(--mono); color: var(--ink); }
 
 /* ---------- selector de umbrales: los TRES criterios en un desplegable ----------
-   El criterio que ahora no se puede elegir (ZPH fuera de precipitación, o uno sin
-   cartas publicadas) NO desaparece de la lista: sigue en su sitio, en gris y con
-   su razón escrita en la propia opción. Ni un párrafo bajo la barra. */
-/* Ancho FIJO: la barra ya no cambia de tamaño al pasar de lluvia a temperatura ni
-   al perder un criterio sus cartas. Los tres rótulos caben enteros; el motivo
-   («· sin cartas publicadas») solo acompaña a opciones DESHABILITADAS, que el
-   navegador nunca deja seleccionadas, y si alguna vez se recortara termina en
-   puntos suspensivos —el motivo entero sigue en el title de la opción. */
-.ct-umbral-sel select { min-height: 32px; width: 168px; font: 500 12.5px var(--fuente);
+   El criterio que no se puede elegir sigue en la lista, en gris y con su razón
+   escrita en la propia opción. Ancho FIJO: la barra no salta al cambiar de
+   variable ni al perder un criterio sus cartas. */
+.ct-umbral-sel select { min-height: 34px; width: 172px; font: 500 12.5px var(--fuente);
   color: var(--ink); text-overflow: ellipsis; }
 .ct-umbral-sel select option:disabled { color: var(--faint); }
-/* El botón que abre y cierra la vista de los cortes va PEGADO al desplegable:
-   se lee como una sola cosa («este criterio · ver sus umbrales»). */
+/* «Umbrales» va PEGADO al desplegable: se lee como una sola cosa. */
 .ct-umbral-ver { margin-left: -6px; white-space: nowrap; }
 .ct-umbral-ver[aria-pressed="true"] { background: var(--blue); color: #fff; border-color: var(--blue); }
 .ct-umbral-ver[aria-pressed="true"]:hover { background: var(--blue-press); }
 
-/* ---------- vista de UMBRALES (no es la advertencia: es el corte) ----------
-   Encabezado propio con filete azul: al entrar se ve de inmediato que la pantalla
-   ha cambiado de asunto. Las tarjetas reusan la rejilla de siempre —una por nivel,
-   con su leyenda y su unidad— para comparar los tres cortes de un vistazo. */
+/* ---------- vista de UMBRALES (no es la advertencia: es el corte) ---------- */
 .ct-umbrales-cab { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
-  margin: 0 0 12px; padding: 2px 0 2px 11px; border-left: 3px solid var(--blue); }
+  margin: 0 0 12px; padding: 2px 0 2px 12px; border-left: 3px solid var(--blue); }
 .ct-umbrales-cab h3 { margin: 0; font-size: 15px; font-weight: 650; color: var(--ink); }
-/* Donde el criterio NO se edita, el botón «Editar umbrales» ya no está. En vez de
-   desaparecer sin más, DEBAJO de la cabecera va una línea llana con la procedencia de
-   esos cortes: de dónde salen y que los calcula el sistema. Fuera del titular —que es
-   solo el nombre del criterio y la variable— y en tono menor: explica, no advierte. */
+/* Procedencia de los cortes, en tono menor: explica, no advierte. */
 .ct-umbrales-fuente { margin: -6px 0 12px; max-width: 72ch; font-size: 12px;
-  line-height: 1.45; color: var(--muted-2); }
+  line-height: 1.5; color: var(--muted-2); }
 .ct-umbrales-vacio { margin: 0 0 14px; font-size: 12.5px; color: var(--muted); }
-/* La tarjeta de un corte no puede confundirse con la de una advertencia: su meta
-   dice «Umbral» y va en el azul del módulo. */
 .ct-carta-umbral .ct-carta-cab .meta { color: var(--blue); font-weight: 650; }
 
-/* ---------- toggles de capa (activo = relleno slate) ----------
-   El relleno vuelve a 5px 11px (2026-09-06). Se había recortado a 5px 8px para que la
-   barra de Advertencias cupiera en una fila, y MEDIDO no hacía falta: con 11px la barra
-   nueva pide 980,4 px de los 1036 disponibles a 1366 px de ventana (una fila, holgura
-   55,6 px; entra desde 1311 px). El recorte tampoco compraba accesibilidad: el bloque
-   @media (hover: none) de base.css sube a 44 px .boton/.chip/.pestana/select, pero NO
-   alcanza a .ct-toggle —no es .boton—, así que el toggle mide 26 px de alto con
-   cualquiera de los dos rellenos. Eso sigue siendo un blanco táctil corto; lo que no
-   es, es una razón para estrecharlo. */
+/* ---------- interruptores de capa: se leen como interruptores ----------
+   Encendido = punto de acento + texto a tinta sobre fondo teñido; apagado = punto
+   hueco. Se agrupan en un bloque con pista, como un control segmentado. */
 .ct-toggles { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
-.ct-toggle { font: 600 11px var(--fuente); color: var(--muted); background: var(--surface-3);
-  border: 1px solid var(--line); padding: 5px 11px; border-radius: 7px; cursor: pointer;
-  user-select: none; transition: background .14s, color .14s, border-color .14s; }
-.ct-toggle:hover { border-color: var(--line-2); }
-.ct-toggle.activo { color: #fff; background: var(--slate); border-color: var(--slate); }
-/* tema oscuro: --slate se vuelve CLARO (#7E8DA6) y el texto blanco del toggle
-   encendido no se leía; tinta oscura sobre ese relleno claro. */
-html[data-tema="oscuro"] .ct-toggle.activo { color: #101B33; }
+.ct-toggle { display: inline-flex; align-items: center; gap: 7px; height: 30px;
+  font: 600 12px var(--fuente); color: var(--muted); background: transparent;
+  border: 0; padding: 0 11px 0 10px; border-radius: 8px; cursor: pointer; white-space: nowrap;
+  user-select: none; transition: background .14s, color .14s; }
+.ct-toggle::before { content: ""; width: 9px; height: 9px; flex: none; border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--ctrl-bd); transition: background .14s, box-shadow .14s; }
+.ct-toggle:hover { color: var(--ink); background: color-mix(in srgb, var(--surface) 70%, transparent); }
+.ct-toggle.activo { color: var(--ink); background: var(--surface); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.ct-toggle.activo::before { background: var(--acc, var(--blue)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--acc, var(--blue)) 22%, transparent); }
 
-/* v10: navegación de instante agrupada con los selectores (izquierda); toggles de capa a la derecha */
-.ct-inst-nav { display: flex; align-items: center; gap: 6px; }
-.ct-capas { display: flex; align-items: center; gap: 6px; margin-left: auto; }
-/* UNA LEYENDA POR GRÁFICO en TODAS las pestañas de cartas (Advertencias, Pronóstico,
-   Calibrado, Hidroestimadores, FFGS y heladas): cada tarjeta lleva la suya en su propio
-   hueco .ct-ley-card, bajo el mapa y dentro de la tarjeta. Cuando los modelos comparten
-   escala la leyenda se REPITE por tarjeta; ya no hay barra compartida bajo la grilla. */
-.ct-carta .ct-ley-card { padding: 8px 13px 12px; border-top: 1px solid var(--line-3); }
+/* navegación de instante agrupada con los selectores; interruptores a la derecha */
+.ct-inst-nav { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; min-width: 0; }
+.ct-inst-nav .et { margin-right: 2px; }
+.ct-inst-nav .ct-instante { min-width: 0; }
+.ct-capas { display: flex; align-items: center; gap: 2px; margin-left: auto; padding: 3px;
+  background: var(--surface-3); border: 1px solid var(--line); border-radius: 11px;
+  overflow-x: auto; scrollbar-width: none; max-width: 100%; }
+.ct-capas::-webkit-scrollbar { display: none; }
+/* UNA LEYENDA POR GRÁFICO: cada tarjeta lleva la suya bajo el mapa, dentro de la tarjeta. */
+.ct-carta .ct-ley-card { padding: 9px 14px 12px; border-top: 1px solid var(--line-3); min-width: 0; }
 .ct-carta .ct-ley-card:empty { display: none; }
-/* la leyenda va DEBAJO del mapa dentro de la tarjeta: nunca lo tapa. Los números
-   son hijos absolutos de .ct-leyenda-ticks (position:relative), así que no ensanchan
-   la columna ni deforman el alto del lienzo (aspect-ratio fijo). min-width:0 evita
-   que una etiqueta larga estire la celda de la grilla. */
-.ct-carta .ct-ley-card { min-width: 0; }
 
 /* ---------- grilla de cartas: SIEMPRE 3 por fila en escritorio, sean 1, 4, 6, 9 o 12
-   tarjetas (orden del dueño, 2026-09-03). La disposición NO depende de cuántas
-   fuentes publique el día: no hay modificador por número de cartas. Degradado:
-   3 columnas → 2 (≤1180px, tableta) → 1 (≤760px, teléfono). ---------- */
-.ct-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 13px; margin-bottom: 14px; }
+   tarjetas (orden del dueño, 2026-09-03). Degradado: 3 → 2 (≤1180px) → 1 (≤760px). ---------- */
+.ct-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 16px; }
 @media (max-width: 1180px) { .ct-grid { grid-template-columns: repeat(2, 1fr); } }
 
 /* FFGS: rejilla de TODOS los productos del paso horario (leyenda por carta) */
 .ct-grid.cuencas { gap: 12px; }
-.ct-grid.cuencas .ct-ley-card { padding: 7px 12px 11px; border-top: 1px solid var(--line); }
+.ct-grid.cuencas .ct-ley-card { padding: 8px 12px 11px; border-top: 1px solid var(--line-3); }
 .ct-grid.cuencas .ct-ley-card:empty { display: none; }
-.ct-hint { align-self: center; color: var(--muted-2); font-size: 11px; }
+.ct-hint { align-self: center; color: var(--muted-2); font-size: 11.5px; }
 @media (max-width: 1180px) { .ct-grid.cuencas { grid-template-columns: repeat(2, 1fr); } }
-/* 1 columna solo por debajo de 760px (antes 980): en tableta vertical dos cartas
-   siguen siendo legibles y una sola columna obligaba a desplazarse el doble. Va
-   DESPUÉS del corte de .cuencas: misma especificidad, gana la última regla. */
+/* 1 columna solo por debajo de 760px; va DESPUÉS del corte de .cuencas (gana la última). */
 @media (max-width: 760px) { .ct-grid, .ct-grid.cuencas { grid-template-columns: 1fr; } }
 
-/* ---------- tarjeta de carta (figure + img sobre degradado de mar) ---------- */
+/* ---------- tarjeta de carta ---------- */
 .ct-carta { margin: 0; background: var(--surface); border: 1px solid var(--line);
-  border-radius: 13px; overflow: hidden; box-shadow: var(--shadow-card); }
-/* min-height + meta en UNA línea con recorte (…): las cabeceras de una misma fila
-   arrancan el mapa a la misma altura (el texto completo va en el title del span). */
-.ct-carta-cab { display: flex; align-items: baseline; justify-content: space-between;
-  gap: 10px; padding: 11px 14px 9px; min-height: 40px; box-sizing: border-box; }
-.ct-carta-cab .titulo { font-size: 15px; font-weight: 650; color: var(--ink); }
-.ct-carta-cab .meta { font: 500 11.5px var(--mono); color: var(--muted-2);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; max-width: 55%; }
-/* sigla técnica DETRÁS del título en castellano (cartas de crecidas FFGS) */
+  border-radius: var(--r-card); overflow: hidden; box-shadow: var(--shadow-card);
+  transition: border-color .18s, box-shadow .18s; }
+.ct-carta:hover { border-color: var(--line-2); box-shadow: var(--shadow-hover); }
+/* cabeceras de una misma fila a la misma altura: el mapa arranca alineado */
+.ct-carta-cab { display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 10px 14px; min-height: 44px; box-sizing: border-box; border-bottom: 1px solid var(--line-3); }
+.ct-carta-cab .titulo { font-size: 14.5px; font-weight: 650; color: var(--ink); letter-spacing: -.005em; white-space: nowrap; }
+.ct-carta-cab .meta { font: 500 11.5px var(--fuente); color: var(--muted-2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; max-width: 60%; }
 .ct-carta-cab .titulo .ct-sigla { font: 600 10px var(--mono); color: var(--muted-2); letter-spacing: .05em; margin-left: 4px; }
-.ct-lienzo { position: relative; aspect-ratio: 63 / 67;
-  background: linear-gradient(180deg, var(--sea-top), var(--sea-bottom)); overflow: hidden; }
-/* Grillas del módulo PRONÓSTICO (pronóstico/calibrado/hidro/heladas): papel BLANCO
-   SIEMPRE (la clase la pone lienzoCarta según el tipo activo). Alertas y FFGS
-   (bajo Hidrología) se quedan con el degradado temático de arriba. */
-.ct-lienzo.ct-lienzo-fijo { background: linear-gradient(180deg, var(--sea-fijo-top), var(--sea-fijo-bottom)); }
+/* El lienzo pinta un COLOR de fondo además del degradado: el recuadro de
+   Galápagos lee ese color (fondoEfectivo) para taparse; con solo degradado lo
+   tomaba de la tarjeta y salía oscuro sobre el papel blanco. */
+.ct-lienzo { position: relative; isolation: isolate; aspect-ratio: 63 / 67; background-color: var(--sea-bottom);
+  background-image: linear-gradient(180deg, var(--sea-top), var(--sea-bottom)); overflow: hidden; }
+/* Grillas del módulo PRONÓSTICO: papel BLANCO SIEMPRE (lo pone lienzoCarta). */
+.ct-lienzo.ct-lienzo-fijo { background-color: var(--sea-fijo-bottom);
+  background-image: linear-gradient(180deg, var(--sea-fijo-top), var(--sea-fijo-bottom)); }
 .ct-lienzo img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .ct-mapa-plot { position: absolute; inset: 0; }
 .ct-lienzo .cargando { position: absolute; inset: 0; display: flex; align-items: center;
-  justify-content: center; font: 500 12px var(--mono); color: var(--muted-2); z-index: 1; }
+  justify-content: center; font: 500 12px var(--fuente); color: var(--muted-2); z-index: 1; }
 .ct-lienzo .fallo { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 6px;
   align-items: center; justify-content: center; text-align: center; padding: 16px;
-  font-size: 12px; color: var(--muted); z-index: 1; }
+  font-size: 12.5px; color: var(--muted); z-index: 1; }
 .ct-lienzo .fallo .icono { font-size: 26px; opacity: .5; }
+/* La barra de herramientas de Plotly no cabe junto a los botones propios de la
+   carta: en las cartas se oculta (zoom con la rueda/pellizco y descargas propias). */
+.ct-lienzo .modebar-container { display: none !important; }
 
 /* botón de descarga (PNG formal) sobre cada mapa */
 .ct-dl { position: absolute; top: 8px; right: 8px; z-index: 3; width: 30px; height: 30px;
   display: inline-flex; align-items: center; justify-content: center; border-radius: 8px;
-  color: var(--muted); background: color-mix(in srgb, var(--surface) 86%, transparent);
-  border: 1px solid var(--line-2); box-shadow: 0 1px 4px rgba(8,18,38,.12);
-  cursor: pointer; backdrop-filter: blur(3px); transition: color .14s, background .14s, border-color .14s; }
+  color: var(--ink-2); background: color-mix(in srgb, var(--surface) 88%, transparent);
+  border: 1px solid var(--line-2); box-shadow: 0 1px 4px rgba(8,18,38,.14);
+  cursor: pointer; backdrop-filter: blur(4px); transition: color .14s, background .14s, border-color .14s; }
 .ct-dl:hover { color: #fff; background: var(--blue); border-color: var(--blue); }
 .ct-dl[aria-disabled="true"] { opacity: .42; cursor: not-allowed; box-shadow: none; }
-.ct-dl[aria-disabled="true"]:hover { color: var(--muted); background: color-mix(in srgb, var(--surface) 86%, transparent);
+.ct-dl[aria-disabled="true"]:hover { color: var(--ink-2); background: color-mix(in srgb, var(--surface) 88%, transparent);
   border-color: var(--line-2); }
 .ct-dl-shp { right: 44px; width: auto; min-width: 30px; padding: 0 7px;
-  font: 800 10px/30px ui-monospace, "IBM Plex Mono", monospace; letter-spacing: .4px; }
+  font: 700 10px/30px var(--mono); letter-spacing: .4px; }
 
 /* ---------- §DESCARGA-GEOM (2026-09-10): el shapefile, en DOS geometrías ----------
-   El dueño pidió «dos botones, uno de geometría exacta y otro de geometría
-   simplificada» PARA DESCARGAR — el mapa sigue dibujando siempre la exacta.
-   Dos botones sueltos no caben: la esquina de la carta ya lleva el de la imagen y
-   la barra de advertencias costó dejarla en UNA fila desde 1366 px. Así que es UN
-   control con DOS entradas: el disparador ocupa EXACTAMENTE el hueco del «SHP» de
-   antes (mismo alto, mismo ancho, misma esquina — `.ct-dl-desc` hereda su sitio y
-   el botón pasa a `static` dentro) y las opciones se despliegan ENCIMA del mapa,
-   en capa, sin empujar ni un píxel de la tarjeta ni de la barra.
-
-   MEDIDO en hidromet/_pruebas/barra_descarga.html (el banco reconstruido con este
-   marcado; `medirDescarga()` en consola), a 1366 / 1440 / 1536 px de ventana:
-     · disparador ANTES y AHORA: 35,2 × 30 px, a 44 px del borde derecho del
-       lienzo y 8 px del alto. Idéntico en los tres anchos.
-     · tarjeta 339,7 / 364,3 / 396,3 px de ancho; menú desplegado 236 px, alto
-       160,1 (opción apagada) a 204,6 px (frase larga). Le sobran 95,7 / 120,3 /
-       152,3 px por la izquierda y 8 px por la derecha dentro del lienzo, y
-       112,6 a 217,4 px por abajo.
-     · la tarjeta NO cambia de tamaño al abrirlo (el menú va en capa).
-     · caso apretado: a 1181 px —la ventana más estrecha en que la grilla sigue a
-       3 columnas y la tarjeta baja a 278 × 295,6 px— aún sobran 34 px por la
-       izquierda y 47 px por abajo.
-   Y la barra de advertencias sigue clavada donde estaba (`medir()` en
-   hidromet/_pruebas/barra.html): 980,4 px pedidos, UNA fila desde 1311 px. Este
-   control no la toca porque no vive en ella. */
+   UN control con DOS entradas: el disparador ocupa EXACTAMENTE el hueco del «SHP» de
+   antes (35,2 × 30 px a 44 px del borde derecho y 8 px del alto, medido en
+   hidromet/_pruebas/barra_descarga.html a 1366 / 1440 / 1536 px) y las opciones se
+   despliegan ENCIMA del mapa, en capa, sin empujar ni un píxel de la tarjeta. */
 .ct-dl-desc { position: absolute; top: 8px; right: 44px; z-index: 4; line-height: 0; }
 .ct-dl-desc > .ct-dl-shp { position: static; }
 .ct-dl-shp[aria-disabled="true"] { opacity: .4; cursor: not-allowed; }
-/* El menú se ancla al BORDE de la carta (right: -36px = los 44 del botón menos los
-   8 del margen), no al botón: así cabe entero en la columna más estrecha en que la
-   grilla sigue a 3 columnas (~285 px de tarjeta a 1181 px de ventana). */
-/* max-height + scroll = RED DE SEGURIDAD, no recorte: el lienzo tiene
-   overflow:hidden, y una carta con muchas más manchas alarga la frase. 232 px es
-   lo que cabe en la tarjeta más baja que llega a tener el menú (278 × 295,7 px, a
-   1181 px de ventana). Si el texto crece, el menú SE DESPLAZA; nunca se corta lo
-   que declara. */
-/* [hidden] lo pone el agente de usuario con display:none, pero un display de
-   AUTOR lo pisa sin importar la especificidad: sin esta linea el menu salia
-   abierto en todas las cartas, tapando el mapa. */
+/* [hidden] con display de autor: sin esta línea el menú salía abierto en todas las cartas. */
 .ct-dl-menu[hidden] { display: none !important; }
+/* Anclado al BORDE de la carta (right: -36px = 44 del botón − 8 de margen); max-height
+   + scroll = red de seguridad: si el texto crece, el menú SE DESPLAZA, nunca se corta. */
 .ct-dl-menu { position: absolute; top: calc(100% + 6px); right: -36px; z-index: 5;
   width: 236px; max-height: 232px; display: flex; flex-direction: column;
   overflow: hidden auto; overscroll-behavior: contain;
-  background: var(--surface); border: 1px solid var(--line-2); border-radius: 10px;
-  box-shadow: 0 8px 22px rgba(8, 18, 38, .20); }
-.ct-dl-op { display: block; width: 100%; text-align: left; padding: 8px 10px 9px;
-  background: none; border: 0; border-top: 1px solid var(--line); cursor: pointer;
+  background: var(--surface); border: 1px solid var(--line-2); border-radius: 11px;
+  box-shadow: var(--shadow-hover); }
+.ct-dl-op { display: block; width: 100%; text-align: left; padding: 8px 11px 9px;
+  background: none; border: 0; border-top: 1px solid var(--line-3); cursor: pointer;
   color: var(--ink); font: inherit; line-height: normal; }
 .ct-dl-op:first-child { border-top: 0; }
 .ct-dl-op:hover, .ct-dl-op:focus-visible { background: var(--blue-50); outline: none; }
 .ct-dl-op:focus-visible { box-shadow: inset 2px 0 0 var(--blue); }
 .ct-dl-op-t { display: block; font: 650 12px var(--fuente); color: var(--ink); }
-.ct-dl-op-d { display: block; margin-top: 2px; font: 400 11px/1.35 var(--fuente); color: var(--muted); }
+.ct-dl-op-d { display: block; margin-top: 2px; font: 400 11px/1.4 var(--fuente); color: var(--muted); }
 /* No disponible: SE VE y dice por qué (jamás se esconde la opción). */
 .ct-dl-op[aria-disabled="true"] { cursor: not-allowed; }
 .ct-dl-op[aria-disabled="true"] .ct-dl-op-t { color: var(--muted-2); }
 .ct-dl-op[aria-disabled="true"]:hover { background: none; }
 
-/* hint de zoom (Ctrl + rueda) — aparece al pasar el cursor sobre la carta */
+/* pista de zoom (Ctrl + rueda) al pasar el cursor sobre la carta */
 .ct-zoomhint { position: absolute; left: 8px; bottom: 8px; z-index: 3; pointer-events: none;
-  font: 600 9.5px var(--mono); letter-spacing: .02em; color: var(--muted-2);
-  background: color-mix(in srgb, var(--surface) 86%, transparent); border: 1px solid var(--line-2);
-  border-radius: 6px; padding: 3px 7px; opacity: 0; transition: opacity .16s; backdrop-filter: blur(3px); }
+  font: 600 10px var(--fuente); color: var(--ink-2);
+  background: color-mix(in srgb, var(--surface) 88%, transparent); border: 1px solid var(--line-2);
+  border-radius: 7px; padding: 3px 8px; opacity: 0; transition: opacity .16s; backdrop-filter: blur(3px); }
 .ct-lienzo:hover .ct-zoomhint { opacity: 1; }
-/* táctil (sin hover): mostrar el hint de zoom tenue para que se sepa que se puede pellizcar */
 @media (hover: none) { .ct-zoomhint { opacity: .6; } }
 
-/* leyenda discreta bajo un mapa: en CARTAS ya no se usa (todas las pestañas llevan
-   la leyenda POR CARTA, .ct-ley-card, arriba). La conserva el módulo Clima, que reusa
-   esta clase para la leyenda de sus mapas — no borrar. */
+/* ---------- leyenda bajo un mapa (la reusa el módulo Clima: no borrar) ---------- */
 .ct-leyenda-carta { margin: -2px 0 14px; }
 .ct-leyenda-carta:empty { display: none; }
-.ct-leyenda-cab { display: flex; align-items: baseline; gap: 10px; margin-bottom: 5px; }
-.ct-leyenda-unidad { font: 700 11px var(--mono); color: var(--ink-2); text-transform: uppercase; letter-spacing: .04em; }
+.ct-leyenda-cab { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+.ct-leyenda-unidad { font: 650 11.5px var(--fuente); color: var(--ink-2); }
 .ct-leyenda-sub { font: 500 11px var(--mono); color: var(--muted-2); }
-.ct-leyenda-barra { display: flex; height: 12px; border-radius: 4px; overflow: hidden;
-  border: 1px solid var(--line-2); }
+.ct-leyenda-barra { display: flex; height: 10px; border-radius: 5px; overflow: hidden;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 10%, transparent); }
 .ct-leyenda-barra span { flex: 1; }
-/* números de la leyenda legibles: 11 px y tinta más oscura (antes 9.5 px en gris claro,
-   al límite de lo legible; ahora la barra es ancha y hay sitio). */
-.ct-leyenda-ticks { position: relative; height: 18px; margin-top: 3px; }
+/* los números son hijos absolutos de .ct-leyenda-ticks: no ensanchan la columna */
+.ct-leyenda-ticks { position: relative; height: 18px; margin-top: 4px; }
 .ct-leyenda-ticks .t { position: absolute; transform: translateX(-50%); top: 0;
-  font: 500 11px var(--mono); color: var(--muted); white-space: nowrap; }
-/* SIN DATO NO ES SIN ALERTA (§17.1b): el hueco que la geometría deja donde no hubo
-   dato se pinta en el mapa con color propio y tramado, y aquí lleva su rótulo con el
-   área DECLARADA. Va FUERA de la barra de riesgo porque no es un nivel más de la
-   escala. La muestra repite el MISMO tramado que dibuja el mapa —mismo ángulo (45°,
-   como el shape "/" de Plotly) y los mismos dos colores— para que la leyenda y el
-   mapa se lean como la misma cosa. Los colores van literales, no por variable de
-   tema, justo por eso: los del mapa también lo son. */
+  font: 500 11px var(--mono); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* SIN DATO NO ES SIN ALERTA (§17.1b): el hueco sin dato se pinta con color propio y
+   tramado y aquí lleva su rótulo. La muestra repite el MISMO tramado del mapa (45°,
+   los mismos dos colores, literales a propósito: los del mapa también lo son). */
 .ct-leyenda-sindato { display: flex; align-items: center; gap: 7px; margin-top: 2px; }
 .ct-leyenda-sindato .ct-sd-muestra { flex: none; width: 16px; height: 11px; border-radius: 3px;
   border: 1px solid var(--line-2);
   background: repeating-linear-gradient(45deg, #4a5162 0 2px, #e6e9ef 2px 6px); }
-.ct-leyenda-sindato .ct-sd-txt { font: 500 11px var(--mono); color: var(--muted); }
+.ct-leyenda-sindato .ct-sd-txt { font: 500 11px var(--fuente); color: var(--muted); }
 
 /* ---------- panel de validación de desempeño ---------- */
-.ct-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 13px;
+.ct-panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card);
   padding: 18px; box-shadow: var(--shadow-card); }
 .ct-panel-cab { display: flex; align-items: baseline; justify-content: space-between;
   flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
 .ct-panel-cab h3 { margin: 0; font-size: 15px; font-weight: 650; }
 .ct-panel-cab h3 .suave { font-weight: 500; color: var(--muted-2); font-size: 12.5px; }
-.ct-nota { font-size: 12px; color: var(--muted-2); line-height: 1.55; margin: 13px 0 0; }
+.ct-nota { font-size: 12px; color: var(--muted-2); line-height: 1.6; margin: 13px 0 0; }
 
-/* La validación pública de advertencias contiene únicamente evidencia causal y
-   dos gráficos de desempeño. No mezcla mapas ni resúmenes retrospectivos. */
-.ct-evidencia-causal { margin: 0 0 10px; padding: 10px 12px; border-radius: 9px;
+/* Validación pública de advertencias: evidencia causal y dos gráficos de desempeño. */
+.ct-evidencia-causal { margin: 0 0 10px; padding: 10px 12px; border-radius: 10px;
   border: 1px solid var(--line); background: var(--surface-2); }
 .ct-evidencia-causal.insuficiente { color: var(--warn); background: var(--warn-bg); border-color: var(--warn-bd); }
 .ct-evidencia-causal.suficiente { color: var(--ok); background: var(--ok-bg); border-color: var(--ok-bd); }
 .ct-desempeno-comparativo, .ct-desempeno-temporal { width: 100%; min-height: 180px; }
 
-/* Disponibilidad y acreditación son estados distintos: una capa calibrada puede
-   verse como diagnóstico sin participar todavía en el consenso operativo. */
-.ct-fuente-estado { display: inline-flex; align-items: center; margin-left: 7px; padding: 2px 6px;
-  border-radius: 999px; vertical-align: 2px; font: 700 9px/1.25 var(--fuente);
+/* Disponibilidad y acreditación son estados distintos. */
+.ct-fuente-estado { display: inline-flex; align-items: center; margin-left: 7px; padding: 2px 7px;
+  border-radius: 999px; vertical-align: 2px; font: 700 9.5px/1.25 var(--fuente);
   letter-spacing: .01em; white-space: nowrap; }
 .ct-fuente-estado.diagnostico { color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn-bd); }
 .ct-fuente-estado.acreditada { color: var(--ok); background: var(--ok-bg); border: 1px solid var(--ok-bd); }
@@ -293,54 +245,54 @@ html[data-tema="oscuro"] .ct-toggle.activo { color: #101B33; }
 /* ---------- Verificación por generador (subsistema hidromet/alertas) ---------- */
 .ct-ver { margin-top: 14px; }
 .ct-ver .ct-panel-cab { align-items: center; }
-.ct-ver-lead { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; }
-.ct-ver-lead .et { font: 600 10px var(--mono); letter-spacing: .08em; color: var(--faint); text-transform: uppercase; }
-.ct-ver-lead select { min-height: 32px; font: 500 12.5px var(--fuente); color: var(--ink); }
-.ct-ver-tabla-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 11px; background: var(--surface-2); padding: 6px; }
+.ct-ver-lead { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
+.ct-ver-lead .et { font-size: 12px; font-weight: 600; color: var(--muted); }
+.ct-ver-lead select { min-height: 34px; font: 500 12.5px var(--fuente); color: var(--ink); }
+.ct-ver-tabla-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r-panel); background: var(--surface-2); padding: 6px; }
 .ct-ver-tabla-wrap > .suave { display: block; padding: 8px 6px; font-size: 12px; }
-.ct-ver-tabla { width: 100%; border-collapse: collapse; font-size: 11.5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.ct-ver-tabla th { padding: 6px 7px; color: var(--muted-2); text-align: left; border-bottom: 1px solid var(--line);
-  font: 600 9.5px var(--mono); text-transform: uppercase; letter-spacing: .04em; }
-.ct-ver-tabla td { padding: 5px 7px; border-bottom: 1px solid var(--line-3); color: var(--muted); }
+.ct-ver-tabla { width: 100%; border-collapse: collapse; font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ct-ver-tabla th { padding: 7px 8px; color: var(--muted); text-align: left; border-bottom: 1px solid var(--line);
+  font: 650 11px var(--fuente); }
+.ct-ver-tabla td { padding: 6px 8px; border-bottom: 1px solid var(--line-3); color: var(--ink-2); }
 .ct-ver-tabla th.num, .ct-ver-tabla td.num { text-align: right; font-family: var(--mono); }
 .ct-ver-tabla td.mono { color: var(--ink); font-weight: 600; }
 .ct-ver-tabla tbody tr:last-child td { border-bottom: 0; }
 .ct-ver-tabla tbody tr:hover td { background: color-mix(in srgb, var(--accent) 7%, transparent); }
 .ct-ver-tabla .ct-fuente-estado { margin-left: 0; }
 /* estado vacío honesto: sin métricas sustitutas */
-.ct-ver-vacio { padding: 10px 12px; border-radius: 9px; font-size: 12px; line-height: 1.55;
+.ct-ver-vacio { padding: 10px 12px; border-radius: 10px; font-size: 12.5px; line-height: 1.55;
   color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn-bd); }
 /* nota del overlay cantonal bajo la grilla de Advertencias */
 .ct-nota-cantonal [data-rol="cant-resumen"] { font-family: var(--mono); color: var(--muted); }
 
-/* ---------- §P9: validación de hidroestimadores (pestaña Hidroestimadores) ---------- */
+/* ---------- §P9: validación de hidroestimadores ---------- */
 .ct-hv { margin-top: 2px; }
 .ct-hv .ct-panel-cab { align-items: end; gap: 16px; }
-.ct-hv-controles { display: flex; gap: 9px; margin-left: auto; }
-.ct-hv-controles label { display: grid; gap: 3px; min-width: 130px; }
+.ct-hv-controles { display: flex; gap: 10px; margin-left: auto; }
+.ct-hv-controles label { display: grid; gap: 4px; min-width: 130px; }
 .ct-hv-controles label:first-child { min-width: min(360px, 38vw); }
-.ct-hv-controles span { color: var(--muted-2); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.ct-hv-controles span { color: var(--muted); font-size: 12px; font-weight: 600; }
 .ct-hv-controles select { min-height: 34px; }
 .ct-hv-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: stretch; }
-.ct-hv-plot, .ct-hv-tabla-wrap { min-width: 0; background: var(--surface-2); border: 1px solid var(--line); border-radius: 11px; }
+.ct-hv-plot, .ct-hv-tabla-wrap { min-width: 0; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-panel); }
 .ct-hv-tabla-wrap { overflow-x: clip; overflow-y: visible; padding: 7px; }
-.ct-hv-met { width: 100%; border-collapse: collapse; font-size: 10.5px; white-space: nowrap; }
-.ct-hv-met th { padding: 6px 5px; color: var(--muted-2); text-align: right; border-bottom: 1px solid var(--line); font-size: 9px; text-transform: uppercase; letter-spacing: .025em; }
+.ct-hv-met { width: 100%; border-collapse: collapse; font-size: 11px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ct-hv-met th { padding: 7px 6px; color: var(--muted); text-align: right; border-bottom: 1px solid var(--line); font-size: 10.5px; font-weight: 650; }
 .ct-hv-met th:first-child, .ct-hv-met th:last-child { text-align: left; }
-.ct-hv-met td { padding: 5px; border-bottom: 1px solid var(--line-3); color: var(--muted); text-align: right; }
+.ct-hv-met td { padding: 5px 6px; border-bottom: 1px solid var(--line-3); color: var(--ink-2); text-align: right; }
 .ct-hv-met td:first-child, .ct-hv-met td:last-child { text-align: left; }
 .ct-hv-met th:last-child, .ct-hv-met td:last-child { white-space: normal; min-width: 92px; }
 .ct-hv-met td.mono { color: var(--ink); font-weight: 600; }
 .ct-hv-met tr.activa td { background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .ct-hv-met tr:last-child td { border-bottom: 0; }
-.ct-hv-muestra { padding: 7px 5px 2px; color: var(--muted-2); font-size: 10px; }
+.ct-hv-muestra { padding: 7px 5px 2px; color: var(--muted-2); font-size: 11px; }
 .ct-hv-fuente { color: var(--hv-color); font-weight: 750; }
 .ct-hv-fuente::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 50%; background: var(--hv-color); }
 
 /* ---------- editor de umbrales (modal) ---------- */
 .ct-umbrales-tabla { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-.ct-umbrales-tabla th { text-align: left; padding: 7px 9px; font: 600 10px var(--mono);
-  text-transform: uppercase; color: var(--faint); border-bottom: 1px solid var(--line); }
+.ct-umbrales-tabla th { text-align: left; padding: 7px 9px; font: 650 11.5px var(--fuente);
+  color: var(--muted); border-bottom: 1px solid var(--line); }
 .ct-umbrales-tabla td { padding: 6px 9px; border-bottom: 1px solid var(--line-3); }
 .ct-umbrales-tabla input { width: 78px; }
 .ct-umbrales-regla { font-size: 12px; color: var(--muted-2); margin: 4px 0 14px; }
@@ -351,28 +303,34 @@ html[data-tema="oscuro"] .ct-toggle.activo { color: #101B33; }
   .ct-hv-controles { margin-left: 0; flex-wrap: wrap; }
   .ct-hv-controles label:first-child { min-width: min(100%, 360px); flex: 1; }
   .ct-hv-grid { grid-template-columns: 1fr; }
+  .ct-capas { margin-left: 0; }
 }
 
-/* ---------- MÓVIL (teléfonos 360–430px) ---------- */
+/* ---------- MÓVIL (teléfonos 360–430px) ----------
+   Cada grupo de la barra ocupa su fila a lo ancho; la fila de fecha y hora va
+   entera (◀◀ ◀ [fecha] ▶ ▶▶) y los interruptores se deslizan: nada queda suelto. */
 @media (max-width: 560px) {
-  /* cabecera propia a columna */
   .ct-cabecera { flex-direction: column; align-items: flex-start; gap: 10px; }
   .ct-cabecera h1 { font-size: 19px; }
-  /* barras de control: menos padding */
-  .ct-barra, .ct-barra.cols { padding: 10px 12px; gap: 9px 12px; }
+  .ct-barra, .ct-barra.cols { padding: 10px 12px; gap: 10px; }
+  .ct-barra.compacta label.bloque, .ct-barra > label { width: 100%; justify-content: space-between; }
+  .ct-barra.compacta label.bloque select, .ct-barra > label > select { flex: 1; min-width: 0; max-width: 72%; }
+  .ct-barra .ct-umbral-sel { width: auto; flex: 1; }
+  .ct-barra .ct-umbral-sel select { width: 100%; max-width: none; }
+  .ct-inst-nav { width: 100%; flex-wrap: wrap; row-gap: 6px; }
+  .ct-inst-nav .et { flex-basis: 100%; }
+  .ct-inst-nav .ct-instante { flex: 1 1 0; }
   .ct-derecha, .ct-capas { margin-left: 0; }
-  .ct-inst-nav, .ct-derecha { flex-wrap: wrap; }
-  /* controles de instante cómodos al tacto (40px = no revertir el target de base.css) */
+  .ct-capas { width: 100%; }
   .ct-nav { width: 40px; height: 40px; }
-  /* paneles y tarjetas con menos padding */
   .ct-panel { padding: 14px; }
-  /* tabla de umbrales (modal) con scroll horizontal */
   .ct-umbrales-tabla { display: block; overflow-x: auto; }
-  /* En teléfono se conserva el desplazamiento deliberado; en escritorio la
-     tabla de hidroestimadores ocupa una fila completa y nunca se recorta. */
   .ct-hv-tabla-wrap { overflow-x: auto; }
   .ct-hv-met { min-width: 780px; }
-  /* verificación por generador: desplazamiento horizontal deliberado en teléfono */
+  /* la lista de estaciones toma el ancho de su opción más larga: se ciñe al panel */
+  .ct-hv-controles { width: 100%; }
+  .ct-hv-controles label, .ct-hv-controles label:first-child { min-width: 0; flex: 1 1 100%; }
+  .ct-hv-controles select { width: 100%; min-width: 0; max-width: 100%; }
   .ct-ver .ct-panel-cab { align-items: stretch; }
   .ct-ver-lead { margin-left: 0; }
   .ct-ver-tabla { min-width: 720px; }

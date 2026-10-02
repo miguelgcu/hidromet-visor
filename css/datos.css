@@ -10,7 +10,7 @@
 /* ---------- cabecera propia (acento slate) ---------- */
 .datos-cabecera { display: flex; align-items: flex-end; justify-content: space-between;
   gap: 20px; margin-bottom: 14px; }
-.datos-kicker { font: 600 11px var(--mono); letter-spacing: .14em; text-transform: uppercase;
+.datos-kicker { font: 600 12px var(--fuente);
   color: var(--slate); margin-bottom: 6px; }
 .datos-h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -.01em; color: var(--ink); }
 .datos-sub { color: var(--muted); font-size: 13.5px; margin-top: 3px; }
@@ -35,8 +35,8 @@
 .datos-tabla-caja { border: 1px solid var(--line-3); border-radius: 9px; overflow: hidden; }
 .datos-tabla { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
 .datos-tabla thead tr { background: var(--surface-2); }
-.datos-tabla th { text-align: left; padding: 8px 10px; font: 600 11px var(--mono);
-  color: var(--muted-2); text-transform: uppercase; border-bottom: 1px solid var(--line); }
+.datos-tabla th { text-align: left; padding: 8px 10px; font: 600 12px var(--fuente);
+  color: var(--muted-2); border-bottom: 1px solid var(--line); }
 .datos-tabla th.datos-num { text-align: right; }
 .datos-tabla td { padding: 7px 10px; border-bottom: 1px solid var(--line-3); color: var(--ink-2); }
 .datos-tabla tbody tr:last-child td { border-bottom: none; }

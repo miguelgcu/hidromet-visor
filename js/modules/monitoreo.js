@@ -45,13 +45,12 @@
   function leerPrefs() {
     try { return JSON.parse(localStorage.getItem(CLAVE_LOCAL) || "{}") || {}; } catch (e) { return {}; }
   }
+  // Una sola capa a la vez: se guarda cuál y con qué opacidad ("" = solo el mapa base).
   function guardarPrefs() {
     try {
+      const a = E.anim || [...E.capas.values()][0] || null;
       localStorage.setItem(CLAVE_LOCAL, JSON.stringify({
-        base: E.baseId,
-        anim: E.anim ? E.anim.p.id : "",
-        animOpacidad: E.anim ? E.anim.opacidad : undefined,
-        capas: [...E.capas.values()].map(a => ({ id: a.p.id, opacidad: a.opacidad })),
+        base: E.baseId, capa: a ? a.p.id : "", opacidad: a ? a.opacidad : undefined,
       }));
     } catch (e) { /* sin almacenamiento: no pasa nada */ }
   }
@@ -509,6 +508,25 @@
     pintarPanel(); pintarLeyendas(); guardarPrefs();
   }
 
+  // UNA capa a la vez (pedido del dueño, 2026-10-02: «no quiero bandas sobre otras
+  // bandas; es una u otra»). Elegir un producto apaga el que hubiera, animado o no;
+  // tocar el que ya está activo lo apaga y deja solo el mapa base con Ecuador.
+  function apagarTodo() {
+    desactivarAnim();
+    for (const [id, a] of [...E.capas]) {
+      if (a.capa && E.mapa) E.mapa.removeLayer(a.capa);
+      E.capas.delete(id);
+    }
+  }
+  function elegir(id, opacidad) {
+    const p = E.cat && E.cat.productos.find(x => x.id === id);
+    const yaActiva = (E.anim && E.anim.p.id === id) || E.capas.has(id);
+    apagarTodo();
+    if (!p || yaActiva) { pintarPanel(); pintarControl(); pintarLeyendas(); guardarPrefs(); return; }
+    if (esAnimable(p)) activarAnim(id, opacidad);
+    else { pintarControl(); activarCapa(id, opacidad); }
+  }
+
   /* ---------------- pintado ---------------- */
   function fichaHTML(p) {
     const cob = p.cobertura ? `${p.cobertura.archivos} de ${p.cobertura.esperados} archivos` : "";
@@ -537,8 +555,7 @@
         const a = anim ? (animId === p.id ? E.anim : null) : E.capas.get(p.id);
         const op = a ? Math.round(a.opacidad * 100) : 0;
         return `<div class="mon-prod${a ? " activa" : ""}" data-id="${p.id}">
-          <label><input type="${anim ? "radio" : "checkbox"}" name="${anim ? "mon-anim" : ""}" ${a ? "checked" : ""}
-                   data-${anim ? "anim" : "act"}="${p.id}">
+          <label><input type="radio" name="mon-capa" ${a ? "checked" : ""} data-elegir="${p.id}">
             <span class="nom">${esc(p.nombre)}${anim ? ` <i class="mon-anima" title="Se anima">▶</i>` : ""}</span>
             <span class="res">${esc(p.resolucion)}</span></label>
           <button class="mon-info" data-info="${p.id}" title="Qué es y cómo leerlo" aria-label="Ficha de ${esc(p.nombre)}">i</button>
@@ -547,16 +564,8 @@
         </div>`;
       }).join("")}</section>`;
     }).join("");
-    caja.querySelectorAll("[data-act]").forEach(c => c.onchange = () => {
-      const id = c.dataset.act;
-      if (c.checked) activarCapa(id); else desactivarCapa(id);
-    });
-    // un solo producto animado: tocar el que ya está activo lo apaga
-    caja.querySelectorAll("[data-anim]").forEach(c => c.onclick = () => {
-      const id = c.dataset.anim;
-      if (E.anim && E.anim.p.id === id) { desactivarAnim(); pintarPanel(); pintarControl(); guardarPrefs(); }
-      else activarAnim(id);
-    });
+    // una sola capa: tocar otra la cambia; tocar la activa la apaga
+    caja.querySelectorAll("[data-elegir]").forEach(c => c.onclick = () => elegir(c.dataset.elegir));
     caja.querySelectorAll("[data-info]").forEach(b => b.onclick = () => mostrarFicha(b.dataset.info));
     caja.querySelectorAll("[data-op]").forEach(r => r.oninput = () => {
       const id = r.dataset.op;
@@ -609,7 +618,7 @@
       ${A ? `<div id="mon-sub" class="mon-ctl-sub"></div>${escalaAnim(A.p)}` : ""}`;
     caja.querySelector("#mon-anim-sel").onchange = ev => {
       const id = ev.target.value;
-      if (id) activarAnim(id); else { desactivarAnim(); pintarPanel(); pintarControl(); guardarPrefs(); }
+      if (id) elegir(id); else { apagarTodo(); pintarPanel(); pintarControl(); pintarLeyendas(); guardarPrefs(); }
     };
     if (!A) return;
     caja.querySelector("#mon-play").onclick = () => { if (E.anim && E.anim.raf) pararAnim(); else animar(); };
@@ -713,14 +722,30 @@
     guardarPrefs();
   }
 
+  // Ecuador SIEMPRE a la vista, por encima de cualquier capa: provincias finas y el
+  // borde nacional grueso, ambos con halo oscuro para leerse sobre cualquier color
+  // (antes, una línea blanca de 0,9 px desaparecía bajo un campo intenso).
   async function ponerLimites() {
     let geo = null;
     try { geo = await App.api("/datos/capas/provincias.geojson"); } catch (e) { geo = null; }
-    if (!geo || !E.mapa) return;
-    E.limites = L.geoJSON(geo, {
-      pane: "mon-limites", interactive: false,
-      style: { color: "#FFFFFF", weight: 0.9, opacity: 0.75, fill: false },
-    }).addTo(E.mapa);
+    if (!E.mapa) return;
+    const grupo = L.layerGroup().addTo(E.mapa);
+    E.limites = grupo;
+    if (geo) {
+      L.geoJSON(geo, { pane: "mon-limites", interactive: false,
+        style: { color: "#0A1220", weight: 2.6, opacity: 0.45, fill: false } }).addTo(grupo);
+      L.geoJSON(geo, { pane: "mon-limites", interactive: false,
+        style: { color: "#FFFFFF", weight: 0.9, opacity: 0.85, fill: false } }).addTo(grupo);
+    }
+    const c = E.calc && (E.calc.productos || []).find(p => p.tipo === "contorno");
+    if (!c) return;
+    let pais = null;
+    try { pais = await (await fetch(urlArchivo(c.archivo))).json(); } catch (e) { pais = null; }
+    if (!pais || !E.mapa || E.limites !== grupo) return;
+    L.geoJSON(pais, { pane: "mon-limites", interactive: false,
+      style: { color: "#0A1220", weight: 5.5, opacity: 0.55, fill: false, lineJoin: "round" } }).addTo(grupo);
+    L.geoJSON(pais, { pane: "mon-limites", interactive: false,
+      style: { color: "#FFFFFF", weight: 2, opacity: 1, fill: false, lineJoin: "round" } }).addTo(grupo);
   }
 
   function baseSegunTema() {
@@ -753,7 +778,7 @@
           <button id="mon-plegar" class="boton-fantasma" aria-expanded="true">Capas</button>
         </div>
         <div id="mon-capas" class="mon-capas"></div>
-        <p class="mon-nota">▶ = se anima (una a la vez). Las imágenes se piden en vivo a NASA y Copernicus, con su resolución nativa.</p>
+        <p class="mon-nota">Una capa a la vez: elegir otra cambia la vista. ▶ = se anima. Las imágenes se piden en vivo a NASA y Copernicus, con su resolución nativa.</p>
       </aside>
       <div class="mon-mapa-caja">
         <div id="mon-mapa" class="mon-mapa" role="region" aria-label="Mapa de monitoreo"></div>
@@ -792,14 +817,16 @@
     pintarPanel();
     pintarControl();
     ponerLimites();
-    // preferencias guardadas (y las de la primera versión, que no distinguía la capa animada)
-    const viejas = Array.isArray(prefs.activas) ? prefs.activas : [];
-    const animGuardada = prefs.anim !== undefined ? prefs.anim
-      : (viejas.find(x => (E.cat.productos.find(p => p.id === x.id) || {}).animable) || { id: ANIM_INICIAL }).id;
-    if (animGuardada) activarAnim(animGuardada, prefs.animOpacidad);
-    const capas = (Array.isArray(prefs.capas) ? prefs.capas : viejas)
-      .filter(x => E.cat.productos.some(p => p.id === x.id && !esAnimable(p)));
-    for (const x of capas) activarCapa(x.id, x.opacidad);
+    // preferencia guardada: UNA capa. Las de versiones anteriores (animada + superpuestas)
+    // se reducen a una: la animada si había, si no la primera superpuesta.
+    let capa = prefs.capa, opacidad = prefs.opacidad;
+    if (capa === undefined) {
+      const viejas = Array.isArray(prefs.capas) ? prefs.capas : (Array.isArray(prefs.activas) ? prefs.activas : []);
+      if (prefs.anim) { capa = prefs.anim; opacidad = prefs.animOpacidad; }
+      else if (prefs.anim === undefined && !viejas.length) capa = ANIM_INICIAL;
+      else if (viejas.length) { capa = viejas[0].id; opacidad = viejas[0].opacidad; }
+    }
+    if (capa && E.cat.productos.some(p => p.id === capa)) elegir(capa, opacidad);
     setTimeout(() => E.mapa && E.mapa.invalidateSize(), 50);
   }
 
@@ -846,7 +873,6 @@
         kicker: "Satélites en vivo · GOES-19, GPM, VIIRS, Sentinel-1 y Copernicus",
         titulo: "Monitoreo",
         sub: "Lo que está pasando ahora sobre Ecuador, con la resolución nativa de cada producto",
-        acento: "var(--cyan)",
         inicial: "mapa",
         pestanas: [
           { id: "mapa", etiqueta: "Mapa en vivo", render: tabMapa, alSalir: limpiar },

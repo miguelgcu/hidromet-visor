@@ -23,6 +23,25 @@
   let _alTema = null;
   document.addEventListener("temacambiado", () => { if (_alTema) try { _alTema(); } catch (e) {} });
 
+  // Mapa base: contorno provincial, configuración en castellano y alto que sigue
+  // al ancho. Al separarse de Climatología (2026-09-17) este módulo siguió
+  // llamando a las copias privadas de clima.js, que aquí no existen, y la pestaña
+  // no cargaba («inyectarCSS is not defined»). Ahora usa las del núcleo.
+  let geo = null;
+  async function cargarGeo() {
+    if (geo === null) geo = typeof App.geoProvincias === "function" ? await App.geoProvincias() : false;
+  }
+  function contorno() {
+    return typeof App.trazasContornoProvincias === "function" ? App.trazasContornoProvincias(geo) : [];
+  }
+  // El idioma «es» de los gráficos lo registra el núcleo al arrancar.
+  function configEs() { return Object.assign({}, App.plotlyConfig ? App.plotlyConfig() : {}, { locale: "es" }); }
+  function quitarPlaceholder(host) {
+    if (!host) return;
+    Array.from(host.children || []).forEach(h => { if (h.classList && h.classList.contains("cl-vacio")) h.remove(); });
+  }
+  function observarTamanoMapa(host) { if (typeof App.ajustarAltoMapa === "function") App.ajustarAltoMapa(host, .78, 410, 620); }
+
   // IUV POR ESTACIÓN — índice UV máximo diario CAMS en el punto de cada estación ----
   // Fuente: /iuv/estaciones (base 5, hidromet.puente_uv). Por estación con
   // coordenadas, el valor de la celda CAMS Global de 0,4° MÁS CERCANA, sin interpolar,
@@ -206,7 +225,7 @@
   }
 
   async function tabIuv(c) {
-    inyectarCSS(); _alTema = null; await cargarGeo();
+    _alTema = null; await cargarGeo();
     c.innerHTML = cargando("Leyendo el índice UV por estación…");
     let p;
     try { p = await App.api("/iuv/estaciones"); }

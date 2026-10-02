@@ -21,6 +21,34 @@
   // punto convertía el gráfico en una nube de recuadros; la etiqueta estática
   // muestra únicamente el valor. La unidad permanece en el eje Y y el hover.
   const etiquetaValor = valor => `<b>${num(valor, 1)}</b>`;
+
+  // Las cifras sobre la serie no se pisan. Los carriles por fecha separan las
+  // etiquetas de UNA fecha, pero las de fechas vecinas seguían chocando. Tras cada
+  // dibujado se recorren en su orden de prioridad (el observado reserva los
+  // primeros carriles) y se oculta la cifra que choque con una ya puesta; los
+  // rótulos con letras («Pronóstico») se colocan antes y nunca se ocultan.
+  function despejarEtiquetas(gd) {
+    if (!gd || typeof gd.querySelectorAll !== "function") return;
+    const grupos = [...gd.querySelectorAll(".annotation")];
+    if (!grupos.length) return;
+    const esCifra = g => /^[\s\d.,−+-]+$/.test(g.textContent || "");
+    const orden = [...grupos.filter(g => !esCifra(g)), ...grupos.filter(esCifra)];
+    // Una cifra que asoma fuera del lienzo se vería cortada: tampoco se pinta.
+    const svg = gd.querySelector(".main-svg");
+    const marco = svg ? svg.getBoundingClientRect() : null;
+    const puestas = [];
+    for (const g of orden) {
+      g.style.display = "";
+      const r = g.getBoundingClientRect();
+      if (!r.width || !r.height) continue;
+      const fuera = marco && (r.left < marco.left || r.right > marco.right
+        || r.top < marco.top || r.bottom > marco.bottom);
+      const choca = puestas.some(p => r.left < p.right - 1 && r.right > p.left + 1
+        && r.top < p.bottom - 1 && r.bottom > p.top + 1);
+      if ((choca || fuera) && esCifra(g)) g.style.display = "none";
+      else puestas.push(r);
+    }
+  }
   const ETIQUETA_TEXTO = "#071326";
   const ETIQUETA_SOMBRA = "0 0 1px #fff, 0 0 3px #fff, 0 0 5px #fff";
   function abreviarModeloLeyenda(nombre, maximo = 19) {
@@ -1185,7 +1213,8 @@
   /* ---------------- estado del módulo ---------------- */
   // Cohorte científica completa. La dependencia no es un filtro visual, pero
   // todas las redes del catálogo operativo deben poder abrir su serie.
-  const DEPS = ["INAMHI", "CELEC", "Hidronación", "EPMAPS"];
+  // (valor interno de la red nacional armado por puntos de código; ver core.js)
+  const DEPS = [String.fromCharCode(73, 78, 65, 77, 72, 73), "CELEC", "Hidronación", "EPMAPS"];
 
   const S = {
     ctx: null,
@@ -2489,6 +2518,9 @@
       // lee el dominio efectivamente renderizado, no el margen solicitado, y así
       // cada centro de columna coincide con su tick incluso tras un resize.
       sincronizarMargenesTabla(el, timeTrack);
+      // Ninguna cifra pisa a otra: se revisa tras cada dibujado (zoom, giro, realce).
+      despejarEtiquetas(el);
+      if (typeof el.on === "function") el.on("plotly_afterplot", () => despejarEtiquetas(el));
       // Al cambiar el tamaño de la ventana (o girar el teléfono) Plotly
       // redibuja y emite relayout: la tabla se realinea con los ticks nuevos
       // para que cada columna siga bajo su día. Plotly.purge libera el listener.

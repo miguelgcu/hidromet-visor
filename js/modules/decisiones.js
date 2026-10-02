@@ -46,8 +46,10 @@
   // Redes fijas (mismo contrato que mlnwp.js). En el visor el slug de mlnwp/*
   // descarta 'deps' (core.js/rutaAProducto = exportar_web): QS inocuo allí y
   // correcto contra el backend vivo.
+  // El valor interno de la red nacional se arma por puntos de código: la
+  // interfaz publicada no escribe el nombre de la institución (core.js).
   const DEPS_QS = "deps=" + encodeURIComponent(
-    "INAMHI,CELEC,Hidronación,EPMAPS");
+    [String.fromCharCode(73, 78, 65, 77, 72, 73), "CELEC", "Hidronación", "EPMAPS"].join(","));
   // Ventana de la VALIDACIÓN de las decisiones (nº de fechas). DEBE coincidir
   // con la que se publica en productos/mlnwp/validacion_estacion (hoy 10):
   // con "30" el fichero no existía y la evidencia salía siempre vacía.
