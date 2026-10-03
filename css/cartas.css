@@ -93,12 +93,28 @@
 .ct-inst-nav { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; min-width: 0; }
 .ct-inst-nav .et { margin-right: 2px; }
 .ct-inst-nav .ct-instante { min-width: 0; }
-/* Interruptores de capa: un grupo más de la barra, con su etiqueta. Al pasar de fila
-   arranca a la izquierda como los demás; si no cabe, se desliza dentro de su pista. */
-.ct-capas-grupo { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; }
-.ct-capas { display: flex; align-items: center; gap: 2px; padding: 3px; min-width: 0;
-  background: var(--surface-3); border: 1px solid var(--line); border-radius: 11px;
-  overflow-x: auto; scrollbar-width: none; }
+/* Barra en UNA fila (pedido del dueño, 2026-10-03): cada control muestra su valor, así que
+   las etiquetas sueltas quedan solo para lectores de pantalla, y las capas van en un menú. */
+.ct-barra.una-fila { flex-wrap: wrap; row-gap: 10px; }
+.ct-barra.una-fila .et { position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; }
+.ct-barra.una-fila label.bloque { gap: 0; }
+.ct-capas-menu { position: relative; flex: none; }
+.ct-capas-btn { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px;
+  border: 1px solid var(--ctrl-bd); border-radius: 9px; background: var(--surface); color: var(--ink);
+  font: 600 13px var(--fuente); cursor: pointer; white-space: nowrap; }
+.ct-capas-btn:hover { background: var(--surface-3); }
+.ct-capas-btn:focus-visible { outline: 2px solid var(--acc, var(--blue)); outline-offset: 1px; }
+.ct-capas-n { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; display: inline-grid;
+  place-items: center; font-size: 11px; background: color-mix(in srgb, var(--acc, var(--blue)) 22%, transparent); }
+.ct-capas-menu.abierto .ct-capas-btn { background: var(--surface-3); }
+/* la lista de capas: un panel que se despliega bajo el botón */
+.ct-capas { position: absolute; top: calc(100% + 6px); right: 0; z-index: 40; display: flex;
+  flex-direction: column; align-items: stretch; gap: 2px; min-width: 210px; padding: 6px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .28); }
+.ct-capas[hidden] { display: none; }
+.ct-capas .ct-toggle { width: 100%; justify-content: flex-start; height: 32px; }
 .ct-capas::-webkit-scrollbar { display: none; }
 /* UNA LEYENDA POR GRÁFICO: cada tarjeta lleva la suya bajo el mapa, dentro de la tarjeta. */
 .ct-carta .ct-ley-card { padding: 9px 14px 12px; border-top: 1px solid var(--line-3); min-width: 0; }
@@ -307,7 +323,6 @@
   .ct-hv-controles { margin-left: 0; flex-wrap: wrap; }
   .ct-hv-controles label:first-child { min-width: min(100%, 360px); flex: 1; }
   .ct-hv-grid { grid-template-columns: 1fr; }
-  .ct-capas { margin-left: 0; }
 }
 
 /* ---------- MÓVIL (teléfonos 360–430px) ----------
@@ -322,11 +337,12 @@
   .ct-barra .ct-umbral-sel { width: auto; flex: 1; }
   .ct-barra .ct-umbral-sel select { width: 100%; max-width: none; }
   .ct-inst-nav { width: 100%; flex-wrap: wrap; row-gap: 6px; }
-  .ct-capas-grupo { width: 100%; }
+  .ct-capas-menu { width: 100%; }
+  .ct-capas-btn { width: 100%; justify-content: space-between; }
+  .ct-capas { left: 0; right: 0; }
   .ct-inst-nav .et { flex-basis: 100%; }
   .ct-inst-nav .ct-instante { flex: 1 1 0; }
-  .ct-derecha, .ct-capas { margin-left: 0; }
-  .ct-capas { width: 100%; }
+  .ct-derecha { margin-left: 0; }
   .ct-nav { width: 40px; height: 40px; }
   .ct-panel { padding: 14px; }
   .ct-umbrales-tabla { display: block; overflow-x: auto; }

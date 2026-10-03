@@ -1039,13 +1039,8 @@
   function lienzoCarta(params, alt) {
     const base = baseParams(params);
     const datosUrl = "/cartas/carta_datos?" + qs(base);
-    // Descarga = carta FORMAL: todas las capas de presentación activas.
-    const pngParams = Object.assign({}, base,
-      { titulo: 1, escala: 1, galapagos: 1, interpolar: 1, grilla: 1, isolineas: 0, estaciones: 0 });
-    // Descarga = JPG GUARDADO en Descargas por el servidor (el <a download> del PNG NO descarga en
-    // WebView2). Se reusa carta_descargar (renderiza el PNG formal → JPG). nombre = de la carta.
+    // Descarga = la ficha JPG del mapa tal como se ve (§FICHA); el nombre sale de la carta.
     const slugNombre = String(alt || "carta").replace(/[^\w\-]+/g, "_").slice(0, 55) || "carta";
-    const jpgRuta = "/cartas/carta_descargar?" + qs(Object.assign({}, pngParams, { nombre: slugNombre }));
     // Botón SHP: SOLO en cartas de alerta por nivel → zip con .shp + .qml de QGIS de la
     // advertencia EXACTA mostrada (misma variable, modelo y instante).
     const esAlertaNivel = /^alerta_(lluvia|tmin|tmax)_/.test(String(params.capa || ""));
@@ -1054,7 +1049,10 @@
                                      modo: (E && E.alerta && E.alerta.modo) || "fija" })
       : "";
     // §DESCARGA-GEOM: el mismo sitio de siempre, con las DOS geometrías dentro.
-    const shpBtn = esAlertaNivel
+    // 2026-10-03: el dueño pidió quitar la descarga en shapefile («Quita lo de la descarga de
+    // shp»); la carta se descarga solo como imagen. El control sigue escrito por si vuelve.
+    const SHP_EN_CARTAS = false;
+    const shpBtn = SHP_EN_CARTAS && esAlertaNivel
       ? controlDescargaShp({
           ruta: shpRuta,
           nombreDl: nombreDescargaAlerta(params.capa, params.esperado_inicio),
@@ -1070,7 +1068,7 @@
       : "";
     return `
       <div class="ct-lienzo${papelFijo() ? " ct-lienzo-fijo" : ""}" data-datos="${esc(datosUrl)}"${cantAttr}>
-        <a class="ct-dl ct-dl-jpg" role="button" tabindex="0" data-jpg="${esc(jpgRuta)}" data-nombre="${esc(slugNombre)}"
+        <a class="ct-dl ct-dl-jpg" role="button" tabindex="0" data-jpg="1" data-nombre="${esc(slugNombre)}"
            title="Descargar carta (imagen)" aria-label="Descargar carta">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1789,16 +1787,23 @@
         bgcolor: oscuro ? "rgba(20,28,45,.78)" : "rgba(255,255,255,.82)", borderpad: 8,
         bordercolor: oscuro ? "rgba(182,192,205,.40)" : "rgba(100,116,139,.32)", borderwidth: 1 }]);
     }
+    // Relieve (2026-10-03): sombreado del DEM de 30 m ENCIMA del color, fino en El Oro.
+    if (cap.relieve && App.imagenesRelieve) {
+      // Las cartas que dejan en blanco a los países vecinos llevan el relieve recortado a Ecuador.
+      const imgs = await App.imagenesRelieve("x", "y", { soloEcuador: !fijo });
+      if (!vivo()) return;
+      if (imgs.length) layout.images = (layout.images || []).concat(imgs);
+    }
     if (!vivo()) return;                       // §P14: no pintar sobre un render más nuevo
     const c = div.querySelector(".cargando"); if (c) c.remove();
     const plot = div.querySelector(".ct-mapa-plot");
     Plotly.newPlot(plot, traces, layout, App.plotlyConfig({ scrollZoom: !TOUCH_COARSE, staticPlot: TOUCH_COARSE, displayModeBar: false, doubleClick: "reset" }));
     if (App.pinchZoomMapa) App.pinchZoomMapa(plot);   // v17: pinza = zoom del mapa
-    // Datos para reconstruir la carta FORMAL al descargar en el VISOR (título + leyenda/
-    // colorbar), ya que ahí no hay backend que renderice el PNG formal. En la app se usa
-    // el render del servidor. Se guardan en el propio div del plot.
+    // Lo que la ficha JPG necesita de la carta (§FICHA): título, ventana y leyenda.
     plot._carta = { titulo: d.titulo, subtitulo: d.subtitulo, unidad: d.unidad,
-                    tick_labels: d.tick_labels, tickvals: d.tickvals, vmin: d.vmin, vmax: d.vmax };
+                    tick_labels: d.tick_labels, tickvals: d.tickvals, vmin: d.vmin, vmax: d.vmax,
+                    colorscale: d.colorscale, categorico: !!d.categorico, omitir_cero: !!d.omitir_cero,
+                    discreto: !!d.discreto, pasos: !!d.pasos, sin_dato: sinDatoCarta(d) };
     // Zoom con rueda SOLO con Ctrl: sin Ctrl, el evento no llega a Plotly (lo paramos
     // en captura) y la PÁGINA hace scroll normal; con Ctrl, Plotly recibe la rueda y hace zoom.
     // Flag anti-duplicado: el re-montaje por cambio de tema reusa el MISMO nodo.
@@ -1993,9 +1998,35 @@
     const galapagos = c.foco
       ? b("galapagos", "Galápagos", "El recuadro de Galápagos se muestra con la vista de todo el país", true)
       : b("galapagos", "Galápagos");
-    // Un grupo más de la barra, con su etiqueta (2026-10-03): antes iba empujado a la derecha
-    // (margin-left:auto) y, al pasar de fila, quedaba suelto y cortado contra el borde.
-    return `<div class="ct-capas-grupo"><span class="et">Capas</span><div class="ct-capas" role="group" aria-label="Capas del mapa">${b("foco", "El Oro", "Centrar el mapa en El Oro y resaltar su contorno; apagado, se ve todo el país")}${b("grilla", "Grilla")}${sinIsolineas ? "" : b("isolineas", "Isolíneas")}${galapagos}${b("estaciones", "Estaciones")}${conCantones ? b("cantones", "Cantones", "Nivel por cantón con los umbrales activos, dibujado sobre la carta Consenso") : ""}</div></div>`;
+    // Pedido del dueño (2026-10-03): la barra entera en UNA fila. Las capas van en un menú
+    // desplegable («Capas» y cuántas hay encendidas); abrirlo no redibuja los mapas.
+    const ids = ["foco", "relieve", "grilla", ...(sinIsolineas ? [] : ["isolineas"]), ...(c.foco ? [] : ["galapagos"]), "estaciones", ...(conCantones ? ["cantones"] : [])];
+    const encendidas = ids.filter(id => c[id]).length;
+    const abierto = !!(E && E.capasAbierto);
+    return `<div class="ct-capas-menu${abierto ? " abierto" : ""}">
+      <button type="button" class="ct-capas-btn" data-rol="capas-btn" aria-haspopup="true" aria-expanded="${abierto}"
+        title="Capas del mapa">Capas<span class="ct-capas-n">${encendidas}</span></button>
+      <div class="ct-capas" role="group" aria-label="Capas del mapa"${abierto ? "" : " hidden"}>${b("foco", "El Oro", "Centrar el mapa en El Oro y resaltar su contorno; apagado, se ve todo el país")}${b("relieve", "Relieve", "Sombreado del terreno sobre el mapa")}${b("grilla", "Grilla")}${sinIsolineas ? "" : b("isolineas", "Isolíneas")}${galapagos}${b("estaciones", "Estaciones")}${conCantones ? b("cantones", "Cantones", "Nivel por cantón con los umbrales activos, dibujado sobre la carta Consenso") : ""}</div></div>`;
+  }
+  // Interruptores y menú de capas de una barra. Cambiar una capa redibuja (re); abrir o
+  // cerrar el menú no. Un clic fuera o Escape lo cierra (oyente único, en el documento).
+  function conectarCapas(cont, re) {
+    cont.querySelectorAll('.ct-toggle[data-capa]').forEach(b => b.onclick = () => { E.capas[b.dataset.capa] = !E.capas[b.dataset.capa]; re(); });
+    const btn = cont.querySelector('[data-rol="capas-btn"]');
+    if (btn) btn.onclick = ev => { ev.stopPropagation(); ponerMenuCapas(!E.capasAbierto); };
+    if (!conectarCapas._oyente) {
+      conectarCapas._oyente = true;
+      document.addEventListener("click", ev => { if (E && E.capasAbierto && !ev.target.closest(".ct-capas-menu")) ponerMenuCapas(false); });
+      document.addEventListener("keydown", ev => { if (ev.key === "Escape" && E && E.capasAbierto) ponerMenuCapas(false); });
+    }
+  }
+  function ponerMenuCapas(abierto) {
+    if (E) E.capasAbierto = abierto;
+    document.querySelectorAll(".ct-capas-menu").forEach(m => {
+      m.classList.toggle("abierto", abierto);
+      const pop = m.querySelector(".ct-capas"); if (pop) pop.hidden = !abierto;
+      const b = m.querySelector('[data-rol="capas-btn"]'); if (b) b.setAttribute("aria-expanded", String(abierto));
+    });
   }
 
   // §P1: la serie temporal que vivía BAJO la grilla de cartas (pintarSeriePron) se
@@ -2094,7 +2125,7 @@
     const hayDiaAntes = conteo.slice(0, _iniDia).some(n => n > 0);
     const hayDiaDespues = conteo.slice(_finDia + 1).some(n => n > 0);
     return `
-      <div class="ct-barra cols compacta">
+      <div class="ct-barra cols compacta una-fila">
         <label class="bloque"><span class="et">Variable</span>
           <select data-rol="var">${optsVar}</select></label>
         <label class="bloque"><span class="et">Período</span>
@@ -2315,7 +2346,7 @@
     cont.querySelector('[data-rol="next"]').onclick = () => salta(1);
     const _dprev = cont.querySelector('[data-rol="dprev"]'); if (_dprev) _dprev.onclick = () => saltaDia(-1);
     const _dnext = cont.querySelector('[data-rol="dnext"]'); if (_dnext) _dnext.onclick = () => saltaDia(1);
-    cont.querySelectorAll('.ct-toggle[data-capa]').forEach(b => b.onclick = () => { E.capas[b.dataset.capa] = !E.capas[b.dataset.capa]; re(); });
+    conectarCapas(cont, re);
     if (tipoId === "hidro") cargarValidacionHidro(cont);   // §P9: panel de validación
   }
 
@@ -2381,7 +2412,7 @@
       });
     }).join("");
     return `
-      <div class="ct-barra cols compacta">
+      <div class="ct-barra cols compacta una-fila">
         <label class="bloque"><span class="et">Período</span>
           <select data-rol="hper">${optsPer}</select></label>
         <div class="ct-inst-nav">
@@ -2406,7 +2437,7 @@
     if (q('[data-rol="hinst"]')) q('[data-rol="hinst"]').onchange = e => { g.inst = +e.target.value; re(); };
     if (q('[data-rol="hprev"]')) q('[data-rol="hprev"]').onclick = () => { if (g.inst > 0) { g.inst--; re(); } };
     if (q('[data-rol="hnext"]')) q('[data-rol="hnext"]').onclick = () => { if (g.inst < nInst - 1) { g.inst++; re(); } };
-    cont.querySelectorAll('.ct-toggle[data-capa]').forEach(b => b.onclick = () => { E.capas[b.dataset.capa] = !E.capas[b.dataset.capa]; re(); });
+    conectarCapas(cont, re);
   }
 
   /* ============================================================
@@ -2584,10 +2615,9 @@
     const _sinUmbrales = `<p class="ct-umbrales-vacio">Sin umbrales para esta fecha.</p>`;
     const vistaUmbrales = _cabUmbrales + (_hayUmbrales ? _rejillaUmbrales : _sinUmbrales);
 
-    const vistaAlertas = `
-      ${sinArbol}
-      <div class="ct-grid">${cartas}</div>
-      ${notaCantonal}
+    // La validación de las advertencias (acierto por zona, por fuente y por nivel) es una
+    // herramienta del dueño: en el visor en línea no se muestra ni se carga (2026-10-03).
+    const validacion = window.HIDROMET_VISOR ? "" : `
       <div class="ct-panel" id="ct-desempeno">
         <div class="ct-panel-cab">
           <h3>Dónde y cuánto acertaron las advertencias <span class="suave" data-rol="dsub">· cargando…</span></h3>
@@ -2607,9 +2637,14 @@
         <div class="ct-ver-tabla-wrap" data-rol="vtabla"><span class="suave">Leyendo la verificación publicada…</span></div>
         <p class="ct-nota" data-rol="vnota"></p>
       </div>`;
+    const vistaAlertas = `
+      ${sinArbol}
+      <div class="ct-grid">${cartas}</div>
+      ${notaCantonal}
+      ${validacion}`;
 
     return `
-      <div class="ct-barra compacta ct-barra-alertas">
+      <div class="ct-barra compacta ct-barra-alertas una-fila">
         <label><select data-rol="avar" aria-label="Variable de la advertencia">${optsVar}</select></label>
         <label class="ct-umbral-sel"><select data-rol="umbral"
           aria-label="Criterio de umbrales de la advertencia"
@@ -2676,10 +2711,12 @@
     // Bloque "sin advertencias en esta fecha": salto directo al instante con más datos.
     const _ir = cont.querySelector('[data-rol="ir-reciente"]');
     if (_ir) _ir.onclick = () => { if (p) { a.inst = instanteDefecto(p.instantes); re(); } };
-    cont.querySelectorAll('.ct-toggle[data-capa]').forEach(b => b.onclick = () => { E.capas[b.dataset.capa] = !E.capas[b.dataset.capa]; re(); });
+    conectarCapas(cont, re);
 
-    cargarDesempeno();
-    cargarVerificacion();
+    if (!window.HIDROMET_VISOR) {
+      cargarDesempeno();
+      cargarVerificacion();
+    }
   }
 
   // Datos de desempeño causal cacheados por variable+modo.
@@ -2926,7 +2963,7 @@
     if (!E) {
       E = { tipo: "pronostico", productos: { tipos: [] }, grid: {},
             // §P4: los cuatro toggles de capa inician ACTIVOS en todas las cartas.
-            capas: { foco: true, grilla: true, isolineas: true, galapagos: true, estaciones: true, cantones: false },
+            capas: { foco: true, relieve: true, grilla: true, isolineas: true, galapagos: true, estaciones: true, cantones: false },
             // verUmbrales: la pestaña arranca SIEMPRE en las advertencias; la vista
             // de los cortes se abre a mano y se cierra con el mismo botón.
             alerta: { varId: "alerta_lluvia", modo: "fija", inst: null, verUmbrales: false,
@@ -3097,8 +3134,8 @@
          + ". Para analizar y medir, la exacta.";
   }
 
-  // Descarga de shapefile (alertas) O carta JPG: se GUARDA en la carpeta Descargas desde el
-  // servidor (el <a download> de WebView2 no descarga) y se avisa, como el resto de exports.
+  // Descarga de la carta (ficha JPG) o del shapefile. En la aplicación se GUARDA en Descargas
+  // desde el servidor (el <a download> de WebView2 no descarga) y se avisa.
   document.addEventListener("click", async (ev) => {
     const b = ev.target && ev.target.closest && ev.target.closest("[data-shp],[data-jpg],[data-dlimg]");
     if (!b) return;
@@ -3109,13 +3146,9 @@
     if (_menu) cerrarMenusDescarga(null);
     b.dataset.busy = "1"; b.style.opacity = ".45";
     try {
-      // IMAGEN del mapa: data-dlimg siempre, y las cartas (data-jpg) cuando
-      // estamos en el VISOR en línea (sin backend que renderice la carta formal).
-      if (b.dataset.dlimg || (b.dataset.jpg && window.HIDROMET_VISOR)) {
+      // IMAGEN: la ficha JPG (§FICHA), igual en el visor y en la aplicación.
+      if (b.dataset.dlimg || b.dataset.jpg) {
         await descargarImagenMapa(b);
-      } else if (b.dataset.jpg) {
-        const r = await App.api(b.dataset.jpg);   // app: carta FORMAL renderizada por el servidor
-        App.aviso(`Carta guardada en Descargas: ${r.archivo}`, "ok", 6000);
       } else if (b.dataset.shp) {
         if (window.HIDROMET_VISOR) {
           await _descargarShpVisor(b.dataset.shp, b.dataset.dl);
@@ -3158,53 +3191,57 @@
     App.aviso("Shapefile descargado", "ok", 4000);
   }
 
-  // Descarga el mapa Plotly vecino al botón como una CARTA (con su título y leyenda). VISOR
-  // (navegador real): compone el PNG con Plotly y lo baja con <a download>. APP (WebView2 no
-  // dispara <a download>): manda el PNG al servidor, que lo guarda en Descargas.
+  /* ============================================================ §FICHA
+     LA DESCARGA ES UNA FICHA JPG (2026-10-03, pedido del dueño: «verifica que la descarga
+     en jpg esté bien hecha y diseñada, con marca de agua o algo que identifique»).
+
+     Antes el visor bajaba un PNG con el título y la barra de color pegados encima del mapa
+     de la pantalla (que parpadeaba mientras tanto) y la aplicación pedía al servidor una
+     carta de 900 px sin marca. Ahora las dos bajan la misma ficha, de 1600 px de ancho:
+
+       · encabezado con el logotipo, el título de la carta y su ventana de validez;
+       · el mapa tal como se ve (encuadre, capas y acercamiento), siempre en papel blanco;
+       · la marca: el logotipo en una esquina del mapa y la palabra HidroMet en diagonal,
+         muy tenue, repetida por todo el mapa, para que un recorte no la quite;
+       · la leyenda, dibujada con los colores de la propia carta;
+       · un pie con el aviso de reproducción y la hora de descarga.
+
+     El mapa de la pantalla no se toca: Plotly dibuja una copia aparte (toImage sobre una
+     figura clonada), así que no hay parpadeo ni nada que restituir si algo falla. El
+     logotipo se traza en el lienzo con los mismos caminos de logoSVG (core.js) y no como
+     imagen SVG, que en algunos navegadores bloquea la exportación del lienzo.
+     ============================================================ */
+  const FICHA = {
+    ancho: 1600, margen: 56,
+    tinta: "#0F1B2D", suave: "#55657C", tenue: "#8692A6", borde: "#D3DAE4",
+    marca: "HidroMet",
+  };
+  const _letra = (peso, px) => `${peso} ${px}px 'IBM Plex Sans', system-ui, -apple-system, "Segoe UI", sans-serif`;
+
   async function descargarImagenMapa(b) {
     const cont = b.closest(".ct-lienzo") || b.closest("figure") || b.parentElement;
     const plot = cont && (cont.querySelector(".ct-mapa-plot")
       || cont.querySelector(".js-plotly-plot"));
-    if (!plot || !window.Plotly) throw new Error("El mapa aún no está listo");
+    if (!plot || !window.Plotly || !plot.data) throw new Error("El mapa aún no está listo");
     const nombre = String(b.dataset.nombre || "carta").replace(/[^\w\-]+/g, "_").slice(0, 60) || "carta";
-    const bb = plot.getBoundingClientRect();
-    const w = Math.max(1000, Math.round((bb.width || 520) * 2));
-    const h = Math.max(680, Math.round((bb.height || 360) * 2));
-    // Carta de pronóstico/alerta (tiene datos guardados) → imagen FORMAL con título + leyenda.
-    // Los mapas que ya llevan su leyenda dentro de la figura se capturan tal cual.
-    const dataUrl = plot._carta
-      ? await _imagenCartaFormal(plot, w, h)
-      : await _imagenMapaBlanco(plot, w, h);
+    const lienzo = await fichaCarta(plot);
     if (window.HIDROMET_VISOR) {
-      const a = document.createElement("a"); a.href = dataUrl; a.download = nombre + ".png";
+      const blob = await new Promise(ok => lienzo.toBlob(ok, "image/jpeg", 0.92));
+      if (!blob) throw new Error("No se pudo preparar la imagen");
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = nombre + ".jpg";
       document.body.appendChild(a); a.click(); a.remove();
-      App.aviso("Carta descargada (PNG con leyenda)", "ok", 4000);
+      setTimeout(() => URL.revokeObjectURL(url), 8000);
+      App.aviso("Carta descargada", "ok", 4000);
     } else {
-      const r = await App.api("/cartas/guardar_imagen", { method: "POST", body: { imagen: dataUrl, nombre } });
+      // WebView2 no dispara el <a download>: la ficha viaja al servidor, que la guarda.
+      const imagen = lienzo.toDataURL("image/jpeg", 0.92);
+      const r = await App.api("/cartas/guardar_imagen", { method: "POST", body: { imagen, nombre } });
       App.aviso(`Carta guardada en Descargas: ${r.archivo}`, "ok", 6000);
     }
   }
 
-  // Guarda los colores/fondos TEMÁTICOS actuales del layout para poder revertirlos tras
-  // el toImage (el PNG exportado usa papel blanco y tinta fija, independientes del tema:
-  // el "mar" blanco lo pone el CSS del contenedor, no el layout, así que sin esto el PNG
-  // salía transparente y con fuente del tema — ilegible en oscuro sobre fondo blanco).
-  function _fondoPrevio(plot) {
-    const L = plot.layout || {};
-    return {
-      "paper_bgcolor": L.paper_bgcolor || "rgba(0,0,0,0)",
-      "plot_bgcolor": L.plot_bgcolor || "rgba(0,0,0,0)",
-      "font.color": (L.font && L.font.color) || null,
-      "legend.font.color": (L.legend && L.legend.font && L.legend.font.color) || null,
-    };
-  }
-  const _FONDO_PNG = { "paper_bgcolor": "#ffffff", "plot_bgcolor": "#ffffff", "font.color": "#0F1B2D",
-                       "legend.font.color": "#283550" };
-
-  // Los mapas TEMÁTICOS dibujan contorno/microcuencas/estaciones con la paleta del
-  // tema; el PNG de descarga es SIEMPRE la carta blanca (entregable externo). Antes
-  // del toImage se fuerzan esos trazos (por su meta) a la paleta de PAPEL y se
-  // devuelve una función que restituye los colores que tenían en pantalla.
+  // Trazos con `meta`: llevan siempre su color de papel en la ficha, en cualquier tema.
   const _PAPEL_TRAZA = {
     "outline-halo":   { "line.color": "#ffffff" },
     "outline-linea":  { "line.color": "#000000" },
@@ -3213,67 +3250,304 @@
     "microcuencas":   { "line.color": "rgba(35,49,77,.32)" },
     "estaciones-ct":  { "marker.color": "#10233F", "marker.line.color": "#fff" },
   };
-  async function _trazasAPapel(plot) {
-    const data = plot.data || [];
-    const revertir = [];
-    for (let i = 0; i < data.length; i++) {
-      const fix = _PAPEL_TRAZA[data[i].meta];
-      if (!fix) continue;
-      const prev = {};
-      for (const clave of Object.keys(fix)) {
-        let v = data[i];
-        for (const p of clave.split(".")) v = v ? v[p] : undefined;
-        prev[clave] = v === undefined ? null : v;
+  // Las cartas que TEMATIZAN (alertas, heladas) llevan en oscuro el mar, los rótulos y la
+  // rejilla claros. La ficha va siempre en papel: cada color del tema oscuro se cambia por
+  // el que esa misma carta usa en claro (los pares de pintarMapaCarta, trazasFoco, el
+  // borde cantonal y el recuadro de Galápagos). Si se añade un color de tema, va aquí.
+  const _PAPEL_DE_OSCURO = {
+    "#0B1322": "#ffffff", "#AEBBD0": "#000000", "#7FE3F0": "#0B5C7A", "#141F38": "#ffffff",
+    "#B6C0CD": "#46597A", "#9DAABF": "#58667A", "#E2E8F7": "#283550",
+    "rgba(214,222,236,.45)": "rgba(20,30,50,.42)", "rgba(226,232,247,.72)": "rgba(40,53,80,.7)",
+    "rgba(223,230,247,.13)": "rgba(70,89,122,.16)", "rgba(20,28,45,.78)": "rgba(255,255,255,.82)",
+    "rgba(182,192,205,.40)": "rgba(100,116,139,.32)",
+  };
+  function _clonarFigura(o) {
+    try { return structuredClone(o); } catch (e) { return JSON.parse(JSON.stringify(o)); }
+  }
+  function _colorPapel(v) {
+    if (typeof v === "string") return _PAPEL_DE_OSCURO[v] || v;
+    if (Array.isArray(v)) { for (let i = 0; i < v.length; i++) v[i] = _colorPapel(v[i]); return v; }
+    if (v && typeof v === "object" && !ArrayBuffer.isView(v)) for (const k of Object.keys(v)) v[k] = _colorPapel(v[k]);
+    return v;
+  }
+  function _ponerEnRuta(obj, ruta, valor) {
+    const partes = ruta.split(".");
+    let o = obj;
+    for (const p of partes.slice(0, -1)) { if (!o[p] || typeof o[p] !== "object") o[p] = {}; o = o[p]; }
+    o[partes[partes.length - 1]] = valor;
+  }
+  // Rótulos dentro del mapa (Galápagos, «sin alertas»…): el traductor del DOM no llega a
+  // la copia, así que se traducen aquí, tramo a tramo entre las etiquetas <br> e <i>.
+  const _traducirRotulo = s => String(s || "").replace(/(<[^>]+>)|([^<]+)/g, (m, etq, txt) => etq || App.t(txt));
+
+  // Copia de la figura en pantalla lista para la ficha: papel blanco, colores de papel, sin
+  // título ni barra de color (la leyenda va dibujada aparte, debajo del mapa).
+  function _figuraEnPapel(plot) {
+    const data = _colorPapel(_clonarFigura(plot.data || []));
+    for (const t of data) {
+      const fijo = _PAPEL_TRAZA[t.meta];
+      if (fijo) for (const [ruta, v] of Object.entries(fijo)) _ponerEnRuta(t, ruta, v);
+      if (t.type === "heatmap" || t.type === "contour") t.showscale = false;
+    }
+    const layout = _colorPapel(_clonarFigura(plot.layout || {}));
+    Object.assign(layout, { paper_bgcolor: "#ffffff", plot_bgcolor: "#ffffff", showlegend: false, title: { text: "" } });
+    layout.font = Object.assign({}, layout.font, { color: FICHA.tinta });
+    for (const an of layout.annotations || []) an.text = _traducirRotulo(an.text);
+    delete layout.width; delete layout.height;
+    return { data, layout };
+  }
+
+  function _cargarImagen(src) {
+    return new Promise((ok, mal) => {
+      const im = new Image();
+      im.onload = () => ok(im);
+      im.onerror = () => mal(new Error("No se pudo preparar la imagen"));
+      im.src = src;
+    });
+  }
+
+  // El logotipo (gota, ondas, órbita y satélite) con los caminos de logoSVG. En papel la
+  // órbita va en tinta: la blanca de la barra lateral no se vería sobre fondo blanco.
+  function _logoEnLienzo(ctx, x, y, lado) {
+    ctx.save();
+    ctx.translate(x, y); ctx.scale(lado / 64, lado / 64);
+    ctx.lineCap = "round";
+    const agua = ctx.createLinearGradient(18, 8, 46, 56);
+    agua.addColorStop(0, "#5EEAD4"); agua.addColorStop(0.48, "#22B8F0"); agua.addColorStop(1, "#3159E8");
+    const orbita = ctx.createLinearGradient(4, 42, 60, 22);
+    orbita.addColorStop(0, "rgba(15,27,45,.18)"); orbita.addColorStop(0.55, "rgba(15,27,45,.72)"); orbita.addColorStop(1, "rgba(15,27,45,.26)");
+    const trazo = (d, color, ancho, alfa = 1) => {
+      ctx.globalAlpha = alfa; ctx.strokeStyle = color; ctx.lineWidth = ancho; ctx.stroke(new Path2D(d)); ctx.globalAlpha = 1;
+    };
+    trazo("M7 41 A26 9 -20 0 1 57 23", orbita, 2, 0.5);
+    ctx.fillStyle = agua; ctx.fill(new Path2D("M32 6.5C32 6.5 15 25 15 38a17 17 0 0 0 34 0C49 25 32 6.5 32 6.5Z"));
+    trazo("M24.2 29.5c-2.3 3.2-3.5 6.2-3.6 8.8", "#ffffff", 2.3, 0.5);
+    trazo("M21 42.5q5.5-4.2 11 0t11 0", "#ffffff", 2.4);
+    trazo("M24.5 49q3.75-2.8 7.5 0t7.5 0", "#ffffff", 2.1, 0.75);
+    trazo("M57 23 A26 9 -20 0 1 7 41", orbita, 2);
+    ctx.fillStyle = "#FFC93C"; ctx.beginPath(); ctx.arc(52.2, 35.1, 2.7, 0, 2 * Math.PI); ctx.fill();
+    ctx.restore();
+  }
+
+  // Parte un texto en renglones que caben en `ancho`. Los ideogramas (chino) se cortan
+  // donde haga falta; el resto, entre palabras.
+  function _renglones(ctx, texto, ancho) {
+    const piezas = String(texto || "").match(/[\u2E80-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF]|[^\s\u2E80-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF]+|\s+/g) || [];
+    const out = [];
+    let linea = "";
+    for (const p of piezas) {
+      const prueba = linea + p;
+      if (linea.trim() && ctx.measureText(prueba.trimEnd()).width > ancho) {
+        out.push(linea.trimEnd());
+        linea = /^\s+$/.test(p) ? "" : p;
+      } else linea = prueba;
+    }
+    if (linea.trim()) out.push(linea.trimEnd());
+    return out;
+  }
+
+  // Ventana de validez legible a partir del subtítulo del motor: «03/10/2026 (7-7)» es el
+  // día de lluvia de 07:00 a 07:00 y «03/10/2026 (00-24)», el día civil. Lo demás
+  // («03/10 01:00–13:00») ya se lee bien y solo pasa por el traductor.
+  function _ventanaFicha(sub) {
+    const s = String(sub || "").trim();
+    if (!s) return "";
+    const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})\s*\((7-7|00-24)\)$/);
+    const hora = App.t("Hora de Ecuador");
+    if (!m) return /\d:\d\d/.test(s) ? `${App.t(s)} · ${hora}` : App.t(s);
+    const dia = new Date(Date.UTC(+m[3], +m[2] - 1, +m[1], 12));
+    const larga = f => f.toLocaleDateString(App.locale(),
+      { timeZone: "UTC", weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    if (m[4] === "00-24") return `${larga(dia)} · 00:00–24:00 · ${hora}`;
+    return `${larga(dia)}, 07:00 → ${larga(new Date(dia.getTime() + 864e5))}, 07:00 · ${hora}`;
+  }
+
+  const _etiquetaLeyenda = v => {
+    if (v == null) return "";
+    const s = String(v).trim();
+    return /^-?\d+(\.\d+)?$/.test(s) ? App.fmtNum(s, 2, { minimos: 0 }) : App.t(s);
+  };
+
+  // Leyenda con los colores de la propia carta (las mismas reglas que leyendaCarta).
+  // Categórica (alertas): una muestra por nivel con su nombre. Escalonada: bandas de igual
+  // ancho con la cifra en cada frontera. Continua: degradado con la cifra en su valor.
+  // Devuelve el alto que ocupa; con `dibujar` falso solo mide.
+  function _leyendaFicha(ctx, c, x, y, ancho, dibujar) {
+    const cs = c.colorscale || [];
+    if (!cs.length) return 0;
+    const titulo = c.unidad === "nivel" ? App.t("Nivel de alerta") : App.t(c.unidad || "");
+    const yBarra = y + 30, alto = 24;
+    let usado = 30 + alto;
+    if (dibujar && titulo) {
+      ctx.font = _letra(600, 18); ctx.fillStyle = FICHA.suave; ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+      ctx.fillText(titulo, x, y + 18);
+    }
+    if (c.categorico) {
+      let items = coloresBanda(cs).map((col, i) => ({ col, et: (c.tick_labels || [])[i] }));
+      if (c.omitir_cero) items = items.slice(1);
+      items = items.filter(it => it.et != null && String(it.et) !== "");
+      if (dibujar) {
+        let cx = x;
+        for (const it of items) {
+          ctx.fillStyle = it.col; ctx.strokeStyle = "rgba(15,27,45,.25)"; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.roundRect(cx + 0.5, yBarra + 0.5, 40, alto - 1, 4); ctx.fill(); ctx.stroke();
+          const et = _etiquetaLeyenda(it.et);
+          ctx.font = _letra(500, 20); ctx.fillStyle = FICHA.tinta; ctx.textBaseline = "middle";
+          ctx.fillText(et, cx + 52, yBarra + alto / 2 + 1);
+          cx += 52 + ctx.measureText(et).width + 40;
+        }
       }
-      revertir.push([i, prev]);
-      await window.Plotly.restyle(plot, fix, [i]);
+    } else {
+      const anchoBarra = Math.min(ancho, 1120);
+      const rango = (c.vmax - c.vmin) || 1;
+      const escalon = !!(c.discreto || c.pasos);
+      const colores = coloresBanda(cs), nB = colores.length;
+      const bordes = bordesBanda(cs);
+      const posicion = tv => {
+        const frac = (tv - c.vmin) / rango;
+        if (!escalon || nB < 2) return Math.max(0, Math.min(1, frac));
+        let mejor = 0, dist = Infinity;   // frontera de banda más cercana al valor
+        for (let i = 0; i < bordes.length; i++) { const dd = Math.abs(bordes[i] - frac); if (dd < dist) { dist = dd; mejor = i; } }
+        return mejor / nB;
+      };
+      usado += 34;
+      if (dibujar) {
+        if (escalon && nB >= 2) {
+          colores.forEach((col, i) => { ctx.fillStyle = col; ctx.fillRect(x + anchoBarra * i / nB, yBarra, anchoBarra / nB + 0.6, alto); });
+        } else {
+          const g = ctx.createLinearGradient(x, 0, x + anchoBarra, 0);
+          for (const [t, col] of cs) g.addColorStop(Math.max(0, Math.min(1, t)), col);
+          ctx.fillStyle = g; ctx.fillRect(x, yBarra, anchoBarra, alto);
+        }
+        ctx.strokeStyle = "rgba(15,27,45,.22)"; ctx.lineWidth = 1;
+        ctx.strokeRect(x + 0.5, yBarra + 0.5, anchoBarra - 1, alto - 1);
+        // Cifras: se salta la que pisaría a la anterior (la primera y la última siempre).
+        ctx.font = _letra(500, 17); ctx.fillStyle = FICHA.tinta; ctx.textBaseline = "top"; ctx.textAlign = "center";
+        const ticks = (c.tickvals || []).map((tv, k) => ({ px: x + posicion(tv) * anchoBarra, et: _etiquetaLeyenda((c.tick_labels || [])[k] ?? tv) }));
+        let finAnterior = -Infinity;
+        ticks.forEach((tk, k) => {
+          const w = ctx.measureText(tk.et).width;
+          const cx = Math.max(x + w / 2, Math.min(x + anchoBarra - w / 2, tk.px));
+          const ultima = k === ticks.length - 1;
+          if (cx - w / 2 < finAnterior + 10 && !ultima) return;
+          ctx.fillStyle = "rgba(15,27,45,.45)"; ctx.fillRect(Math.round(tk.px) - 0.5, yBarra + alto, 1, 6);
+          ctx.fillStyle = FICHA.tinta; ctx.fillText(tk.et, cx, yBarra + alto + 9);
+          finAnterior = cx + w / 2;
+        });
+        ctx.textAlign = "left";
+      }
     }
-    return async () => { for (const [i, prev] of revertir) await window.Plotly.restyle(plot, prev, [i]); };
+    // «Sin dato» va aparte, con su muestra rayada: no es un nivel más de la escala.
+    if (c.sin_dato) {
+      if (dibujar) {
+        const sy = y + usado + 14;
+        ctx.save();
+        ctx.beginPath(); ctx.rect(x, sy, 40, 22); ctx.clip();
+        ctx.fillStyle = "#e6e9ef"; ctx.fillRect(x, sy, 40, 22);
+        ctx.strokeStyle = "#4a5162"; ctx.lineWidth = 2;
+        for (let k = -22; k < 40; k += 7) { ctx.beginPath(); ctx.moveTo(x + k, sy + 22); ctx.lineTo(x + k + 22, sy); ctx.stroke(); }
+        ctx.restore();
+        ctx.strokeStyle = "rgba(15,27,45,.25)"; ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, sy + 0.5, 39, 21);
+        ctx.font = _letra(500, 18); ctx.fillStyle = FICHA.suave; ctx.textBaseline = "middle"; ctx.textAlign = "left";
+        ctx.fillText(`${App.t(SIN_DATO_ROTULO)} · ${App.fmtNum(c.sin_dato.km2, 1, { minimos: 0 })} km²`, x + 52, sy + 12);
+      }
+      usado += 14 + 22;
+    }
+    return usado;
   }
 
-  // PNG (dataURL) de un mapa con la leyenda ya incluida en la figura:
-  // se captura tal cual pero con papel blanco y tinta fija, revertidos después.
-  async function _imagenMapaBlanco(plot, w, h) {
-    const prev = _fondoPrevio(plot);
-    const restituir = await _trazasAPapel(plot);
-    await window.Plotly.relayout(plot, Object.assign({}, _FONDO_PNG));
-    try { return await window.Plotly.toImage(plot, { format: "png", width: w, height: h, scale: 1 }); }
-    finally { await window.Plotly.relayout(plot, prev); await restituir(); }
+  // La marca sobre el mapa: la palabra en diagonal, muy tenue, por toda la superficie, y el
+  // logotipo con el nombre en la esquina superior izquierda (mar en los dos encuadres:
+  // el país entero y El Oro), sobre una placa blanca para que se lea encima de cualquier color.
+  function _marcaEnMapa(ctx, x, y, w, h) {
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+    ctx.translate(x + w / 2, y + h / 2); ctx.rotate(-Math.PI / 7);
+    ctx.font = _letra(600, 30); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = "rgba(15,27,45,.06)";
+    const px = 400, py = 200, n = Math.ceil(Math.hypot(w, h) / py / 2) + 1;
+    for (let j = -n; j <= n; j++) {
+      for (let i = -n * 2; i <= n * 2; i++) ctx.fillText(FICHA.marca, i * px + (j % 2 ? px / 2 : 0), j * py);
+    }
+    ctx.restore();
+
+    ctx.save();
+    ctx.font = _letra(700, 24);
+    const ancho = 18 + 40 + 12 + ctx.measureText(FICHA.marca).width + 20;
+    ctx.globalAlpha = 0.86; ctx.fillStyle = "#ffffff";
+    ctx.beginPath(); ctx.roundRect(x + 20, y + 20, ancho, 60, 12); ctx.fill();
+    ctx.globalAlpha = 1;
+    _logoEnLienzo(ctx, x + 32, y + 30, 40);
+    ctx.fillStyle = FICHA.tinta; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    ctx.fillText(FICHA.marca, x + 32 + 40 + 12, y + 51);
+    ctx.restore();
   }
 
-  // PNG (dataURL) de una carta CON su título y su leyenda (colorbar), reconstruidos
-  // TEMPORALMENTE sobre el propio plot y revertidos después (el visor no tiene backend que
-  // renderice el PNG formal del servidor, así que la carta se compone en el navegador).
-  async function _imagenCartaFormal(plot, w, h) {
+  // Compone la ficha y devuelve el lienzo. El mapa conserva la proporción que tiene en
+  // pantalla y se dibuja a la escala que llena el ancho de la ficha (nítido, no estirado).
+  async function fichaCarta(plot) {
     const c = plot._carta || {};
-    const data = plot.data || [];
-    const idx = data.findIndex(t => t.type === "heatmap" && (!t.xaxis || t.xaxis === "x"));
-    const prev = _fondoPrevio(plot);
-    const restituir = await _trazasAPapel(plot);
-    const relOn = Object.assign({ "margin.t": (c.titulo ? 54 : 12), "margin.r": 96, "margin.b": 14 }, _FONDO_PNG);
-    if (c.titulo) {
-      relOn["title.text"] = esc(c.titulo) + (c.subtitulo ? `<br><span style="font-size:12px;font-weight:400">${esc(c.subtitulo)}</span>` : "");
-      relOn["title.x"] = 0.5; relOn["title.xanchor"] = "center"; relOn["title.y"] = 0.98; relOn["title.font.size"] = 16;
-      relOn["title.font.color"] = "#0F1B2D";
-    }
-    await window.Plotly.relayout(plot, relOn);
-    const conBarra = idx >= 0 && c.tickvals && c.tick_labels && c.tickvals.length === c.tick_labels.length;
-    if (conBarra) {
-      await window.Plotly.restyle(plot, {
-        showscale: true,
-        colorbar: [{ thickness: 13, len: 0.86, y: 0.5, x: 1.0, xpad: 4, outlinewidth: 0,
-          tickvals: c.tickvals, ticktext: c.tick_labels, tickfont: { size: 9, color: "#283550" },
-          title: { text: c.unidad || "", side: "right", font: { size: 10, color: "#283550" } } }],
-      }, [idx]);
-    }
-    let url;
-    try { url = await window.Plotly.toImage(plot, { format: "png", width: w, height: h, scale: 1 }); }
-    finally {
-      await window.Plotly.relayout(plot, Object.assign({ "title.text": "", "margin.t": 0, "margin.r": 0, "margin.b": 0 }, prev));
-      if (conBarra) await window.Plotly.restyle(plot, { showscale: false }, [idx]);
-      await restituir();
-    }
-    return url;
+    const W = FICHA.ancho, M = FICHA.margen, util = W - 2 * M;
+    try { await Promise.all([600, 700, 500, 400].map(p => document.fonts.load(_letra(p, 20)))); } catch (e) { /* letra del sistema */ }
+
+    const bb = plot.getBoundingClientRect();
+    const w = Math.max(320, Math.round(bb.width || 520)), h = Math.max(240, Math.round(bb.height || 380));
+    const altoMapa = Math.round(h * util / w);
+    const mapa = await _cargarImagen(await window.Plotly.toImage(_figuraEnPapel(plot),
+      { format: "png", width: w, height: h, scale: util / w }));
+
+    const lienzo = document.createElement("canvas");
+    const ctx = lienzo.getContext("2d");
+    // Primero se mide (renglones del título, alto de la leyenda) para saber el alto total.
+    const titulo = App.t(String(c.titulo || "").replace(/\bCONSENSO\b/g, "Consenso").replace(/_/g, " "));
+    const ventana = _ventanaFicha(c.subtitulo);
+    ctx.font = _letra(700, 38); const lTit = _renglones(ctx, titulo, util);
+    ctx.font = _letra(400, 22); const lVen = _renglones(ctx, ventana, util);
+    const yCab = 46, altoCab = 64;
+    const yTit = yCab + altoCab + 40;
+    const yVen = yTit + lTit.length * 48;
+    const yMapa = yVen + (lVen.length ? lVen.length * 32 + 10 : 0) + 20;
+    const yLey = yMapa + altoMapa + 30;
+    const altoLey = _leyendaFicha(ctx, c, M, yLey, util, false);
+    const yPie = yLey + altoLey + (altoLey ? 46 : 10);
+    lienzo.width = W; lienzo.height = yPie + 30 + 40;
+
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, lienzo.width, lienzo.height);
+
+    // Encabezado: logotipo y nombre a la izquierda.
+    _logoEnLienzo(ctx, M, yCab, altoCab);
+    ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+    ctx.font = _letra(700, 32); ctx.fillStyle = FICHA.tinta; ctx.fillText(FICHA.marca, M + altoCab + 16, yCab + 30);
+    ctx.font = _letra(500, 18); ctx.fillStyle = FICHA.suave; ctx.fillText(App.t("Ecuador"), M + altoCab + 16, yCab + 56);
+
+    // Título y ventana de validez.
+    ctx.font = _letra(700, 38); ctx.fillStyle = FICHA.tinta;
+    lTit.forEach((l, i) => ctx.fillText(l, M, yTit + 36 + i * 48));
+    ctx.font = _letra(400, 22); ctx.fillStyle = FICHA.suave;
+    lVen.forEach((l, i) => ctx.fillText(l, M, yVen + 24 + i * 32));
+
+    // Mapa con esquinas redondeadas y borde fino; encima, la marca.
+    ctx.save();
+    ctx.beginPath(); ctx.roundRect(M, yMapa, util, altoMapa, 14); ctx.clip();
+    ctx.drawImage(mapa, M, yMapa, util, altoMapa);
+    _marcaEnMapa(ctx, M, yMapa, util, altoMapa);
+    ctx.restore();
+    ctx.strokeStyle = FICHA.borde; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.roundRect(M + 0.75, yMapa + 0.75, util - 1.5, altoMapa - 1.5, 14); ctx.stroke();
+
+    _leyendaFicha(ctx, c, M, yLey, util, true);
+
+    // Pie: aviso de reproducción a la izquierda, hora de descarga a la derecha.
+    const anio = new Date().getFullYear();
+    const cuando = new Date().toLocaleString(App.locale(), { timeZone: "America/Guayaquil",
+      day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+    ctx.font = _letra(500, 17); ctx.fillStyle = FICHA.tenue; ctx.textBaseline = "alphabetic";
+    ctx.textAlign = "left";
+    ctx.fillText(`© ${anio} ${FICHA.marca}. ${App.t("Prohibida su reproducción sin autorización.")}`, M, yPie + 24);
+    ctx.textAlign = "right";
+    ctx.fillText(`${App.t("Descargado el")} ${cuando} (${App.t("Hora de Ecuador")})`, W - M, yPie + 24);
+    ctx.textAlign = "left";
+    return lienzo;
   }
 
   /* ============================================================

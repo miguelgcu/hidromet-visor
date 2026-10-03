@@ -1552,6 +1552,38 @@ const App = (() => {
     return salida;
   }
 
+  /* Relieve sombreado (hidromet/relieve.py, DEM de 30 m, 2026-10-03): capas PNG
+     semitransparentes —el país a ~670 m y, más fina, la ventana de El Oro a ~165 m— que los
+     mapas Plotly ponen ENCIMA del color como imágenes de layout: sombras y luces sin tapar
+     el producto. De cada malla hay una capa completa y otra recortada a Ecuador, para los
+     mapas que dejan en blanco a los países vecinos. Cada PNG se baja una sola vez y se
+     guarda como data: URL, que es como Plotly lo incrusta en una descarga (con otra URL lo
+     convertiría de nuevo en cada mapa). */
+  let _indiceRelieve = null;
+  const _pngRelieve = new Map();          // archivo → promesa de su data: URL (null si no llegó)
+  function _dataUrl(url) {
+    return fetch(url).then(r => (r.ok ? r.blob() : null)).then(blob => !blob ? null : new Promise(ok => {
+      const f = new FileReader(); f.onload = () => ok(f.result); f.onerror = () => ok(null); f.readAsDataURL(blob);
+    })).catch(() => null);
+  }
+  // Imágenes de layout del relieve para los ejes dados (vacío si no hay capas publicadas).
+  async function imagenesRelieve(ejeX = "x", ejeY = "y", opciones = {}) {
+    if (!_indiceRelieve) _indiceRelieve = api("/relieve/indice").catch(() => ({ capas: [] }));
+    const ind = await _indiceRelieve;
+    const recorte = opciones.soloEcuador ? "ecuador" : null;
+    const base = window.HIDROMET_VISOR ? "productos/relieve/archivo/" : "/api/relieve/archivo/";
+    const salida = [];
+    for (const c of ((ind && ind.capas) || []).filter(x => (x.recorte || null) === recorte)) {
+      if (!_pngRelieve.has(c.archivo)) _pngRelieve.set(c.archivo, _dataUrl(base + c.archivo));
+      const url = await _pngRelieve.get(c.archivo);
+      if (!url) continue;
+      const [o, s, e, n] = c.limites;
+      salida.push({ source: url, xref: ejeX, yref: ejeY, x: o, y: n, sizex: e - o, sizey: n - s,
+                    xanchor: "left", yanchor: "top", sizing: "stretch", layer: "above", opacity: 1 });
+    }
+    return salida;
+  }
+
   function plotlyLayoutBase(extra = {}) {
     const oscuro = tema() === "oscuro";
     return Object.assign({
@@ -1761,7 +1793,7 @@ const App = (() => {
   return { api, aviso, tarea, seguirTarea, modalTarea, tema, registrar, navegar, iniciar, el, fmtFecha, plotlyLayoutBase,
            plotlyLayoutSerie, plotlyConfig, pinchZoomMapa, hayTareaActiva, cancelarTarea, cancelarTodas, panel, vistaPestanas, restaurador,
            rutaAProducto, leerJsonGzip, hoyEC, redEtiqueta, nombreEstacion, sinMarcaInstitucional,
-           acentoModulo, geoProvincias, trazasContornoProvincias, ajustarAltoMapa,
+           acentoModulo, geoProvincias, trazasContornoProvincias, ajustarAltoMapa, imagenesRelieve,
            fmtNum, fmtSigno, textoServidor, textosServidor,
            idioma, locale, localeGraficos, selectorIdioma, cargarIdioma, t: traducir, sinTraducir: () => [...SIN_TRADUCIR] };
 })();

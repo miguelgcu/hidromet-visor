@@ -26,11 +26,12 @@
 .lp-card ul { margin: 0; padding-left: 18px; }
 .lp-card li + li { margin-top: 6px; }
 
-/* mapa grande + provincias */
-.lp-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, 1fr); gap: 14px; align-items: start; }
+/* mapa grande + provincias. La lista no estira la fila: su tarjeta toma el alto de la del
+   mapa (contain: size) y la lista se desliza por dentro. Antes la lista desbordaba su tarjeta
+   y se montaba sobre «Mes a mes». */
+.lp-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, 1fr); gap: 14px; align-items: stretch; }
 .lp-mapa { width: 100%; aspect-ratio: 62 / 68; max-height: 640px; border-radius: 10px; overflow: hidden;
   background: var(--sea-bottom); isolation: isolate; }
-.lp-fuente { margin: 10px 0 0; font-size: 11.5px; color: var(--muted-2); line-height: 1.5; }
 .lp-nota { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.55; }
 
 /* leyenda por clases: celdas iguales, rótulos en los bordes */
@@ -47,8 +48,9 @@
 .lp-ley-lados { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--muted); margin-top: 2px; }
 
 /* lista por provincia */
-.lp-prov-card { max-height: 760px; display: flex; flex-direction: column; }
-.lp-prov-lista { display: flex; flex-direction: column; overflow-y: auto; margin: 0 -6px; padding: 0 6px; }
+.lp-prov-card { display: flex; flex-direction: column; contain: size; }
+.lp-prov-lista { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  margin: 0 -6px; padding: 0 6px; }
 .lp-prov { display: grid; grid-template-columns: minmax(110px, 1fr) minmax(90px, 1.2fr) auto; align-items: center;
   gap: 10px; padding: 7px 0; border-top: 1px solid var(--line-3); }
 .lp-prov:first-child { border-top: 0; }
@@ -62,6 +64,9 @@
 .lp-div { position: relative; height: 10px; border-radius: 5px; background: var(--surface-3); }
 .lp-div::after { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--line-2); }
 .lp-div i { position: absolute; top: 0; bottom: 0; border-radius: 5px; }
+/* barra desde cero (valor esperado) */
+.lp-esp { position: relative; height: 10px; border-radius: 5px; background: var(--surface-3); overflow: hidden; }
+.lp-esp i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; }
 /* barra de terciles (probabilidad) */
 .lp-terc { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--surface-3); }
 .lp-terc i { display: block; height: 100%; }
@@ -95,11 +100,10 @@
 .lp-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .lp-pluma { width: 100%; min-height: 380px; }
 
-.lp-metodo { max-width: 920px; }
 
 @media (max-width: 1100px) {
   .lp-grid { grid-template-columns: 1fr; }
-  .lp-prov-card { max-height: none; }
+  .lp-prov-card { contain: none; max-height: 560px; }
   .lp-grid2 { grid-template-columns: 1fr; }
   .lp-nino-cab { grid-template-columns: 1fr 1fr; }
   .lp-nino-cab .lp-nota { grid-column: 1 / -1; }

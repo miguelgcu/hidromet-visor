@@ -1,8 +1,8 @@
 {
   "schema": "hidromet.frontend.v1",
   "source": "ui/",
-  "source_sha256": "a20c4a78fde10a809624ce5dddacaeb052e39f2f8abf0720ae6bf4e499f8575d",
-  "cache_version": "a20c4a78fde1",
+  "source_sha256": "228536f5953988434b37e412a5b0a18431a79ade06976d8e688d87fbfb06be6f",
+  "cache_version": "228536f59539",
   "mode": "readonly-static",
   "included_modules": [
     "monitoreo",

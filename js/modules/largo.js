@@ -1,11 +1,21 @@
 /* ============================================================
-   Largo plazo — pronóstico estacional (SEAS5 de ECMWF, C3S) y pluma de El Niño.
+   Largo plazo — pronóstico estacional y pluma de El Niño.
    Backend: /api/largo/* (app/rutas/largo.py ← hidromet/largo_plazo).
+
+   Es un producto: la vista no nombra centros, modelos ni fuentes (pedido del
+   dueño, 2026-10-03: «Quita el apartado de metodología. Esto es un producto. no
+   quiero poner esas cosas»). El visor publicado recibe además el índice y la
+   pluma ya limpios (exportar_web.largo_publico).
 
    Dibujo de los campos: la malla publicada es de 0,1° (interpolada de la nativa
    de 1°). Aquí se refina ×4 con interpolación bicúbica y se pinta con CLASES de
    color: el campo sale suave y cada clase con su borde nítido. El contorno del
    país es una máscara de polígono (la costa exacta, sin escalones de celda).
+
+   «Valor esperado» (2026-10-03): lluvia en mm y temperatura en °C calibradas con
+   la normal local y el DEM de 30 m (hidromet/largo_plazo/calibrado.py). El mapa
+   grande usa su malla de 0,025°, que trae el detalle del relieve; los pequeños,
+   el promedio a 0,1° del archivo del periodo.
    ============================================================ */
 "use strict";
 
@@ -17,7 +27,7 @@
   const oscuro = () => (App.tema ? App.tema() === "oscuro" : true);
 
   const E = {
-    indice: null, periodo: null, variable: "lluvia", producto: "anomalia",
+    indice: null, periodo: null, variable: "lluvia", producto: "esperado",
     archivos: new Map(), geo: null, nino: null, provincias: null, tabs: null, _alTema: null,
   };
   document.addEventListener("temacambiado", () => { if (E._alTema) try { E._alTema(); } catch (e) { /* vista cerrada */ } });
@@ -27,6 +37,18 @@
      temperatura: azul (frío) → rojo (cálido); probabilidad: la categoría más
      probable con la intensidad de su probabilidad (gris = sin señal clara). */
   const ESCALAS = {
+    lluvia_esp: {
+      titulo: "Lluvia esperada", unidad: "mm", dec: 0, campo: "lluvia_esperada",
+      bordes: [10, 25, 50, 75, 100, 150, 200, 250, 300, 400, 500, 700],
+      colores: ["#f3e7c6", "#e8e2a4", "#cde39f", "#a5d699", "#74c39a", "#47ab9c", "#2a8f9e", "#23729b",
+                "#2a5797", "#33408d", "#3b2c80", "#45206f", "#4f1460"],
+    },
+    t2m_esp: {
+      titulo: "Temperatura media esperada", unidad: "°C", dec: 1, campo: "t2m_esperada",
+      bordes: [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28],
+      colores: ["#3f1d6b", "#3b3d99", "#2f62b3", "#2c86c1", "#3aa6c4", "#5fbfb6", "#8fd3a0", "#bfe08a",
+                "#e6e57d", "#f7d26a", "#f9b457", "#f39046", "#e4683a", "#cc4030", "#a3202a"],
+    },
     lluvia_pct: {
       titulo: "Anomalía de lluvia", unidad: "% de lo normal", dec: 0, signo: true,
       bordes: [-75, -50, -30, -15, -5, 5, 15, 30, 50, 75, 100, 150],
@@ -56,6 +78,7 @@
   };
   function claveEscala() {
     if (E.producto === "probabilidad") return E.variable === "lluvia" ? "prob_lluvia" : "prob_t2m";
+    if (E.producto === "esperado") return E.variable === "lluvia" ? "lluvia_esp" : "t2m_esp";
     return E.variable === "lluvia" ? "lluvia_pct" : "t2m";
   }
   // Rango de dibujo: una clase más allá de cada borde extremo.
@@ -141,6 +164,10 @@
   // ninguna pasa del 40 %).
   function campoActivo(dat, malla) {
     const c = dat.campos || {};
+    if (E.producto === "esperado") {
+      const k = ESCALAS[claveEscala()].campo;
+      return c[k] ? c[k][malla] : null;
+    }
     if (E.producto !== "probabilidad") {
       const k = E.variable === "lluvia" ? "lluvia_pct" : "t2m";
       return c[k] ? c[k][malla] : null;
@@ -159,6 +186,7 @@
   }
   function textoValor(es, v) {
     if (v == null || !isFinite(v)) return "sin dato";
+    if (es.campo) return `${num(v, es.dec)} ${es.unidad}`;
     if (es.prob) {
       if (v === 0 || Math.abs(v) < 40) return "Sin señal clara (normal o empate)";
       return `${v > 0 ? es.sobre : es.bajo}: ${num(Math.abs(v), 0)} %`;
@@ -202,16 +230,23 @@
     const es = ESCALAS[claveEscala()];
     const g = await geo();
     const f = opts.mini ? 2 : 4;
+    // Valor esperado en el mapa grande: el continente sale de la malla fina (0,025°), que ya
+    // trae el detalle del relieve; se refina ×2 solo para suavizar los bordes de clase.
+    const det = !opts.mini && opts.detalle && opts.detalle.malla ? opts.detalle : null;
     const colorMar = getComputedStyle(document.documentElement).getPropertyValue("--sea-bottom").trim() || (oscuro() ? "#0C1526" : "#EEF3F8");
     const [zmin, zmax] = rangoEscala(es);
     const cs = colorscaleDiscreta(es);
     const trazas = [];
-    for (const [malla, ejeX, ejeY] of [["continente", "x", "y"], ["galapagos", "x2", "y2"]]) {
-      const z0 = campoActivo(dat, malla);
-      const m = dat.mallas && dat.mallas[malla];
+    // La normal local es solo continental: con el valor esperado no hay recuadro de Galápagos.
+    const conGalapagos = E.producto !== "esperado";
+    for (const [malla, ejeX, ejeY] of [["continente", "x", "y"], ...(conGalapagos ? [["galapagos", "x2", "y2"]] : [])]) {
+      const fino = det && malla === "continente";
+      const z0 = fino ? det.valores : campoActivo(dat, malla);
+      const m = fino ? det.malla : (dat.mallas && dat.mallas[malla]);
       if (!z0 || !m) continue;
-      const z = refinar(z0, f);
-      const { xs, ys } = ejes(m, f);
+      const ff = fino ? 2 : f;
+      const z = refinar(z0, ff);
+      const { xs, ys } = ejes(m, ff);
       const t = { type: "heatmap", x: xs, y: ys, z, xaxis: ejeX, yaxis: ejeY, zmin, zmax, colorscale: cs,
         zsmooth: "best", showscale: false, hoverongaps: false };
       if (opts.mini) t.hoverinfo = "skip";
@@ -232,11 +267,14 @@
       // ecuatoriano medido con el contorno oficial); abajo a la izquierda tapaba El Oro y Guayas.
       xaxis2: { visible: false, range: [CAJA_G[0], CAJA_G[1]], domain: [0.70, 0.98], anchor: "y2", fixedrange: true },
       yaxis2: { visible: false, range: [CAJA_G[2], CAJA_G[3]], domain: [0.03, 0.3], anchor: "x2", scaleanchor: "x2", fixedrange: true },
-      shapes: [{ type: "rect", xref: "paper", yref: "paper", x0: 0.70, x1: 0.98, y0: 0.03, y1: 0.3,
+      shapes: !conGalapagos ? [] : [{ type: "rect", xref: "paper", yref: "paper", x0: 0.70, x1: 0.98, y0: 0.03, y1: 0.3,
         line: { color: oscuro() ? "#33435F" : "#C9D3E1", width: 1 }, fillcolor: "rgba(0,0,0,0)" }],
-      annotations: opts.mini ? [] : [{ xref: "paper", yref: "paper", x: 0.98, y: 0.305, xanchor: "right", yanchor: "bottom",
+      annotations: opts.mini || !conGalapagos ? [] : [{ xref: "paper", yref: "paper", x: 0.98, y: 0.305, xanchor: "right", yanchor: "bottom",
         text: "Galápagos", showarrow: false, font: { size: 10, color: ink } }],
     });
+    // Relieve sombreado del DEM de 30 m sobre el color, recortado a Ecuador (fuera va el mar).
+    // Los mapas pequeños de «Mes a mes» no lo llevan: a ese tamaño no se lee y pesa.
+    if (!opts.mini && App.imagenesRelieve) layout.images = await App.imagenesRelieve("x", "y", { soloEcuador: true });
     // Sin zoom con la rueda: la rueda desplaza la página (atraparla sobre un mapa grande
     // deja al usuario sin poder bajar). Se acerca arrastrando o pellizcando; doble clic vuelve.
     const cfg = App.plotlyConfig({ displayModeBar: false, scrollZoom: false, staticPlot: !!opts.mini });
@@ -265,6 +303,7 @@
     return P.map(p => {
       const v = (p.valores || {})[per] || {};
       return { nombre: p.nombre, region: p.region, anom: E.variable === "lluvia" ? v.lluvia_pct : v.t2m,
+               esp: E.variable === "lluvia" ? v.lluvia_esperada : v.t2m_esperada,
                mm: v.lluvia_mm, pb: v[`p_bajo_${s}`], pn: v[`p_normal_${s}`], ps: v[`p_sobre_${s}`] };
     }).filter(r => r.nombre);
   }
@@ -283,6 +322,19 @@
           <div class="lp-prov-v">${num(ps)} %</div></div>`;
       }).join("")}</div>
       <div class="lp-terc-ley"><span><i style="background:${col[2]}"></i>${esc(es.bajo)}</span><span><i style="background:${col[5]}"></i>Normal</span><span><i style="background:${col[col.length - 3]}"></i>${esc(es.sobre)}</span></div>`;
+    }
+    if (E.producto === "esperado") {
+      // Valor esperado: barra desde cero con el color de su clase y, debajo, la anomalía.
+      filas.sort((a, b) => (b.esp ?? -1e9) - (a.esp ?? -1e9));
+      const max = Math.max(1e-9, ...filas.map(r => Math.abs(r.esp ?? 0)));
+      return `<div class="lp-prov-lista">${filas.map(r => {
+        const v = r.esp, k = claseDe(es, v), c = k == null ? "transparent" : es.colores[k];
+        const ancho = v == null ? 0 : Math.max(0, v) / max * 100;
+        const anom = r.anom == null ? "" : `<small>${E.variable === "lluvia" ? sig(r.anom, 0) + " %" : sig(r.anom, 1) + " °C"}</small>`;
+        return `<div class="lp-prov"><div class="lp-prov-n"><b>${esc(r.nombre)}</b><small>${esc(r.region || "")}</small></div>
+          <div class="lp-esp"><i style="width:${ancho}%;background:${c}"></i></div>
+          <div class="lp-prov-v">${v == null ? "—" : num(v, es.dec) + " " + es.unidad}${anom}</div></div>`;
+      }).join("")}</div>`;
     }
     filas.sort((a, b) => (b.anom ?? -1e9) - (a.anom ?? -1e9));
     const maxAbs = Math.max(1e-9, ...filas.map(r => Math.abs(r.anom ?? 0)));
@@ -354,6 +406,7 @@
             <button type="button" data-var="lluvia">Lluvia</button><button type="button" data-var="t2m">Temperatura</button></div></div>
         <div class="campo-inline"><span class="lp-et">Producto</span>
           <div class="segmentado lp-seg" data-rol="producto">
+            <button type="button" data-prod="esperado">Valor esperado</button>
             <button type="button" data-prod="anomalia">Anomalía</button>
             <button type="button" data-prod="probabilidad" ${ind.terciles ? "" : "disabled title='Sin terciles en esta emisión'"}>Probabilidad</button></div></div>
       </div>
@@ -362,7 +415,6 @@
           <header class="lp-card-cab"><h2 data-rol="tit"></h2><span data-rol="sub"></span></header>
           <div class="lp-mapa" data-rol="mapa"></div>
           <div data-rol="ley"></div>
-          <p class="lp-fuente">ECMWF SEAS5 (sistema ${esc(ind.emision.sistema)}) vía Copernicus C3S · emisión ${esc(ind.emision.etiqueta)} · ${esc(ind.emision.miembros)} miembros · malla nativa de 1°</p>
         </section>
         <section class="lp-card lp-prov-card">
           <header class="lp-card-cab"><h2>Por provincia</h2><span data-rol="prov-sub"></span></header>
@@ -390,12 +442,20 @@
       $('[data-rol="tit"]').textContent = `${es.titulo} · ${per.etiqueta_larga}`;
       $('[data-rol="sub"]').textContent = E.producto === "probabilidad"
         ? "Probabilidad de quedar bajo, en o sobre lo normal (terciles 1993-2016)"
-        : (E.variable === "lluvia" ? "Diferencia con la lluvia normal del modelo" : "Diferencia con la temperatura normal del modelo");
+        : E.producto === "esperado"
+          ? (E.variable === "lluvia"
+            ? (per.tipo === "trimestre" ? "Milímetros por mes, promedio del trimestre" : "Milímetros en el mes")
+            : "Promedio del periodo, con el detalle del relieve")
+          : (E.variable === "lluvia" ? "Diferencia con la lluvia normal del modelo" : "Diferencia con la temperatura normal del modelo");
       $('[data-rol="ley"]').innerHTML = leyendaHTML(es);
       $('[data-rol="prov-sub"]').textContent = E.producto === "probabilidad" ? "bajo · normal · sobre lo normal" : per.etiqueta;
       $('[data-rol="prov"]').innerHTML = htmlProvincias(per.id);
       const mapa = $('[data-rol="mapa"]');
-      try { await pintarMapa(mapa, await archivo(per.archivo)); }
+      // Valor esperado: el mapa grande usa la malla fina del periodo (si no llega, la de 0,1°).
+      let detalle = null;
+      const rutaDet = E.producto === "esperado" && per.detalle && per.detalle[es.campo];
+      if (rutaDet) { try { detalle = await archivo(rutaDet); } catch (e) { detalle = null; } }
+      try { await pintarMapa(mapa, await archivo(per.archivo), { detalle }); }
       catch (e) { mapa.innerHTML = vacio("No se pudo leer este periodo.", e.message); }
       // mes a mes (solo meses), con el periodo activo resaltado
       const minis = $('[data-rol="minis"]');
@@ -416,8 +476,7 @@
   }
 
   /* ---------------- pestaña El Niño ---------------- */
-  const COLOR_SIS = { ecmwf: "#4C8DFF", ukmo: "#F59E0B", meteo_france: "#22C3A6", dwd: "#E5484D", cmcc: "#9D7BFF",
-                      ncep: "#38BDF8", jma: "#F472B6", eccc: "#A3E635", bom: "#FB923C" };
+  const COLOR_PRINCIPAL = "#4C8DFF";
   function colorCategoria(nombre) {
     const s = String(nombre || "").toLowerCase();
     if (/extraordinaria|muy fuerte/.test(s)) return "rgba(185,28,28,.16)";
@@ -433,34 +492,36 @@
     const trazas = [];
     const obs = (idx.observado || []).filter(o => o && o.mes && o.valor != null);
     const osc = oscuro();
-    // miembros de ECMWF (tenues) y banda P10–P90
-    const ec = (nino.sistemas || []).find(s => s.centro === "ecmwf");
+    // miembros del modelo principal (tenues) y su banda P10–P90. En el visor publicado
+    // el centro llega como «principal»; en la aplicación, con su código.
+    const esPrincipal = s => s.centro === "principal" || s.centro === "ecmwf";
+    const ec = (nino.sistemas || []).find(esPrincipal);
     if (ec && ec.indices[clave]) {
       const r = ec.indices[clave].resumen;
       trazas.push({ x: meses, y: r.p90, mode: "lines", line: { width: 0 }, hoverinfo: "skip", showlegend: false });
       trazas.push({ x: meses, y: r.p10, mode: "lines", line: { width: 0 }, fill: "tonexty",
-        fillcolor: "rgba(76,141,255,.18)", name: "ECMWF · banda 10–90 %", hoverinfo: "skip" });
+        fillcolor: "rgba(76,141,255,.18)", name: "Modelo principal · banda 10–90 %", hoverinfo: "skip" });
       (ec.indices[clave].miembros || []).slice(0, 51).forEach(m => trazas.push({ x: meses, y: m, mode: "lines",
         line: { width: 0.6, color: "rgba(76,141,255,.22)" }, hoverinfo: "skip", showlegend: false }));
     }
-    // Los demás sistemas, en UN color y con UNA entrada de leyenda: se leen como la
-    // dispersión entre modelos; el nombre de cada uno sale al pasar el cursor.
+    // Los demás modelos, en UN color y con UNA entrada de leyenda: se leen como la
+    // dispersión entre modelos. Sin nombres: la vista no dice de dónde sale cada uno.
     let primeroOtro = true;
     for (const s of (nino.sistemas || [])) {
       const r = s.indices[clave] && s.indices[clave].resumen;
-      if (!r || s.centro === "ecmwf") continue;
-      trazas.push({ x: meses, y: r.p50, mode: "lines", name: "Otros sistemas C3S · mediana", legendgroup: "otros",
+      if (!r || esPrincipal(s)) continue;
+      trazas.push({ x: meses, y: r.p50, mode: "lines", name: "Otros modelos · mediana", legendgroup: "otros",
         showlegend: primeroOtro, line: { width: 1.6, color: osc ? "rgba(203,213,225,.55)" : "rgba(71,85,105,.55)" },
-        hovertemplate: `${esc(s.nombre)} (${s.miembros}): %{y:+.1f} °C<extra></extra>` });
+        hovertemplate: `Otro modelo (${s.miembros} miembros): %{y:+.1f} °C<extra></extra>` });
       primeroOtro = false;
     }
     if (ec && ec.indices[clave]) {
-      trazas.push({ x: meses, y: ec.indices[clave].resumen.p50, mode: "lines+markers", name: "ECMWF SEAS5 · mediana",
-        line: { width: 3.2, color: COLOR_SIS.ecmwf }, marker: { size: 6 },
-        hovertemplate: `<b>ECMWF SEAS5</b> (${ec.miembros}): %{y:+.1f} °C<extra></extra>` });
+      trazas.push({ x: meses, y: ec.indices[clave].resumen.p50, mode: "lines+markers", name: "Modelo principal · mediana",
+        line: { width: 3.2, color: COLOR_PRINCIPAL }, marker: { size: 6 },
+        hovertemplate: `<b>Modelo principal</b> (${ec.miembros} miembros): %{y:+.1f} °C<extra></extra>` });
     }
     if (obs.length) {
-      trazas.push({ x: obs.map(o => o.mes), y: obs.map(o => o.valor), mode: "lines+markers", name: "Observado (NOAA CPC)",
+      trazas.push({ x: obs.map(o => o.mes), y: obs.map(o => o.valor), mode: "lines+markers", name: "Observado",
         line: { width: 2.6, color: osc ? "#E9EFF8" : "#0B1426" }, marker: { size: 6 },
         hovertemplate: `<b>Observado</b> %{x|%b %Y}: %{y:+.2f} °C<extra></extra>` });
     }
@@ -503,14 +564,13 @@
     };
     c.innerHTML = `<div class="lp">
       <div class="lp-nino-cab">${tarjeta("nino12")}${tarjeta("nino34")}
-        <p class="lp-nota">Mediana de cada sistema del multisistema C3S, la banda 10–90 % y los miembros de ECMWF, y lo
-        observado por NOAA. El Niño 1+2 (frente a Ecuador y Perú) manda en la lluvia de la costa; el 3.4 (Pacífico
-        central) define el evento a escala global. Las franjas de color son categorías de referencia.</p></div>
+        <p class="lp-nota">La mediana de cada modelo, la banda 10–90 % y los miembros del modelo principal, y la
+        temperatura del mar observada. El Niño 1+2, frente a Ecuador y Perú, manda en la lluvia de la costa; el 3.4, en
+        el Pacífico central, define el evento a escala global. Las franjas de color son categorías de referencia.</p></div>
       <div class="lp-grid2">
         <section class="lp-card"><header class="lp-card-cab"><h2>Niño 1+2</h2><span>0–10°S, 90–80°O</span></header><div class="lp-pluma" data-rol="n12"></div></section>
         <section class="lp-card"><header class="lp-card-cab"><h2>Niño 3.4</h2><span>5°N–5°S, 170–120°O</span></header><div class="lp-pluma" data-rol="n34"></div></section>
       </div>
-      <p class="lp-fuente">Sistemas: ${esc((ind.sistemas_pluma || []).join(" · "))}. Anomalías de cada modelo respecto de su hindcast 1993-2016; lo observado, ${esc(nino.fuente_observado || "")}.</p>
     </div>`;
     const dibujar = async () => {
       await pintarPluma(c.querySelector('[data-rol="n12"]'), "nino12", nino);
@@ -518,45 +578,6 @@
     };
     E._alTema = () => { if (c.isConnected) dibujar(); };
     await dibujar();
-  }
-
-  /* ---------------- pestaña Metodología ---------------- */
-  async function tabMetodo(c) {
-    E._alTema = null;
-    let ind = null;
-    try { ind = await indice(); } catch (e) { /* se explica igual */ }
-    const em = (ind && ind.emision) || {};
-    c.innerHTML = `<div class="lp lp-metodo">
-      <section class="lp-card"><h2>Qué es</h2>
-        <p>El pronóstico estacional no dice qué día lloverá: dice si el mes o el trimestre será, en conjunto, más lluvioso
-        o más cálido de lo normal. Sale de un <b>conjunto</b> de ${esc(em.miembros || 51)} simulaciones del modelo acoplado
-        océano-atmósfera SEAS5 de ECMWF, publicadas por el servicio de cambio climático de Copernicus (C3S). Se emite el día 5
-        de cada mes con seis meses de plazo${em.proxima ? `; la próxima emisión, el ${esc(em.proxima)}` : ""}.</p></section>
-      <section class="lp-card"><h2>Cómo se calcula</h2>
-        <ul>
-          <li><b>Anomalía:</b> diferencia entre la media del conjunto y la normal del propio modelo (su hindcast 1993-2016). La
-          lluvia se expresa en porcentaje de esa normal; no se muestra donde el modelo da menos de 10 mm al mes.</li>
-          <li><b>Probabilidad por terciles:</b> con las 600 simulaciones del hindcast (25 miembros × 24 años) se fijan, en cada
-          punto, los límites del tercio seco, el normal y el húmedo; la probabilidad es la fracción de miembros del pronóstico
-          que cae en cada tercio. El mapa muestra la categoría más probable y su probabilidad; en gris, sin señal clara.</li>
-          <li><b>Pluma de El Niño:</b> media de la anomalía de la temperatura del mar en cada región, ponderada por la latitud,
-          para cada miembro de cada sistema; se dibujan la mediana de cada sistema y la banda 10–90 % de ECMWF.</li>
-        </ul></section>
-      <section class="lp-card"><h2>Límites honestos</h2>
-        <ul>
-          <li>La malla nativa es de 1° (unos 110 km): el mapa se interpola a 0,1° para dibujarse sin escalones, no para ganar
-          detalle. Un cantón pequeño hereda el valor de la celda que lo cubre.</li>
-          <li>Se publican solo anomalías y probabilidades: la lluvia absoluta del modelo tiene sesgos grandes en los Andes y la
-          costa.</li>
-          <li>Las probabilidades son recuentos de miembros sin calibrar; un solo modelo suele pecar de exceso de confianza. La
-          pluma compara varios sistemas por eso.</li>
-        </ul></section>
-      <section class="lp-card"><h2>Fuentes y licencias</h2>
-        <p>Contiene información modificada del Servicio de Cambio Climático de Copernicus (C3S) ${esc(String(new Date().getFullYear()))}:
-        conjuntos <i>seasonal-postprocessed-single-levels</i> y <i>seasonal-monthly-single-levels</i> (ECMWF, Met Office,
-        Météo-France, DWD, CMCC, NCEP, JMA, ECCC y BoM). Ni la Comisión Europea ni ECMWF responden del uso de esta información.
-        Lo observado de El Niño: NOAA Climate Prediction Center (OISST v2.1). Límites provinciales: CONALI-CNE 2022.</p></section>
-    </div>`;
   }
 
   function vacio(titulo, detalle) {
@@ -584,7 +605,6 @@
         pestanas: [
           { id: "estacional", etiqueta: "Estacional", render: tabEstacional },
           { id: "nino", etiqueta: "El Niño", render: tabNino },
-          { id: "metodo", etiqueta: "Metodología", render: tabMetodo },
         ],
       });
     },

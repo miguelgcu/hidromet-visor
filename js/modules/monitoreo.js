@@ -513,13 +513,35 @@
     return grupo;
   }
 
+  // Imagen calculada. Si trae versión de alta definición de la zona del cliente (p.hd, 280 m),
+  // va encima de la nacional y a ésta se le recorta ese rectángulo (clip-path con hueco, en
+  // porcentajes de Mercator, que siguen al zoom), para que en El Oro no se sumen dos capas
+  // semitransparentes. El grupo se comporta como una capa: setOpacity, options.opacity y «load».
+  function capaImagen(p, opacidad) {
+    const [o, s, e, n] = p.limites;
+    const img = (archivo, sw, ne) => L.imageOverlay(urlArchivo(archivo), [sw, ne], {
+      opacity: opacidad, pane: "mon-productos", zIndex: ++E.z, interactive: false, className: "mon-img" });
+    const base = img(p.archivo, [s, o], [n, e]);
+    if (!p.hd || !Array.isArray(p.hd.limites)) return base;
+    const [o2, s2, e2, n2] = p.hd.limites;
+    const hd = img(p.hd.archivo, [s2, o2], [n2, e2]);
+    const my = lat => Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360));
+    const px = lon => `${((lon - o) / (e - o) * 100).toFixed(3)}%`;
+    const py = lat => `${((my(n) - my(lat)) / (my(n) - my(s)) * 100).toFixed(3)}%`;
+    const hueco = `polygon(evenodd, 0% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%, ${px(o2)} ${py(n2)}, ` +
+      `${px(e2)} ${py(n2)}, ${px(e2)} ${py(s2)}, ${px(o2)} ${py(s2)}, ${px(o2)} ${py(n2)})`;
+    base.on("add", () => { const el = base.getElement(); if (el) el.style.clipPath = hueco; });
+    const grupo = L.layerGroup([base, hd]);
+    grupo.options = { opacity: opacidad };
+    grupo.setOpacity = v => { grupo.options.opacity = v; base.setOpacity(v); hd.setOpacity(v); return grupo; };
+    let listas = 0;
+    const una = () => { if (++listas === 2) grupo.fire("load"); };
+    for (const capa of [base, hd]) { capa.once("load", una); capa.once("error", una); }
+    return grupo;
+  }
+
   function crearCapa(p, t, opacidad) {
-    if (p.tipo === "imagen") {
-      const [o, s, e, n] = p.limites;
-      return L.imageOverlay(urlArchivo(p.archivo), [[s, o], [n, e]], {
-        opacity: opacidad, pane: "mon-productos", zIndex: ++E.z, interactive: false, className: "mon-img",
-        attribution: "Calculado por HidroMet con NOAA GOES-19" });
-    }
+    if (p.tipo === "imagen") return capaImagen(p, opacidad);
     if (p.tipo === "puntos") return capaPuntos(p, opacidad);
     const comun = { opacity: opacidad, attribution: esc(p.atribucion || ""), pane: "mon-productos",
                     zIndex: ++E.z, maxZoom: 18, crossOrigin: false };
@@ -790,7 +812,7 @@
       <p>${esc(p.que)}</p>
       <p class="mon-lectura"><b>Cómo leerlo.</b> ${esc(p.lectura)}</p>
       <dl>${filas.map(f => `<dt>${esc(f[0])}</dt><dd>${esc(f[1])}</dd>`).join("")}</dl>
-      <a href="${esc(p.enlace)}" target="_blank" rel="noopener">Fuente del producto ↗</a>`;
+      ${p.enlace && !window.HIDROMET_VISOR ? `<a href="${esc(p.enlace)}" target="_blank" rel="noopener">Fuente del producto ↗</a>` : ""}`;
   }
 
   function mostrarFicha(id) {
@@ -1087,9 +1109,9 @@
     for (const p of E.calc.productos) {
       const f = filaDe(p.id);
       if (ids.has(p.id) || !f) continue;
-      const km = /(\d+(?:[.,]\d+)?)\s*km/.exec(String(p.resolucion || ""));
+      // Sin difuminado en el navegador: la imagen ya viene suavizada en su escala (y en alta
+      // definición sobre El Oro); el desenfoque CSS era lo que la hacía ver borrosa.
       E.cat.productos.push({ ...p, grupo: f.grupo, calculado: true, opacidad: p.tipo === "puntos" ? 0.95 : 0.8,
-                             suavizar_m: p.tipo === "imagen" && km ? Math.round(parseFloat(km[1].replace(",", ".")) * 1000) : undefined,
                              latencia: "se calcula en cada actualización" });
     }
   }
@@ -1130,6 +1152,8 @@
     E.mapa = L.map("mon-mapa", { zoomControl: false, worldCopyJump: false, minZoom: 5, maxZoom: 12,
                                  zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 100,
                                  maxBounds: L.latLngBounds([s - 15, o - 25], [n + 15, e + 25]) });
+    // En la esquina solo queda la atribución del mapa base (la exige su licencia); sin «Leaflet».
+    if (E.mapa.attributionControl) E.mapa.attributionControl.setPrefix(false);
     for (const [nombre, z] of [["mon-base", 200], ["mon-anim", 300], ["mon-productos", 350], ["mon-limites", 420],
                                ["mon-area", 430], ["mon-etiquetas", 440], ["mon-puntos", 450]]) {
       const pane = E.mapa.createPane(nombre);
@@ -1211,14 +1235,16 @@
       vista.dataset.screenLabel = "Monitoreo";
       vista.classList.add("vista-monitoreo");
       App.vistaPestanas(vista, {
-        kicker: "Satélites en vivo · GOES-19, GPM, VIIRS, Sentinel-1 y Copernicus",
+        kicker: "Satélites en vivo",
         titulo: "Monitoreo",
         sub: "Lo que está pasando ahora en El Oro, en vivo desde los satélites",
         inicial: "mapa",
         pestanas: [
           { id: "mapa", etiqueta: "Mapa en vivo", render: tabMapa, alSalir: limpiar },
-          { id: "productos", etiqueta: "Productos y fuentes", render: async c => {
-            E.cat = E.cat || await App.api("/monitoreo/catalogo"); await cargarCalculados(); tabProductos(c); } },
+          // Productos y fuentes: solo en la aplicación local del dueño («quiero solo poder verlo
+          // yo»). El visor en línea ni siquiera congela los campos de procedencia.
+          ...(window.HIDROMET_VISOR ? [] : [{ id: "productos", etiqueta: "Productos y fuentes", render: async c => {
+            E.cat = E.cat || await App.api("/monitoreo/catalogo"); await cargarCalculados(); tabProductos(c); } }]),
         ],
       });
     },

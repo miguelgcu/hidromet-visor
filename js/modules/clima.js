@@ -341,6 +341,11 @@
     quitarPlaceholder(host);
     const capas = formas ? [heat, lectura] : [heat, ...contorno()];
     Plotly.react(host, [...capas, ...(foco ? trazasArea() : []), ...trazaEstaciones(ce, d)], layout, configEs());
+    // Relieve sombreado del DEM de 30 m sobre el color, recortado a Ecuador (2026-10-03). Llega
+    // después del primer dibujo: el mapa no espera por él.
+    if (App.imagenesRelieve) App.imagenesRelieve("x", "y", { soloEcuador: true }).then(imgs => {
+      if (imgs.length && host.isConnected && host.classList.contains("js-plotly-plot")) Plotly.relayout(host, { images: imgs });
+    });
     observarTamanoMapa(host);
     if (App.pinchZoomMapa) App.pinchZoomMapa(host);   // v17: pinza = zoom del mapa
     const ley = host.parentElement && host.parentElement.querySelector('[data-rol="leyenda"]');
