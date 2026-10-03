@@ -657,3 +657,19 @@ table.tabla td.num, table.tabla th.num { text-align: right; font-family: var(--m
 .hm-skel-carga .hm-skel-panel { height: 260px; flex: 2; min-width: 0; }
 .hm-skel-carga .hm-skel-panel.chico { flex: 1; }
 @media (max-width: 640px) { .hm-skel-carga .hm-skel-panel.chico { display: none; } }
+
+/* ---------------- selector de idioma: ES · EN · 中文 (2026-10-03) ---------------- */
+.hm-idioma { display: inline-flex; align-items: center; gap: 2px; padding: 3px; border-radius: 999px;
+  border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 70%, transparent); }
+.hm-idioma button { all: unset; box-sizing: border-box; cursor: pointer; font: 600 11.5px/1 var(--fuente);
+  color: var(--muted); padding: 5px 9px; border-radius: 999px; transition: color .15s ease, background .15s ease; }
+.hm-idioma button:hover { color: var(--ink); }
+.hm-idioma button[aria-pressed="true"] { color: var(--ink); background: color-mix(in srgb, var(--acc, var(--cyan)) 22%, transparent); }
+.hm-idioma button:focus-visible { outline: 2px solid var(--acc, var(--cyan)); outline-offset: 1px; }
+#topbar-idioma { margin-right: 10px; }
+@media (max-width: 820px) { #topbar-idioma { margin-right: 6px; } #topbar-idioma button { padding: 5px 7px; } }
+/* en la pantalla de ingreso (siempre oscura) */
+.acceso-idioma.hm-idioma { border-color: rgba(255, 255, 255, .14); background: rgba(5, 12, 26, .45); margin: 18px auto 0; }
+.acceso-idioma.hm-idioma button { color: #93a8c6; }
+.acceso-idioma.hm-idioma button:hover { color: #fff; }
+.acceso-idioma.hm-idioma button[aria-pressed="true"] { color: #fff; background: rgba(34, 184, 240, .22); }

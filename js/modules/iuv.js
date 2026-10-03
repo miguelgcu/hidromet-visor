@@ -35,7 +35,7 @@
     return typeof App.trazasContornoProvincias === "function" ? App.trazasContornoProvincias(geo) : [];
   }
   // El idioma «es» de los gráficos lo registra el núcleo al arrancar.
-  function configEs() { return Object.assign({}, App.plotlyConfig ? App.plotlyConfig() : {}, { locale: "es" }); }
+  function configEs() { return Object.assign({}, App.plotlyConfig ? App.plotlyConfig() : {}, { locale: App.localeGraficos ? App.localeGraficos() : "es" }); }
   function quitarPlaceholder(host) {
     if (!host) return;
     Array.from(host.children || []).forEach(h => { if (h.classList && h.classList.contains("cl-vacio")) h.remove(); });

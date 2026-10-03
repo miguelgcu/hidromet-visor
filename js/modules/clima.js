@@ -51,7 +51,7 @@
       } catch (e) { /* sin registro: los ejes quedan en inglés, nada se rompe */ }
       _locEs = true;
     }
-    return Object.assign({}, App.plotlyConfig(), { locale: "es" });
+    return Object.assign({}, App.plotlyConfig(), { locale: App.localeGraficos ? App.localeGraficos() : "es" });
   }
 
   // c = color representativo de la variable (≈ su paleta en el mapa); alimenta el
@@ -120,6 +120,102 @@
       { type: "scatter", mode: "lines", x: xs, y: ys, hoverinfo: "skip", showlegend: false,
         line: { color: osc ? "#AEBBD0" : "#000000", width: 1.2 } },
     ];
+  }
+
+  // ENFOQUE EN EL ORO (pedido del dueño, 2026-10-03): el mapa arranca sobre la provincia,
+  // con su contorno resaltado y el área de operación si el servidor la entrega (es privada:
+  // /api/monitoreo/area; el visor publicado no la tiene). Apagado, se ve el país entero.
+  const FOCO_EL_ORO = [-80.56, -79.12, -4.13, -2.81];
+  let _areaCliente;
+  async function asegurarAreaCliente() {
+    if (_areaCliente !== undefined) return _areaCliente;
+    try {
+      const g = await App.api("/monitoreo/area");
+      _areaCliente = g && (g.features || []).length ? g : null;
+    } catch (e) { _areaCliente = null; }
+    return _areaCliente;
+  }
+  function lineasDe(features) {
+    const xs = [], ys = [];
+    for (const f of features) {
+      const g = f && f.geometry; if (!g) continue;
+      const polys = g.type === "Polygon" ? [g.coordinates] : g.type === "MultiPolygon" ? g.coordinates : [];
+      for (const poly of polys) for (const ring of poly) {
+        for (const [x, y] of ring) { xs.push(x); ys.push(y); } xs.push(null); ys.push(null);
+      }
+    }
+    return { xs, ys };
+  }
+  // Área de operación (tierra adentro: la máscara del mar no la toca) → traza con su globo.
+  function trazasArea() {
+    if (!_areaCliente) return [];
+    const { xs, ys } = lineasDe(_areaCliente.features);
+    const base = { type: "scatter", mode: "lines", x: xs, y: ys, showlegend: false };
+    return [Object.assign({}, base, { hoverinfo: "skip", line: { color: "#1B1405", width: 5.5 } }),
+            Object.assign({}, base, { hoverinfo: "text", text: "Área de operación", line: { color: "#F5B83D", width: 2.6 } })];
+  }
+
+  // COSTA SIN ESCALONES (2026-10-03, «no quiero productos pixeleados»). Al acercarse a El Oro
+  // la malla de ~5 km dejaba la costa en peldaños. El campo se prolonga dos celdas hacia el
+  // mar (media de las vecinas válidas) para que el suavizado llegue hasta la costa, y una
+  // máscara vectorial con el contorno exacto del país tapa el mar. Los contornos van como
+  // formas encima de la máscara. El cursor lee la capa original, invisible: nunca muestra
+  // un valor prolongado.
+  function prolongar(z, pasos = 2) {
+    let a = z.map(f => f.slice());
+    const nf = a.length, nc = nf ? a[0].length : 0;
+    const vale = v => v != null && Number.isFinite(v);
+    for (let p = 0; p < pasos; p++) {
+      const b = a.map(f => f.slice());
+      for (let i = 0; i < nf; i++) for (let j = 0; j < nc; j++) {
+        if (vale(a[i][j])) continue;
+        let suma = 0, n = 0;
+        for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) {
+          const v = (a[i + di] || [])[j + dj];
+          if (vale(v)) { suma += v; n++; }
+        }
+        if (n) b[i][j] = suma / n;
+      }
+      a = b;
+    }
+    return a;
+  }
+  function caminoDe(features, soloExterior) {
+    let camino = "";
+    for (const f of features) {
+      const g = f && f.geometry; if (!g) continue;
+      const polys = g.type === "Polygon" ? [g.coordinates] : g.type === "MultiPolygon" ? g.coordinates : [];
+      for (const poly of polys) for (const ring of (soloExterior ? poly.slice(0, 1) : poly)) {
+        if (ring && ring.length > 2) camino += "M" + ring.map(([x, y]) => `${x},${y}`).join("L") + "Z";
+      }
+    }
+    return camino;
+  }
+  function fondoDe(el) {
+    for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
+      const c = getComputedStyle(n).backgroundColor;
+      if (c && c !== "transparent" && !/^rgba\(.*,\s*0\)$/.test(c)) return c;
+    }
+    return "#ffffff";
+  }
+  function formasMapa(host, foco) {
+    if (!geo || !geo.features) return null;
+    const osc = App.tema && App.tema() === "oscuro";
+    const tierra = caminoDe(geo.features, true);
+    const linea = (camino, color, ancho) => ({ type: "path", path: camino, xref: "x", yref: "y", layer: "above",
+      fillcolor: "rgba(0,0,0,0)", line: { color, width: ancho } });
+    const formas = [
+      { type: "path", path: "M-95,-12L-70,-12L-70,6L-95,6Z" + tierra, xref: "x", yref: "y", layer: "above",
+        fillrule: "evenodd", fillcolor: fondoDe(host), line: { width: 0 } },
+      linea(caminoDe(geo.features, false), osc ? "#0B1322" : "#ffffff", 2.8),
+      linea(caminoDe(geo.features, false), osc ? "#AEBBD0" : "#000000", 1.2),
+    ];
+    const oro = geo.features.filter(f => f.properties && (f.properties.codigo === "07" || f.properties.nombre === "El Oro"));
+    if (foco && oro.length) {
+      formas.push(linea(caminoDe(oro, true), osc ? "#0B1322" : "#ffffff", 6),
+                  linea(caminoDe(oro, true), osc ? "#7FE3F0" : "#0B5C7A", 2.6));
+    }
+    return formas;
   }
 
   // Capa de estaciones sobre el mapa: valor de la normal activa muestreado en cada
@@ -218,26 +314,33 @@
       d = Object.assign({}, d, { colorscale: escalaAridez(d) });
     const dec = (d.variable === "tmax" || d.variable === "tmin" || d.operacion === "anomalia_mm")
       ? 1 : (d.variable === "aridez" ? 2 : 0);
+    const formas = formasMapa(host, !!E.mapFoco);
     const heat = {
-      type: "heatmap", x: d.lon, y: d.lat, z: d.campo, colorscale: d.colorscale,
+      type: "heatmap", x: d.lon, y: d.lat, z: formas ? prolongar(d.campo) : d.campo, colorscale: d.colorscale,
       zmin: d.vmin, zmax: d.vmax, zsmooth: "best", hoverongaps: false,
       showscale: false,   // v12: la escala vive en la leyenda horizontal bajo el mapa
       hovertemplate: `lat %{y:.2f}, lon %{x:.2f}<br><b>%{z:.${dec}f} ${esc(d.unidad || "")}</b><extra></extra>`,
     };
+    // con máscara, el globo sale de la capa original (invisible): nunca de una celda prolongada
+    const lectura = formas ? Object.assign({}, heat, { z: d.campo, zsmooth: false, opacity: 0 }) : null;
+    if (formas) heat.hoverinfo = "skip";
     // Encuadre ECUADOR CONTINENTAL: la grilla es continental, pero el contorno
     // provincial incluye Galápagos y el autorange alejaba el mapa hacia el oeste.
     // Rango fijo del render (bbox continental); los datos NO se filtran.
     // Altura ajustada al ASPECTO de Ecuador (lat 6.7° / lon 6.1° ≈ 1.1): el mapa
     // estrecho queda ceñido al país, sin franjas de mar muertas (pedido del dueño).
     const alto = Math.max(380, Math.min(640, Math.round((host.clientWidth || 520) * 1.08)));
+    const foco = !!E.mapFoco;
     const layout = App.plotlyLayoutBase({
       height: alto, margin: { l: 6, r: 6, t: 6, b: 6 },
       xaxis: { visible: false, scaleanchor: "y", constrain: "domain", fixedrange: false,
-        range: [-81.2, -75.1] },
-      yaxis: { visible: false, fixedrange: false, range: [-5.1, 1.6] },
+        range: foco ? [FOCO_EL_ORO[0], FOCO_EL_ORO[1]] : [-81.2, -75.1] },
+      yaxis: { visible: false, fixedrange: false, range: foco ? [FOCO_EL_ORO[2], FOCO_EL_ORO[3]] : [-5.1, 1.6] },
     });
+    if (formas) layout.shapes = formas;
     quitarPlaceholder(host);
-    Plotly.react(host, [heat, ...contorno(), ...trazaEstaciones(ce, d)], layout, configEs());
+    const capas = formas ? [heat, lectura] : [heat, ...contorno()];
+    Plotly.react(host, [...capas, ...(foco ? trazasArea() : []), ...trazaEstaciones(ce, d)], layout, configEs());
     observarTamanoMapa(host);
     if (App.pinchZoomMapa) App.pinchZoomMapa(host);   // v17: pinza = zoom del mapa
     const ley = host.parentElement && host.parentElement.querySelector('[data-rol="leyenda"]');
@@ -392,7 +495,7 @@
   // PESTAÑA 1 — MAPAS ---------------------------------------------------------
   // mapEst arranca APAGADO: los 1.061 puntos de estación tapaban el campo de colores
   // al entrar (y descargaban ~236 KB por combinación). La capa es una elección consciente.
-  const E = { mapVar: "precip", mapEsc: "anual", mapEst: false, mapaCache: {}, estCache: {},
+  const E = { mapVar: "precip", mapEsc: "anual", mapEst: false, mapFoco: true, mapaCache: {}, estCache: {},
     tabs: null, estSel: null };
   // Los colores de los gráficos se eligen AL PINTAR (App.tema()): al cambiar de tema
   // hay que redibujar el panel visible (patrón sngr.js). Cada pestaña registra su redibujo.
@@ -410,6 +513,7 @@
           ${MESES.map((m, i) => `<button class="cl-mes ${(i === 0 ? "anual" : i) == E.mapEsc ? "on" : ""}" data-e="${i === 0 ? "anual" : i}">${esc(m)}</button>`).join("")}
         </div></div>
         <div class="cl-grupo"><span>Capa</span>
+          <label class="cl-chk"><input type="checkbox" data-rol="chk-foco" ${E.mapFoco ? "checked" : ""}> enfocar El Oro</label>
           <label class="cl-chk"><input type="checkbox" data-rol="chk-est" ${E.mapEst ? "checked" : ""}> estaciones (valor)</label></div>
       </div>
       <div class="cl-mapgrid">
@@ -507,6 +611,8 @@
       selArea.innerHTML = `<option value="">Provincia (promedio areal)…</option>` + lista.map(a =>
         `<option value="${esc(a.nombre)}">${esc(a.nombre)}${a.region ? " · " + esc(App.redEtiqueta(a.region)) : ""}</option>`).join("");
       selArea.onchange = () => miniArea(selArea.value);
+      // enfoque El Oro: el resumen lateral arranca con la provincia
+      if (E.mapFoco && lista.some(a => a.nombre === "El Oro")) { selArea.value = "El Oro"; miniArea("El Oro"); }
     })();
     async function dibujar() {
       const v = VARS.find(x => x.id === E.mapVar);
@@ -536,6 +642,7 @@
         }
       }
       tit.textContent = d.titulo || "";
+      if (E.mapFoco) await asegurarAreaCliente();
       pintarMapa(plot, d, ce);
       // Clic en una estación → su ficha completa AL LADO del mapa (v16).
       if (typeof plot.on === "function" && !plot._clickEst) {
@@ -559,6 +666,8 @@
       dibujar();
     };
     chkEst.onchange = () => { E.mapEst = chkEst.checked; dibujar(); };
+    const chkFoco = c.querySelector('[data-rol="chk-foco"]');
+    if (chkFoco) chkFoco.onchange = () => { E.mapFoco = chkFoco.checked; dibujar(); };
     _alTema = () => {
       if (!c.isConnected) return;
       dibujar();

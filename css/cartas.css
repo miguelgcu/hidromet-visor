@@ -84,7 +84,8 @@
   user-select: none; transition: background .14s, color .14s; }
 .ct-toggle::before { content: ""; width: 9px; height: 9px; flex: none; border-radius: 50%;
   box-shadow: inset 0 0 0 1.5px var(--ctrl-bd); transition: background .14s, box-shadow .14s; }
-.ct-toggle:hover { color: var(--ink); background: color-mix(in srgb, var(--surface) 70%, transparent); }
+.ct-toggle:hover:not(:disabled) { color: var(--ink); background: color-mix(in srgb, var(--surface) 70%, transparent); }
+.ct-toggle:disabled { opacity: .42; cursor: not-allowed; }
 .ct-toggle.activo { color: var(--ink); background: var(--surface); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
 .ct-toggle.activo::before { background: var(--acc, var(--blue)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--acc, var(--blue)) 22%, transparent); }
 
@@ -92,9 +93,12 @@
 .ct-inst-nav { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; min-width: 0; }
 .ct-inst-nav .et { margin-right: 2px; }
 .ct-inst-nav .ct-instante { min-width: 0; }
-.ct-capas { display: flex; align-items: center; gap: 2px; margin-left: auto; padding: 3px;
+/* Interruptores de capa: un grupo más de la barra, con su etiqueta. Al pasar de fila
+   arranca a la izquierda como los demás; si no cabe, se desliza dentro de su pista. */
+.ct-capas-grupo { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; }
+.ct-capas { display: flex; align-items: center; gap: 2px; padding: 3px; min-width: 0;
   background: var(--surface-3); border: 1px solid var(--line); border-radius: 11px;
-  overflow-x: auto; scrollbar-width: none; max-width: 100%; }
+  overflow-x: auto; scrollbar-width: none; }
 .ct-capas::-webkit-scrollbar { display: none; }
 /* UNA LEYENDA POR GRÁFICO: cada tarjeta lleva la suya bajo el mapa, dentro de la tarjeta. */
 .ct-carta .ct-ley-card { padding: 9px 14px 12px; border-top: 1px solid var(--line-3); min-width: 0; }
@@ -318,6 +322,7 @@
   .ct-barra .ct-umbral-sel { width: auto; flex: 1; }
   .ct-barra .ct-umbral-sel select { width: 100%; max-width: none; }
   .ct-inst-nav { width: 100%; flex-wrap: wrap; row-gap: 6px; }
+  .ct-capas-grupo { width: 100%; }
   .ct-inst-nav .et { flex-basis: 100%; }
   .ct-inst-nav .ct-instante { flex: 1 1 0; }
   .ct-derecha, .ct-capas { margin-left: 0; }

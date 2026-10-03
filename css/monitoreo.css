@@ -1,64 +1,38 @@
 /* ============================================================
-   Monitoreo — mapa Leaflet con productos satelitales en vivo
+   Monitoreo — el mapa ocupa toda la vista (rediseño 2026-10-03)
+   Pedido del dueño: «agranda la ventana de visualización», sin mapa base que elegir,
+   sin redundancia y sin pantallazos. Encima del mapa flotan solo dos piezas:
+   el panel de capas (arriba a la izquierda, plegable) y el reproductor de la capa
+   activa (abajo a la derecha: hora, controles, línea de tiempo y leyenda propia).
    ============================================================ */
-/* La vista de Monitoreo llena el alto disponible (sin cuentas a mano: si aparece
-   la banda de aviso bajo la barra superior, el mapa simplemente se acorta). */
-#vista[data-modulo="monitoreo"] { display: flex; flex-direction: column; padding-bottom: 16px; }
+#vista[data-modulo="monitoreo"] { display: flex; flex-direction: column; padding-bottom: 12px; }
 #vista[data-modulo="monitoreo"] > .hm-cuerpo { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 #vista[data-modulo="monitoreo"] > .hm-cuerpo > * { flex: none; }
 #vista[data-modulo="monitoreo"] > .hm-cuerpo > .mon { flex: 1 1 auto; }
-.mon {
-  display: grid; grid-template-columns: 300px 1fr; gap: var(--gap-grid);
-  height: auto; min-height: 520px;
-}
-.mon-panel {
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card);
-  box-shadow: var(--shadow-card); display: flex; flex-direction: column; min-height: 0;
-}
-.mon-panel-cab {
-  display: flex; gap: 8px; align-items: center; justify-content: space-between;
-  padding: 12px; border-bottom: 1px solid var(--line);
-}
-.mon-panel-cab label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; font-weight: 600; color: var(--muted); flex: 1; }
-.mon-panel-cab select, .mon-ctl select { font: inherit; font-size: var(--fs-sm); color: var(--ink); background-color: var(--surface-2);
-  border: 1px solid var(--ctrl-bd); border-radius: var(--r-ctrl); padding: 5px 7px; }
-#mon-plegar { display: none; }
-.mon-capas { overflow-y: auto; padding: 4px 10px 8px; flex: 1; min-height: 0; }
-.mon-grupo h3 {
-  font-size: 13px; font-weight: 650; color: var(--ink); margin: 14px 0 5px; padding: 0 4px;
-  display: flex; flex-direction: column; gap: 1px;
-}
-.mon-grupo h3 small { font-weight: 400; font-size: var(--fs-micro); color: var(--muted-2); }
-.mon-prod {
-  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 6px;
-  padding: 4px 6px; border-radius: var(--r-ctrl); border: 1px solid transparent;
-}
-.mon-prod:hover { background: var(--surface-2); }
-.mon-prod.activa { background: color-mix(in srgb, var(--acc, var(--cyan)) 12%, var(--surface)); border-color: color-mix(in srgb, var(--acc, var(--cyan)) 40%, var(--line)); }
-.mon-prod label { display: flex; align-items: center; gap: 7px; cursor: pointer; font-size: var(--fs-sm); color: var(--ink); min-width: 0; }
-.mon-prod label input { accent-color: var(--acc, var(--cyan)); margin: 0; }
-.mon-prod .nom { flex: 1; min-width: 0; }
-.mon-anima { font-style: normal; font-size: 9px; color: var(--acc, var(--cyan)); margin-left: 2px; }
-.mon-prod .res { font-size: var(--fs-micro); color: var(--muted-2); font-family: var(--mono); white-space: nowrap; }
-.mon-info {
-  width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--ctrl-bd); background: var(--surface);
-  color: var(--muted); font: 600 11px/1 var(--fuente); cursor: pointer; padding: 0;
-}
-.mon-info:hover { color: var(--acc, var(--cyan)); border-color: var(--acc, var(--cyan)); }
-.mon-op { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; padding: 2px 0 2px 22px; font-size: var(--fs-micro); color: var(--muted); }
-.mon-op input { flex: 1; accent-color: var(--acc, var(--cyan)); }
-.mon-nota { font-size: var(--fs-micro); color: var(--muted-2); margin: 0; padding: 8px 12px 10px; border-top: 1px solid var(--line); }
 
-/* isolation: los paneles flotantes del mapa (z-index 800) se ordenan dentro de esta caja
-   y no tapan la barra superior ni la navegación inferior del teléfono. */
-.mon-mapa-caja { position: relative; isolation: isolate; min-height: 0; border-radius: var(--r-card); overflow: hidden;
-  border: 1px solid var(--line); box-shadow: var(--shadow-card); container-type: inline-size; }
+.mon { position: relative; min-height: 560px; }
+/* isolation: las piezas flotantes (z-index 800) se ordenan dentro de esta caja y no tapan
+   la barra superior ni la navegación inferior del teléfono. */
+.mon-mapa-caja {
+  position: absolute; inset: 0; isolation: isolate; overflow: hidden;
+  border-radius: var(--r-card); border: 1px solid var(--line); box-shadow: var(--shadow-card);
+  container-type: inline-size;
+}
 .mon-mapa { position: absolute; inset: 0; background: var(--sea-bottom); }
-.mon-mapa .leaflet-control-attribution { font-size: 10px; max-width: 60%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mon-mapa .leaflet-control-attribution {
+  font-size: 10px; max-width: 46%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: color-mix(in srgb, var(--surface) 70%, transparent); color: var(--muted); border-top-left-radius: 6px;
+}
+.mon-mapa .leaflet-control-attribution a { color: var(--muted); }
+.mon-mapa .leaflet-control-scale-line {
+  background: color-mix(in srgb, var(--surface) 72%, transparent); color: var(--ink-2);
+  border-color: var(--ink-2); font: 500 10.5px/1.3 var(--fuente);
+}
 
-/* Nada pixelado: Leaflet pide a Safari escalar los mosaicos sin suavizar
-   (-webkit-optimize-contrast) y al acercar el mapa se veían los píxeles. */
+/* Nada pixelado: Leaflet pide a Safari escalar sin suavizar (-webkit-optimize-contrast) y al
+   acercarse se veían los píxeles. El difuminado proporcional al píxel lo pone el módulo. */
 .vista-monitoreo .leaflet-tile, .vista-monitoreo .leaflet-image-layer { image-rendering: auto !important; }
+.vista-monitoreo .leaflet-pane { transition: filter .25s ease; }
 /* El lienzo animado se funde en los bordes: si el mapa enseña más allá de la caja, no hay corte seco */
 .mon-lienzo {
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 2.5%, #000 97.5%, transparent),
@@ -69,101 +43,210 @@
   mask-composite: intersect;
 }
 
-.mon-ctl, .mon-leyenda, .mon-ficha {
-  position: absolute; z-index: 800; background: var(--overlay-bg); color: var(--ink);
-  backdrop-filter: blur(6px); border: 1px solid var(--line); border-radius: var(--r-panel);
-  box-shadow: var(--shadow-hover); font-size: var(--fs-sm);
+/* Controles del mapa: zoom y foco, con el mismo vidrio que los paneles */
+.mon-mapa .leaflet-bar { border: 1px solid var(--line) !important; border-radius: 10px; overflow: hidden;
+  box-shadow: var(--shadow-hover); background: var(--overlay-bg); backdrop-filter: blur(10px); }
+.mon-mapa .leaflet-bar a, .mon-foco button {
+  background: transparent; color: var(--ink); border-bottom: 1px solid var(--line);
+  width: 34px; height: 34px; line-height: 34px; font: 600 17px/34px var(--fuente);
 }
-/* Control de la animación: compacto, abajo a la izquierda (como el monitor hidrometeorológico) */
-.mon-ctl { left: 10px; bottom: 22px; padding: 7px 9px; width: 330px; max-width: calc(100% - 20px); }
-.mon-ctl-fila { display: flex; align-items: center; gap: 5px; }
-.mon-ctl-fila select { flex: 1; min-width: 0; padding: 3px 5px; font-size: var(--fs-xs); }
-.mon-ctl-b {
-  border: 1px solid var(--ctrl-bd); background: var(--surface); color: var(--ink); border-radius: var(--r-ctrl);
-  width: 28px; height: 26px; cursor: pointer; font-size: 11px; padding: 0; flex: none;
+.mon-mapa .leaflet-bar a:hover, .mon-foco button:hover { background: color-mix(in srgb, var(--acc, var(--cyan)) 16%, transparent); color: var(--ink); }
+.mon-mapa .leaflet-bar a:last-child, .mon-foco button:last-child { border-bottom: 0; }
+.mon-foco { display: flex; flex-direction: column; }
+.mon-foco button {
+  all: unset; box-sizing: border-box; cursor: pointer; padding: 0 11px; height: 32px; display: flex; align-items: center;
+  font: 600 12px/1 var(--fuente); color: var(--ink); border-bottom: 1px solid var(--line); white-space: nowrap;
 }
-.mon-ctl-b:hover { border-color: var(--acc, var(--cyan)); color: var(--acc, var(--cyan)); }
-.mon-ctl-hora { font-family: var(--mono); font-size: 15px; font-variant-numeric: tabular-nums; min-width: 46px; text-align: right; }
-.mon-ctl-sub { font-size: var(--fs-micro); color: var(--muted); margin-top: 4px; line-height: 1.35; }
-.mon-ctl-ley { display: block; width: 100%; height: auto; margin-top: 5px; background: #fff; border-radius: 4px; }
-.mon-ley-recorte { overflow: hidden; width: 100%; margin-top: 5px; border-radius: 4px; background: #fff; }
-.mon-ley-recorte img { margin-top: 0 !important; display: block; width: 100%; height: auto; }
-.mon-ctl-claves { display: flex; flex-wrap: wrap; gap: 3px 10px; margin-top: 5px; font-size: var(--fs-micro); color: var(--muted); }
-.mon-ctl-claves i, .mon-sw i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 4px; vertical-align: -1px;
-  border: 1px solid rgba(0,0,0,.15); }
+.mon-foco button[hidden] { display: none; }
+.mon-foco button:focus-visible, .mon-mapa .leaflet-bar a:focus-visible { outline: 2px solid var(--acc, var(--cyan)); outline-offset: -2px; }
 
-/* Leyendas de las capas superpuestas: abajo a la derecha, plegables */
-.mon-leyenda { right: 10px; bottom: 22px; width: 280px; max-height: 55%; display: flex; flex-direction: column; }
-.mon-ley-cab { all: unset; cursor: pointer; padding: 6px 10px; font-size: var(--fs-xs); font-weight: 600; color: var(--ink); }
-.mon-ley-cuerpo { overflow-y: auto; padding: 0 10px 8px; }
-.mon-ley-item + .mon-ley-item { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
-.mon-ley-tit { font-weight: 600; font-size: var(--fs-xs); }
-.mon-ley-tit small { font-weight: 400; color: var(--muted); }
-.mon-ley-t { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: var(--fs-micro); color: var(--muted); margin: 1px 0 4px; }
-.mon-dias button { border: 1px solid var(--ctrl-bd); background: var(--surface); color: var(--ink); border-radius: 6px; font-size: 10px;
-  width: 22px; height: 20px; cursor: pointer; padding: 0; }
-.mon-dias button:disabled { opacity: .35; cursor: default; }
-.mon-ley-item img { width: 100%; height: auto; display: block; background: #fff; border-radius: 4px; }
-.mon-sws { display: flex; flex-wrap: wrap; gap: 2px 10px; }
-.mon-sw { font-size: var(--fs-micro); color: var(--muted); }
-.mon-rgb { font-size: var(--fs-micro); color: var(--muted); }
-.mon-fallo { margin-top: 4px; font-size: var(--fs-micro); color: var(--warn); }
-.mon-ley-n { font-size: var(--fs-micro); color: var(--ink-2); margin-bottom: 3px; }
-.mon-tramos { display: flex; width: 100%; }
-.mon-tramo { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-.mon-tramo i { height: 10px; display: block; }
-.mon-tramo em { font-style: normal; font-size: 9.5px; color: var(--muted); white-space: nowrap; overflow: visible; height: 13px; }
+/* ---------------- piezas flotantes: el mismo vidrio ---------------- */
+.mon-panel, .mon-reproductor, .mon-ficha {
+  position: absolute; z-index: 800; color: var(--ink);
+  background: var(--overlay-bg); backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow-pop, var(--shadow-hover));
+  font-size: var(--fs-sm);
+}
+
+/* ---------------- panel de capas ---------------- */
+.mon-panel {
+  top: 12px; left: 12px; width: 296px; max-height: calc(100% - 24px);
+  display: flex; flex-direction: column; overflow: hidden;
+  transition: max-height .28s ease, width .28s ease;
+}
+.mon-panel-cab {
+  all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 8px;
+  padding: 11px 14px; border-bottom: 1px solid var(--line); flex: none;
+}
+.mon-panel-cab:focus-visible { outline: 2px solid var(--acc, var(--cyan)); outline-offset: -2px; border-radius: 14px; }
+.mon-panel-tit { font-weight: 650; font-size: 13.5px; letter-spacing: .01em; }
+.mon-panel-activa { flex: 1; min-width: 0; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
+.mon-chev { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; color: var(--muted); transition: transform .25s ease; flex: none; }
+.mon-panel.plegado .mon-chev { transform: rotate(-90deg); }
+.mon-panel.plegado { max-height: 46px; }
+.mon-panel.plegado .mon-panel-cab { border-bottom-color: transparent; }
+.mon-capas { overflow-y: auto; padding: 4px 8px 10px; flex: 1; min-height: 0; overscroll-behavior: contain; scrollbar-width: thin; }
+
+.mon-grupo h3 {
+  font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .08em; color: var(--muted-2);
+  margin: 14px 8px 5px;
+}
+.mon-grupo:first-child h3 { margin-top: 8px; }
+.mon-item {
+  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 0 4px;
+  border-radius: 10px; border: 1px solid transparent; margin: 1px 0; transition: background .15s ease, border-color .15s ease;
+}
+.mon-item:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.mon-item.activa {
+  background: color-mix(in srgb, var(--acc, var(--cyan)) 13%, transparent);
+  border-color: color-mix(in srgb, var(--acc, var(--cyan)) 45%, transparent);
+}
+.mon-item-b {
+  all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 10px;
+  padding: 7px 4px 7px 9px; min-width: 0; border-radius: 10px;
+}
+.mon-item-b:focus-visible { outline: 2px solid var(--acc, var(--cyan)); outline-offset: -2px; }
+.mon-radio {
+  width: 14px; height: 14px; border-radius: 50%; border: 1.6px solid var(--muted-2); flex: none; position: relative;
+  transition: border-color .15s ease;
+}
+.mon-item.activa .mon-radio { border-color: var(--acc, var(--cyan)); }
+.mon-item.activa .mon-radio::after {
+  content: ""; position: absolute; inset: 2.5px; border-radius: 50%; background: var(--acc, var(--cyan));
+}
+.mon-item-txt { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+.mon-item-nom { font-size: 13px; font-weight: 550; line-height: 1.25; color: var(--ink); }
+.mon-item-meta { font-size: 11px; color: var(--muted); line-height: 1.25; }
+.mon-anim-etq {
+  display: inline-block; font-size: 9.5px; font-weight: 650; letter-spacing: .03em; text-transform: uppercase;
+  color: var(--acc, var(--cyan)); border: 1px solid color-mix(in srgb, var(--acc, var(--cyan)) 55%, transparent);
+  border-radius: 999px; padding: 0 5px; margin-left: 5px; vertical-align: 0; line-height: 14px;
+}
+.mon-info, .mon-rep-info {
+  width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--ctrl-bd); background: transparent;
+  color: var(--muted); font: 600 11.5px/1 var(--fuente); cursor: pointer; padding: 0; margin-right: 6px; flex: none;
+  transition: color .15s ease, border-color .15s ease;
+}
+.mon-info:hover, .mon-rep-info:hover { color: var(--acc, var(--cyan)); border-color: var(--acc, var(--cyan)); }
+.mon-variantes { grid-column: 1 / -1; display: flex; gap: 4px; padding: 0 9px 8px 33px; flex-wrap: wrap; }
+.mon-var {
+  all: unset; box-sizing: border-box; cursor: pointer; font: 600 11.5px/1 var(--fuente); color: var(--muted);
+  padding: 5px 9px; border-radius: 999px; border: 1px solid var(--line); transition: all .15s ease;
+}
+.mon-var:hover { color: var(--ink); border-color: var(--muted-2); }
+.mon-var.activa { color: var(--ink); background: color-mix(in srgb, var(--acc, var(--cyan)) 22%, transparent);
+  border-color: color-mix(in srgb, var(--acc, var(--cyan)) 60%, transparent); }
+.mon-var:focus-visible { outline: 2px solid var(--acc, var(--cyan)); outline-offset: 1px; }
+
+/* ---------------- reproductor de la capa activa ---------------- */
+.mon-reproductor { right: 12px; bottom: 26px; width: 340px; max-width: calc(100% - 24px); padding: 12px 14px 12px; }
+.mon-rep-cab { display: flex; align-items: flex-start; gap: 8px; }
+.mon-rep-tit { flex: 1; min-width: 0; display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 8px; }
+.mon-rep-tit b { font-size: 14px; font-weight: 650; line-height: 1.25; }
+.mon-rep-var {
+  font: 650 10.5px/1 var(--fuente); color: var(--acc, var(--cyan)); padding: 3px 7px; border-radius: 999px;
+  background: color-mix(in srgb, var(--acc, var(--cyan)) 16%, transparent);
+}
+.mon-rep-info { margin-right: -2px; }
+.mon-rep-t { font-family: var(--mono); font-size: 12px; color: var(--ink-2); margin: 3px 0 0; font-variant-numeric: tabular-nums; min-height: 16px; }
+.mon-rep-ctl { display: flex; align-items: center; gap: 6px; margin: 10px 0 2px; }
+.mon-rep-b {
+  width: 30px; height: 30px; border-radius: 9px; border: 1px solid var(--ctrl-bd); background: color-mix(in srgb, var(--surface) 60%, transparent);
+  color: var(--ink); cursor: pointer; padding: 0; flex: none; font: 600 16px/1 var(--fuente);
+  display: inline-flex; align-items: center; justify-content: center; transition: border-color .15s ease, color .15s ease;
+}
+.mon-rep-b:hover:not(:disabled) { border-color: var(--acc, var(--cyan)); color: var(--acc, var(--cyan)); }
+.mon-rep-b:disabled { opacity: .35; cursor: default; }
+.mon-rep-b svg { width: 15px; height: 15px; fill: currentColor; }
+.mon-rep-play { background: var(--acc, var(--cyan)); border-color: transparent; color: #04121c; }
+.mon-rep-play:hover:not(:disabled) { color: #04121c; filter: brightness(1.08); }
+.mon-rep-fecha { flex: 1; text-align: center; font-size: 12px; color: var(--ink-2); }
+/* Línea de tiempo: avance coloreado hasta el cuadro visible */
+.mon-linea {
+  flex: 1; min-width: 0; height: 22px; margin: 0 2px; background: transparent; -webkit-appearance: none; appearance: none; cursor: pointer;
+  --avance: 100%;
+}
+.mon-linea::-webkit-slider-runnable-track {
+  height: 4px; border-radius: 4px;
+  background: linear-gradient(90deg, var(--acc, var(--cyan)) var(--avance), color-mix(in srgb, var(--ink) 18%, transparent) var(--avance));
+}
+.mon-linea::-moz-range-track { height: 4px; border-radius: 4px; background: color-mix(in srgb, var(--ink) 18%, transparent); }
+.mon-linea::-moz-range-progress { height: 4px; border-radius: 4px; background: var(--acc, var(--cyan)); }
+.mon-linea::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; margin-top: -5px;
+  background: #fff; border: 2px solid var(--acc, var(--cyan)); box-shadow: 0 1px 4px rgba(0,0,0,.35);
+}
+.mon-linea::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: #fff; border: 2px solid var(--acc, var(--cyan)); }
+.mon-linea:disabled { opacity: .4; cursor: default; }
+.mon-linea:focus-visible { outline: 2px solid var(--acc, var(--cyan)); outline-offset: 2px; border-radius: 6px; }
+
+/* Leyendas propias: escala continua, tramos y claves */
+.mon-escala { margin-top: 10px; }
+.mon-escala-barra { height: 9px; border-radius: 5px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.18); }
+.mon-escala-seg { display: flex; overflow: hidden; }
+.mon-escala-seg i { flex: 1; display: block; }
+.mon-escala-marcas { position: relative; height: 15px; margin: 3px 6px 0; }
+.mon-escala-marcas span {
+  position: absolute; transform: translateX(-50%); font: 500 10px/1.3 var(--mono); color: var(--ink-2); white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.mon-escala-tramos .mon-escala-marcas span { transform: none; }
+.mon-escala-pie { display: flex; justify-content: space-between; gap: 8px; font-size: 10.5px; color: var(--muted); margin-top: 1px; }
+.mon-escala-u { color: var(--ink-2); font-weight: 600; }
+.mon-claves { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 10px; font-size: 11.5px; color: var(--ink-2); }
+.mon-claves i {
+  width: 11px; height: 11px; border-radius: 3px; display: inline-block; margin-right: 5px; vertical-align: -1px;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.2);
+}
+.mon-claves-puntos i { border-radius: 50%; }
+.mon-rep-n { font-size: 12px; color: var(--ink-2); margin-top: 10px; }
+.mon-rep-nota { font-size: 11px; color: var(--muted); margin-top: 8px; line-height: 1.4; }
+.mon-rep-aviso { font-size: 11px; color: var(--warn); margin-top: 6px; line-height: 1.4; }
+
+/* ---------------- área de operación del cliente ---------------- */
+.leaflet-mon-area-pane .mon-area-linea, .mon-area-linea { filter: drop-shadow(0 0 5px rgba(255, 201, 60, .55)); }
+.mon-area-etq { width: auto !important; height: auto !important; }
+.mon-area-etq span {
+  display: inline-block; transform: translate(-50%, calc(-100% - 8px)); white-space: nowrap;
+  font: 650 11.5px/1 var(--fuente); letter-spacing: .02em; color: #1a1300; background: #FFC93C;
+  padding: 5px 9px; border-radius: 999px; box-shadow: 0 2px 10px rgba(0, 0, 0, .35);
+}
+
+/* ---------------- ficha (qué es y cómo leerlo) ---------------- */
+.mon-ficha { right: 12px; top: 12px; width: 340px; max-height: calc(100% - 24px); overflow-y: auto; padding: 14px 16px; z-index: 810; }
+.mon-ficha-tit { font-weight: 650; font-size: var(--fs-md); margin-bottom: 8px; padding-right: 24px; }
+.mon-ficha p { margin: 0 0 9px; line-height: 1.5; }
+.mon-lectura { background: color-mix(in srgb, var(--acc, var(--cyan)) 10%, transparent); border-left: 3px solid var(--acc, var(--cyan));
+  padding: 8px 10px; border-radius: 8px; }
+.mon-ficha dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0 0 10px; font-size: var(--fs-xs); }
+.mon-ficha dt { color: var(--muted); }
+.mon-ficha dd { margin: 0; }
+.mon-ficha a { color: var(--blue-bright); font-size: var(--fs-xs); }
+.mon-cerrar { position: absolute; top: 8px; right: 10px; border: 0; background: none; color: var(--muted); font-size: 20px; cursor: pointer; line-height: 1; }
+.mon-cerrar:hover { color: var(--ink); }
+
 .mon-pop { border-collapse: collapse; margin-top: 4px; font-size: 12px; }
 .mon-pop td { padding: 1px 8px 1px 0; vertical-align: top; }
 .mon-pop td:first-child { color: #667; }
 
-.mon-ficha { right: 10px; top: 10px; width: 330px; max-height: calc(100% - 120px); overflow-y: auto; padding: 12px 14px; }
-.mon-ficha-tit { font-weight: 600; font-size: var(--fs-md); margin-bottom: 6px; padding-right: 20px; }
-.mon-ficha p { margin: 0 0 8px; line-height: 1.45; }
-.mon-lectura { background: color-mix(in srgb, var(--acc, var(--cyan)) 10%, var(--surface)); border-left: 3px solid var(--acc, var(--cyan)); padding: 7px 9px; border-radius: 6px; }
-.mon-ficha dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 0 0 8px; font-size: var(--fs-xs); }
-.mon-ficha dt { color: var(--muted); }
-.mon-ficha dd { margin: 0; }
-.mon-ficha a { color: var(--blue-bright); font-size: var(--fs-xs); }
-.mon-cerrar { position: absolute; top: 6px; right: 8px; border: 0; background: none; color: var(--muted); font-size: 18px; cursor: pointer; }
-
+/* ---------------- pestaña «Productos y fuentes» ---------------- */
 .mon-tabla-caja { display: flex; flex-direction: column; gap: 10px; }
-.mon-intro { margin: 0; color: var(--muted); }
+.mon-intro { margin: 0; color: var(--muted); max-width: 70ch; }
 .mon-tabla td, .mon-tabla th { vertical-align: top; font-size: var(--fs-sm); }
-.mon-tabla td:nth-child(8) { min-width: 280px; }
-.mon-pendientes { margin: 0; padding-left: 18px; color: var(--ink-2); }
-.mon-pendientes li { margin: 3px 0; }
+.mon-tabla td:last-child { min-width: 280px; }
+.mon-tabla-var { font-size: 11px; color: var(--muted); margin-top: 2px; }
 
-/* Mapa angosto: las leyendas suben para no tapar el control de la animación */
-@container (max-width: 720px) {
-  .mon-leyenda { top: 36px; bottom: auto; max-height: 45%; width: 240px; }   /* bajo la escala de distancia */
-  .mon-ficha { left: 10px; right: 10px; width: auto; }
+/* ---------------- mapa angosto y teléfono ---------------- */
+@container (max-width: 760px) {
+  .mon-panel { width: calc(100% - 24px); }
+  /* el panel ocupa todo el ancho arriba: los controles del mapa bajan para no quedar debajo */
+  .mon-mapa .leaflet-top.leaflet-right { top: 58px; }
+  .mon-reproductor { left: 12px; right: 12px; width: auto; bottom: 22px; }
+  .mon-ficha { left: 12px; right: 12px; width: auto; }
 }
-
 @media (max-width: 900px) {
-  .mon { grid-template-columns: 1fr; grid-template-rows: auto 1fr; height: auto; }
-  #vista[data-modulo="monitoreo"] { display: block; padding-bottom: calc(var(--bn-h) + env(safe-area-inset-bottom, 0px) + 16px); }
-  .mon-panel { max-height: 45vh; }
-  .mon-panel.plegado .mon-capas, .mon-panel.plegado .mon-nota { display: none; }
-  #mon-plegar { display: inline-flex; }
-  .mon-mapa-caja { height: 72vh; min-height: 440px; }
-  .mon-ctl { left: 8px; right: 8px; width: auto; bottom: 20px; }
-  .mon-leyenda { right: 8px; top: 8px; bottom: auto; width: 220px; max-height: 45%; }
-  .mon-ficha { left: 8px; right: 8px; width: auto; top: 8px; }
-}
-
-/* Paneles flotantes compactos. ubicarControles() los pone en la esquina del mapa donde menos
-   tapan a Ecuador (mide el contorno nacional en pantalla) y los recoloca al mover o acercar.
-   2026-10-02: abajo a la izquierda tapaban El Oro y Loja; una barra fija quitaba demasiado mapa. */
-.mon-ctl { width: 300px; padding: 6px 8px; }
-.mon-ctl[data-esq], .mon-leyenda[data-esq] { left: auto; right: auto; top: auto; bottom: auto; }
-.mon-ctl[data-esq="ii"], .mon-leyenda[data-esq="ii"] { left: 10px; bottom: 24px; }
-.mon-ctl[data-esq="si"], .mon-leyenda[data-esq="si"] { left: 52px; top: 10px; }
-.mon-ctl[data-esq="sd"], .mon-leyenda[data-esq="sd"] { right: 10px; top: 40px; }
-.mon-ctl[data-esq="id"], .mon-leyenda[data-esq="id"] { right: 10px; bottom: 24px; }
-.mon-ctl-mas { width: 24px; }
-.mon-nota-capa { font-size: var(--fs-micro); color: var(--muted); margin-top: 4px; line-height: 1.35; }
-@media (max-width: 900px) {
-  .mon-ctl { width: min(300px, calc(100% - 20px)); }
-  .mon-leyenda { width: min(240px, calc(100% - 20px)); }
+  #vista[data-modulo="monitoreo"] { display: flex; padding-bottom: calc(var(--bn-h) + env(safe-area-inset-bottom, 0px) + 12px); }
+  .mon { min-height: 70vh; }
+  .mon-panel:not(.plegado) { max-height: 58%; }
+  .mon-reproductor { padding: 10px 12px; }
 }

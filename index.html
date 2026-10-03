@@ -7,8 +7,9 @@
 <title>HidroMet Ecuador</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#070C16">
+<meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="favicon.png">
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%234C8DFF'/%3E%3Cstop offset='1' stop-color='%2312B5C9'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='9' fill='url(%23g)'/%3E%3Cpath d='M16 6.2c-3.7 4.7-6.3 8.4-6.3 11.8a6.3 6.3 0 0 0 12.6 0c0-3.4-2.6-7.1-6.3-11.8z' fill='none' stroke='%23fff' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M11.6 19.3c1.5-1.1 3-1.1 4.4 0s2.9 1.1 4.4 0' fill='none' stroke='%23fff' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2215%22 fill=%22#0B1A33%22/%3E%3Cdefs%3E%3ClinearGradient id=%22fa%22 x1=%2218%22 y1=%228%22 x2=%2246%22 y2=%2256%22 gradientUnits=%22userSpaceOnUse%22%3E%3Cstop offset=%220%22 stop-color=%22#5EEAD4%22/%3E%3Cstop offset=%22.48%22 stop-color=%22#22B8F0%22/%3E%3Cstop offset=%221%22 stop-color=%22#3159E8%22/%3E%3C/linearGradient%3E%3ClinearGradient id=%22fo%22 x1=%224%22 y1=%2242%22 x2=%2260%22 y2=%2222%22 gradientUnits=%22userSpaceOnUse%22%3E%3Cstop offset=%220%22 stop-color=%22#fff%22 stop-opacity=%22.2%22/%3E%3Cstop offset=%22.55%22 stop-color=%22#fff%22 stop-opacity=%22.95%22/%3E%3Cstop offset=%221%22 stop-color=%22#fff%22 stop-opacity=%22.3%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d=%22M7 41 A26 9 -20 0 1 57 23%22 fill=%22none%22 stroke=%22url%28#fo%29%22 stroke-width=%222%22 stroke-linecap=%22round%22 opacity=%22.5%22/%3E%3Cpath d=%22M32 6.5C32 6.5 15 25 15 38a17 17 0 0 0 34 0C49 25 32 6.5 32 6.5Z%22 fill=%22url%28#fa%29%22/%3E%3Cpath d=%22M24.2 29.5c-2.3 3.2-3.5 6.2-3.6 8.8%22 fill=%22none%22 stroke=%22#fff%22 stroke-opacity=%22.5%22 stroke-width=%222.3%22 stroke-linecap=%22round%22/%3E%3Cpath d=%22M21 42.5q5.5-4.2 11 0t11 0%22 fill=%22none%22 stroke=%22#fff%22 stroke-width=%222.4%22 stroke-linecap=%22round%22/%3E%3Cpath d=%22M24.5 49q3.75-2.8 7.5 0t7.5 0%22 fill=%22none%22 stroke=%22#fff%22 stroke-opacity=%22.75%22 stroke-width=%222.1%22 stroke-linecap=%22round%22/%3E%3Cpath d=%22M57 23 A26 9 -20 0 1 7 41%22 fill=%22none%22 stroke=%22url%28#fo%29%22 stroke-width=%222%22 stroke-linecap=%22round%22/%3E%3Ccircle cx=%2252.2%22 cy=%2235.1%22 r=%222.7%22 fill=%22#FFC93C%22/%3E%3C/svg%3E">
 <script>try{document.documentElement.dataset.tema=localStorage.getItem("hidromet-tema")||"oscuro"}catch(e){document.documentElement.dataset.tema="oscuro"}</script>
 <script>
 /* El menú plegado (riel de iconos) recordado se aplica ANTES de pintar, para que no
@@ -19,24 +20,25 @@
 <link rel="stylesheet" href="lib/leaflet/leaflet.css">
 <link rel="stylesheet" href="lib/leaflet/MarkerCluster.css">
 <link rel="stylesheet" href="lib/leaflet/MarkerCluster.Default.css">
-<link rel="stylesheet" href="css/fonts.css?v=5ee92347f241">
-<link rel="stylesheet" href="css/base.css?v=5ee92347f241">
-<link rel="stylesheet" href="css/mlnwp.css?v=5ee92347f241">
-<link rel="stylesheet" href="css/cartas.css?v=5ee92347f241">
-<link rel="stylesheet" href="css/datos.css?v=5ee92347f241">
-<link rel="stylesheet" href="css/configuracion.css?v=5ee92347f241">
-<link rel="stylesheet" href="css/clima.css?v=5ee92347f241">
-<link rel="stylesheet" href="css/decisiones.css?v=5ee92347f241">
-<link rel="stylesheet" href="css/monitoreo.css?v=5ee92347f241">
-<link rel="stylesheet" href="css/largo.css?v=5ee92347f241">
-<link rel="stylesheet" href="css/deslizamientos.css?v=5ee92347f241">
+<link rel="stylesheet" href="css/fonts.css?v=a20c4a78fde1">
+<link rel="stylesheet" href="css/base.css?v=a20c4a78fde1">
+<link rel="stylesheet" href="css/mlnwp.css?v=a20c4a78fde1">
+<link rel="stylesheet" href="css/cartas.css?v=a20c4a78fde1">
+<link rel="stylesheet" href="css/datos.css?v=a20c4a78fde1">
+<link rel="stylesheet" href="css/configuracion.css?v=a20c4a78fde1">
+<link rel="stylesheet" href="css/clima.css?v=a20c4a78fde1">
+<link rel="stylesheet" href="css/decisiones.css?v=a20c4a78fde1">
+<link rel="stylesheet" href="css/monitoreo.css?v=a20c4a78fde1">
+<link rel="stylesheet" href="css/largo.css?v=a20c4a78fde1">
+<link rel="stylesheet" href="css/deslizamientos.css?v=a20c4a78fde1">
+<link rel="stylesheet" href="css/acceso.css?v=a20c4a78fde1">
 </head>
 <body>
 <div id="capa-app">
   <aside id="sidebar" aria-label="Navegación principal">
     <div class="marca">
-      <span class="marca-logo" aria-hidden="true"><svg viewBox="0 0 32 32"><defs><linearGradient id="hm-logo-g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4C8DFF"/><stop offset="1" stop-color="#12B5C9"/></linearGradient></defs><rect width="32" height="32" rx="9" fill="url(#hm-logo-g)"/><path d="M16 6.2c-3.7 4.7-6.3 8.4-6.3 11.8a6.3 6.3 0 0 0 12.6 0c0-3.4-2.6-7.1-6.3-11.8z" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round"/><path d="M11.6 19.3c1.5-1.1 3-1.1 4.4 0s2.9 1.1 4.4 0" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg></span>
-      <span class="marca-texto">
+      <span class="marca-logo" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="hms-a" x1="18" y1="8" x2="46" y2="56" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#5EEAD4"/><stop offset=".48" stop-color="#22B8F0"/><stop offset="1" stop-color="#3159E8"/></linearGradient><linearGradient id="hms-o" x1="4" y1="42" x2="60" y2="22" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff" stop-opacity=".2"/><stop offset=".55" stop-color="#fff" stop-opacity=".95"/><stop offset="1" stop-color="#fff" stop-opacity=".3"/></linearGradient></defs><path d="M7 41 A26 9 -20 0 1 57 23" fill="none" stroke="url(#hms-o)" stroke-width="2" stroke-linecap="round" opacity=".5"/><path d="M32 6.5C32 6.5 15 25 15 38a17 17 0 0 0 34 0C49 25 32 6.5 32 6.5Z" fill="url(#hms-a)"/><path d="M24.2 29.5c-2.3 3.2-3.5 6.2-3.6 8.8" fill="none" stroke="#fff" stroke-opacity=".5" stroke-width="2.3" stroke-linecap="round"/><path d="M21 42.5q5.5-4.2 11 0t11 0" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/><path d="M24.5 49q3.75-2.8 7.5 0t7.5 0" fill="none" stroke="#fff" stroke-opacity=".75" stroke-width="2.1" stroke-linecap="round"/><path d="M57 23 A26 9 -20 0 1 7 41" fill="none" stroke="url(#hms-o)" stroke-width="2" stroke-linecap="round"/><circle cx="52.2" cy="35.1" r="2.7" fill="#FFC93C"/></svg></span>
+      <span class="marca-texto" translate="no">
         <span class="marca-nombre">HidroMet</span>
         <span class="marca-sub">Ecuador</span>
       </span>
@@ -83,16 +85,16 @@
 <script src="lib/leaflet/leaflet.js"></script>
 <script src="lib/leaflet/leaflet.markercluster.js"></script>
 <script src="lib/plotly/plotly.min.js"></script>
-<script src="js/core.js?v=5ee92347f241"></script>
-<script src="js/modules/monitoreo.js?v=5ee92347f241"></script>
-<script src="js/modules/mlnwp.js?v=5ee92347f241"></script>
-<script src="js/modules/decisiones.js?v=5ee92347f241"></script>
-<script src="js/modules/cartas.js?v=5ee92347f241"></script>
-<script src="js/modules/largo.js?v=5ee92347f241"></script>
-<script src="js/modules/deslizamientos.js?v=5ee92347f241"></script>
-<script src="js/modules/clima.js?v=5ee92347f241"></script>
-<script src="js/modules/iuv.js?v=5ee92347f241"></script>
-<script src="js/modules/glosario.js?v=5ee92347f241"></script>
+<script src="js/core.js?v=a20c4a78fde1"></script>
+<script src="js/modules/monitoreo.js?v=a20c4a78fde1"></script>
+<script src="js/modules/mlnwp.js?v=a20c4a78fde1"></script>
+<script src="js/modules/decisiones.js?v=a20c4a78fde1"></script>
+<script src="js/modules/cartas.js?v=a20c4a78fde1"></script>
+<script src="js/modules/largo.js?v=a20c4a78fde1"></script>
+<script src="js/modules/deslizamientos.js?v=a20c4a78fde1"></script>
+<script src="js/modules/clima.js?v=a20c4a78fde1"></script>
+<script src="js/modules/iuv.js?v=a20c4a78fde1"></script>
+<script src="js/modules/glosario.js?v=a20c4a78fde1"></script>
 <script>App.iniciar();</script>
 </body>
 </html>

@@ -32,7 +32,7 @@
   }
   const hora = iso => {
     const d = new Date(iso);
-    return isNaN(d) ? "" : d.toLocaleString("es-EC", { timeZone: "America/Guayaquil", weekday: "short",
+    return isNaN(d) ? "" : d.toLocaleString((App.locale ? App.locale() : "es-EC"), { timeZone: "America/Guayaquil", weekday: "short",
       day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false });
   };
   function hace(iso) {

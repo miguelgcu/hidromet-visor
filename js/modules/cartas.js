@@ -580,6 +580,59 @@
     ];
   }
 
+  // ENFOQUE EN EL ORO (pedido del dueño, 2026-10-03: «que sea enfocado a la provincia de
+  // El Oro la visualización y con el polígono de ellos bien claro»). La carta arranca sobre
+  // la provincia, con su contorno resaltado y, si el servidor lo entrega, el área de
+  // operación. El tope de alejamiento sigue siendo el país: la rueda o el toggle lo abren.
+  // El área es privada (/api/monitoreo/area, config/cliente/): el visor publicado no la tiene.
+  const FOCO_EL_ORO = [-80.56, -79.12, -4.13, -2.81];   // El Oro con ~0,25° de margen
+  let _areaCliente;                                     // undefined = sin pedir; null = no hay
+  async function asegurarAreaCliente() {
+    if (_areaCliente !== undefined) return _areaCliente;
+    try {
+      const g = await App.api("/monitoreo/area");
+      _areaCliente = g && (g.features || []).length ? g : null;
+    } catch (e) { _areaCliente = null; }
+    return _areaCliente;
+  }
+  function encuadreFoco(marco) {
+    const v = [Math.max(FOCO_EL_ORO[0], marco[0]), Math.min(FOCO_EL_ORO[1], marco[1]),
+               Math.max(FOCO_EL_ORO[2], marco[2]), Math.min(FOCO_EL_ORO[3], marco[3])];
+    return v[0] < v[1] && v[2] < v[3] ? v : marco;
+  }
+  function lineasDe(features) {
+    const xs = [], ys = [];
+    for (const f of features) {
+      const g = f && f.geometry; if (!g) continue;
+      const polys = g.type === "Polygon" ? [g.coordinates] : g.type === "MultiPolygon" ? g.coordinates : [];
+      for (const poly of polys) for (const ring of poly) {
+        for (const [x, y] of ring) { xs.push(x); ys.push(y); }
+        xs.push(null); ys.push(null);
+      }
+    }
+    return { xs, ys };
+  }
+  function trazasFoco(oscuro) {
+    const salida = [];
+    const oro = geoCartas && geoCartas.features
+      ? geoCartas.features.filter(f => f.properties && (f.properties.codigo === "07" || f.properties.nombre === "El Oro"))
+      : [];
+    if (oro.length) {
+      const { xs, ys } = lineasDe(oro);
+      const base = { type: "scatter", mode: "lines", x: xs, y: ys, hoverinfo: "skip", showlegend: false };
+      salida.push(Object.assign({}, base, { meta: "foco-halo", line: { color: oscuro ? "#0B1322" : "#ffffff", width: 6 } }),
+                  Object.assign({}, base, { meta: "foco-linea", line: { color: oscuro ? "#7FE3F0" : "#0B5C7A", width: 2.6 } }));
+    }
+    if (_areaCliente) {
+      const { xs, ys } = lineasDe(_areaCliente.features);
+      const base = { type: "scatter", mode: "lines", x: xs, y: ys, showlegend: false, hoverinfo: "text",
+                     text: "Área de operación", hoverlabel: { bgcolor: "#1B1405", font: { color: "#FFE3A3" } } };
+      salida.push(Object.assign({}, base, { meta: "area-halo", hoverinfo: "skip", line: { color: "#1B1405", width: 5.5 } }),
+                  Object.assign({}, base, { meta: "area-linea", line: { color: "#F5B83D", width: 2.6 } }));
+    }
+    return salida;
+  }
+
   // MÁSCARA al polígono de Ecuador: recorta el campo ráster (celdas 0.1° dentadas) al
   // contorno del país. Antes, con las cartas TEMATIZADAS (fondo oscuro), el ráster sobresalía
   // del contorno en bloques cuadrados feos; recortándolo al polígono el campo queda limpio y
@@ -1648,12 +1701,16 @@
     // §P4: muestra para el hover de estaciones (malla ya cargada + formateador).
     const _muestra = (PR && PR.campo && PR.campo.length)
       ? { lon: PR.lon, lat: PR.lat, campo: PR.campo, fmt: _fmtVal } : null;
+    // Enfoque El Oro: contorno de la provincia y área de operación, debajo de las estaciones.
+    if (cap.foco) { await asegurarAreaCliente(); if (!vivo()) return; traces.push(...trazasFoco(oscuro)); }
     // TOGGLE Estaciones: puntos de las estaciones dentro del recuadro principal.
     if (cap.estaciones) { await asegurarEstaciones(); const te = trazaEstaciones(ext, "x", "y", oscuro, _muestra); if (te) traces.push(te); }
 
     // §P2: marco = extensión oficial recortada a la cobertura real del heatmap (sin
     // franja blanca en el borde).
     const marco = (!cuencasOk && PR && PR.campo && PR.campo.length) ? rangoCubierto(ext, PR) : ext.slice();
+    // Enfoque El Oro: arranca sobre la provincia; el tope de alejamiento sigue siendo `marco`.
+    const vista = cap.foco ? encuadreFoco(marco) : marco;
     // Zoom SOLO de acercamiento: minallowed/maxallowed fijan el extent como tope.
     // TOGGLE Grilla: rejilla lat/lon punteada y tenue (ejes ocultos si está apagada).
     const _ejeGr = cap.grilla
@@ -1662,8 +1719,8 @@
       : { visible: false };
     const layout = App.plotlyLayoutBase({
       showlegend: false, margin: { l: 0, r: 0, t: 0, b: 0 },
-      xaxis: Object.assign({ range: [marco[0], marco[1]], minallowed: marco[0], maxallowed: marco[1], fixedrange: false }, _ejeGr),
-      yaxis: Object.assign({ range: [marco[2], marco[3]], minallowed: marco[2], maxallowed: marco[3], scaleanchor: "x", scaleratio: 1, fixedrange: false }, _ejeGr),
+      xaxis: Object.assign({ range: [vista[0], vista[1]], minallowed: marco[0], maxallowed: marco[1], fixedrange: false }, _ejeGr),
+      yaxis: Object.assign({ range: [vista[2], vista[3]], minallowed: marco[2], maxallowed: marco[3], scaleanchor: "x", scaleratio: 1, fixedrange: false }, _ejeGr),
       dragmode: "pan",
     });
     layout.hovermode = "closest";   // hover por celda: muestra el valor exacto
@@ -1674,7 +1731,7 @@
     // §POLI: mismo criterio que en el panel continental — con polígonos la malla del
     // inset se queda cruda (el color lo ponen las piezas, el hover dice el nivel real).
     const _G = (_G0 && _G0.campo && _G0.campo.length && !d.malla && !hayPoligonos) ? refinarMalla(_G0) : _G0;
-    if (cap.galapagos && _G && _G.campo && _G.campo.length && _gb) {
+    if (cap.galapagos && !cap.foco && _G && _G.campo && _G.campo.length && _gb) {
       // inset en la ESQUINA INFERIOR DERECHA, separado ~0.5 cm de los márgenes der./inf.
       // §P17: recuadro y título corridos ~2 mm a la DERECHA y ~2 mm hacia ABAJO
       // (paper coords: +0.012 en x, −0.015 en y).
@@ -1929,9 +1986,16 @@
   // carta Consenso (arranca apagado: es una capa de lectura, no la carta en sí).
   function capasHTML(sinIsolineas, conCantones) {
     const c = (E && E.capas) || {};
-    const b = (id, et, tit) => `<button class="ct-toggle ${c[id] ? "activo" : ""}" data-capa="${id}"
-      aria-pressed="${c[id] ? "true" : "false"}" title="${esc(tit || ("Mostrar u ocultar la capa " + et))}">${et}</button>`;
-    return `<div class="ct-capas">${b("grilla", "Grilla")}${sinIsolineas ? "" : b("isolineas", "Isolíneas")}${b("galapagos", "Galápagos")}${b("estaciones", "Estaciones")}${conCantones ? b("cantones", "Cantones", "Nivel por cantón con los umbrales activos, dibujado sobre la carta Consenso") : ""}</div>`;
+    const b = (id, et, tit, inactivo) => `<button class="ct-toggle ${c[id] && !inactivo ? "activo" : ""}" data-capa="${id}"
+      aria-pressed="${c[id] && !inactivo ? "true" : "false"}"${inactivo ? " disabled" : ""} title="${esc(tit || ("Mostrar u ocultar la capa " + et))}">${et}</button>`;
+    // Con El Oro enfocado el recuadro de Galápagos no se dibuja (taparía la provincia):
+    // su interruptor queda inactivo y lo dice, en vez de parecer encendido sin efecto.
+    const galapagos = c.foco
+      ? b("galapagos", "Galápagos", "El recuadro de Galápagos se muestra con la vista de todo el país", true)
+      : b("galapagos", "Galápagos");
+    // Un grupo más de la barra, con su etiqueta (2026-10-03): antes iba empujado a la derecha
+    // (margin-left:auto) y, al pasar de fila, quedaba suelto y cortado contra el borde.
+    return `<div class="ct-capas-grupo"><span class="et">Capas</span><div class="ct-capas" role="group" aria-label="Capas del mapa">${b("foco", "El Oro", "Centrar el mapa en El Oro y resaltar su contorno; apagado, se ve todo el país")}${b("grilla", "Grilla")}${sinIsolineas ? "" : b("isolineas", "Isolíneas")}${galapagos}${b("estaciones", "Estaciones")}${conCantones ? b("cantones", "Cantones", "Nivel por cantón con los umbrales activos, dibujado sobre la carta Consenso") : ""}</div></div>`;
   }
 
   // §P1: la serie temporal que vivía BAJO la grilla de cartas (pintarSeriePron) se
@@ -2862,7 +2926,7 @@
     if (!E) {
       E = { tipo: "pronostico", productos: { tipos: [] }, grid: {},
             // §P4: los cuatro toggles de capa inician ACTIVOS en todas las cartas.
-            capas: { grilla: true, isolineas: true, galapagos: true, estaciones: true, cantones: false },
+            capas: { foco: true, grilla: true, isolineas: true, galapagos: true, estaciones: true, cantones: false },
             // verUmbrales: la pestaña arranca SIEMPRE en las advertencias; la vista
             // de los cortes se abre a mano y se cierra con el mismo botón.
             alerta: { varId: "alerta_lluvia", modo: "fija", inst: null, verUmbrales: false,
@@ -3144,6 +3208,8 @@
   const _PAPEL_TRAZA = {
     "outline-halo":   { "line.color": "#ffffff" },
     "outline-linea":  { "line.color": "#000000" },
+    "foco-halo":      { "line.color": "#ffffff" },
+    "foco-linea":     { "line.color": "#0B5C7A" },
     "microcuencas":   { "line.color": "rgba(35,49,77,.32)" },
     "estaciones-ct":  { "marker.color": "#10233F", "marker.line.color": "#fff" },
   };

@@ -537,9 +537,10 @@ const App = (() => {
   function actualizarReloj() {
     const el = document.getElementById("topbar-reloj");
     if (!el) return;
+    el.setAttribute("translate", "no");   // ya sale en el idioma elegido: el traductor no lo mira cada segundo
     const d = new Date();
-    const fecha = d.toLocaleDateString("es-EC", { weekday: "short", day: "numeric", month: "short" });
-    const hora = d.toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+    const fecha = d.toLocaleDateString(locale(), { weekday: "short", day: "numeric", month: "short" });
+    const hora = d.toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
     el.textContent = `${fecha} · ${hora}`;
   }
 
@@ -691,7 +692,7 @@ const App = (() => {
     if (chip) chip.classList.toggle("viejo", estadoOk && isFinite(t) && (Date.now() - t) > 36 * 3.6e6);
     const lineas = [];
     if (isFinite(t) && (Date.now() - t) > 48 * 3.6e6) {
-      const fLarga = new Date(t).toLocaleDateString("es-EC", { day: "numeric", month: "long", year: "numeric" });
+      const fLarga = new Date(t).toLocaleDateString(locale(), { day: "numeric", month: "long", year: "numeric" });
       lineas.push(`Estos datos no se actualizan desde el ${fLarga} (${antig}).`);
     }
     if (!estadoOk) lineas.push("La última actualización quedó incompleta.");
@@ -815,7 +816,17 @@ const App = (() => {
           currency: ["", " $"],
         },
       });
-      Plotly.setPlotConfig({ locale: "es" });
+      Plotly.register({
+        moduleType: "locale", name: "zh-CN", dictionary: {},
+        format: {
+          days: ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"],
+          shortDays: ["周日", "周一", "周二", "周三", "周四", "周五", "周六"],
+          months: ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"],
+          shortMonths: ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"],
+          date: "%Y-%m-%d", decimal: ".", thousands: ",", grouping: [3], currency: ["¥", ""],
+        },
+      });
+      Plotly.setPlotConfig({ locale: localeGraficos() });
     } catch (e) { return; /* la librería seguirá en inglés */ }
     // Aqui se pedia ademas `lib/plotly/plotly-locale-es.js`, el fichero de
     // localizacion oficial de Plotly. Nunca se empaqueto —`ui/lib/plotly/` solo
@@ -833,12 +844,430 @@ const App = (() => {
     // ese fichero a proposito en `ui/lib/plotly/` — no pedirlo a ver si suena.
   }
 
+  /* ---------------- idioma: ES · EN · 中文 ----------------
+     Pedido del dueño (2026-10-03): «añade el botón ES/EN … traduce todo muy muy bien» y
+     «quiero también idioma chino». La interfaz se escribe en español y se traduce AL PINTAR:
+     un observador recorre el texto visible y los atributos (title, aria-label, placeholder, alt)
+     y los cambia por su traducción de ui/i18n/<idioma>.json. Así se traduce también lo que llega
+     de los productos (nombres, fichas, leyendas) sin tocar cada módulo.
+     Claves del diccionario: el texto español con los espacios normalizados y cada cifra
+     reemplazada por {n} («hace {n} min» → «{n} min ago»). Las cifras se escriben en español en
+     todo el código (App.fmtNum) y aquí pasan a la forma inglesa o china (0,5 → 0.5;
+     12.345 → 12,345). Las fechas que formatea el navegador ya salen en el idioma elegido. */
+  const IDIOMAS = {
+    es: { etiqueta: "ES", nombre: "Español", locale: "es-EC", graficos: "es", lang: "es" },
+    en: { etiqueta: "EN", nombre: "English", locale: "en-US", graficos: "en", lang: "en" },
+    zh: { etiqueta: "中文", nombre: "中文（简体）", locale: "zh-CN", graficos: "zh-CN", lang: "zh-CN" },
+  };
+  const CLAVE_IDIOMA = "hm-idioma";
+  function idioma() {
+    try {
+      const v = localStorage.getItem(CLAVE_IDIOMA);
+      if (IDIOMAS[v]) return v;
+    } catch (e) { /* sin almacenamiento: español */ }
+    return "es";
+  }
+  function locale() { return IDIOMAS[idioma()].locale; }
+  function localeGraficos() { return IDIOMAS[idioma()].graficos; }
+  function ponerIdioma(id) {
+    if (!IDIOMAS[id] || id === idioma()) return;
+    try { localStorage.setItem(CLAVE_IDIOMA, id); } catch (e) { return; }
+    location.reload();   // todo se vuelve a pintar en el idioma nuevo, gráficos incluidos
+  }
+
+  let DICC = null;
+  const SIN_TRADUCIR = new Set();
+  const VERSION_UI = (() => {
+    try {
+      const s = document.querySelector('script[src*="js/core.js"]');
+      const m = s && /[?&]v=([^&]+)/.exec(s.getAttribute("src"));
+      return m ? m[1] : "";
+    } catch (e) { return ""; }
+  })();
+  async function cargarIdioma() {
+    const id = idioma();
+    try { document.documentElement.lang = IDIOMAS[id].lang; } catch (e) { /* sin documento */ }
+    if (id === "es") return;
+    try {
+      const r = await fetch(`i18n/${id}.json${VERSION_UI ? `?v=${VERSION_UI}` : ""}`, { cache: "no-cache" });
+      DICC = r.ok ? await r.json() : null;
+    } catch (e) { DICC = null; }
+  }
+
+  const LETRA = /[A-Za-zÁÉÍÓÚÑÜáéíóúñü]/;
+  const MINUSCULA = /[a-záéíóúñü]/;
+  const RE_NUM = /\d+(?:[.,]\d+)*/g;
+  // Cifra escrita en español → inglés/chino: coma decimal a punto y punto de millares a coma.
+  function numeroLocal(tok) {
+    const s = String(tok);
+    const coma = s.lastIndexOf(",");
+    if (coma >= 0) return s.slice(0, coma).replace(/\./g, ",") + "." + s.slice(coma + 1);
+    return /^\d{1,3}(\.\d{3})+$/.test(s) ? s.replace(/\./g, ",") : s;
+  }
+  const convertirNumeros = s => String(s).replace(RE_NUM, numeroLocal);
+  const SEPARADORES = [" · ", " — ", " – ", " | ", " → ", ": "];
+  function traducirNucleo(n) {
+    let t = DICC[n];
+    if (t != null) return t;
+    const nums = [];
+    const clave = n.replace(RE_NUM, m => { nums.push(m); return "{n}"; });
+    if (nums.length) {
+      t = DICC[clave];
+      if (t != null) {
+        let i = 0;
+        return t.replace(/\{n\}/g, () => numeroLocal(nums[i++] ?? ""));
+      }
+    }
+    // frases compuestas («1 km · cada 10 min», «Azuay · Interandina»): cada parte por su lado.
+    // Una parte desconocida queda como está (casi siempre un nombre propio) y solo se anota si
+    // lleva minúsculas: los nombres de estación van en mayúsculas y no son faltas.
+    for (const sep of SEPARADORES) {
+      if (!n.includes(sep)) continue;
+      const partes = n.split(sep);
+      const faltan = [];
+      const tr = partes.map(p => {
+        const q = p.trim();
+        if (!LETRA.test(q)) return convertirNumeros(p);
+        const x = traducirNucleo(q);
+        if (x == null) faltan.push(q);
+        return x ?? p;
+      });
+      if (faltan.length < partes.length) {
+        faltan.filter(q => MINUSCULA.test(q) && !ESTACION.test(q)).forEach(q => SIN_TRADUCIR.add(q));
+        return tr.join(sep);
+      }
+    }
+    return null;
+  }
+  // «Papallacta (M5025)», «Lago Agrio (84012)»: nombre de estación con su código, nombre propio
+  const ESTACION = /\s\((?:[A-Z]{1,3}\d+[A-Z]?|\d{4,5})\)$/;
+  // Fechas que el servidor escribe en español («sáb 03/10», «mié 08/07 → jue 09/07»): en inglés
+  // «03/10» se lee 10 de marzo. Pasan al diccionario como {fecha} y vuelven escritas en el
+  // idioma («Sat, Oct 3», «10月3日周六»); el año es el que cuadra con el día de la semana.
+  // También «03/10/2026» y el «03/10 10:00» de las leyendas (día y mes de dos cifras antes de
+  // una hora). Una sola expresión: las fechas se reponen en el orden en que aparecen.
+  const DIAS_ES = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
+  const RE_FECHA = /\b(dom|lun|mar|mié|jue|vie|sáb)\.? (\d{1,2})\/(\d{1,2})\b|\b(\d{2})\/(\d{2})\/(\d{4})\b|\b(\d{2})\/(\d{2})(?= \d{1,2}:\d{2})/gi;
+  const OPC_FECHA = { timeZone: "UTC", month: "short", day: "numeric" };
+  function fechaValida(anio, mm, dd) {
+    const f = new Date(Date.UTC(anio, mm - 1, dd, 12));
+    return f.getUTCMonth() === mm - 1 && f.getUTCDate() === dd ? f : null;
+  }
+  function fechaLocal(m, dia, dd, mm, dd2, mm2, aaaa, dd3, mm3) {
+    const y = new Date().getFullYear();
+    if (dia) {                                       // «sáb 03/10»: el año es el que cuadra con el día
+      const d0 = DIAS_ES.indexOf(dia.toLowerCase());
+      for (const anio of [y, y - 1, y + 1]) {
+        const f = fechaValida(anio, +mm, +dd);
+        if (f && f.getUTCDay() === d0) return f.toLocaleDateString(locale(), { ...OPC_FECHA, weekday: "short" });
+      }
+      return null;
+    }
+    if (aaaa) {                                      // «03/10/2026»
+      const f = fechaValida(+aaaa, +mm2, +dd2);
+      return f ? f.toLocaleDateString(locale(), { ...OPC_FECHA, year: "numeric" }) : null;
+    }
+    const f = fechaValida(y, +mm3, +dd3);            // «03/10 10:00»: sin año ni día de la semana
+    return f ? f.toLocaleDateString(locale(), OPC_FECHA) : null;
+  }
+  // Traducción de un texto suelto; lo que no está en el diccionario queda igual (y se anota).
+  function traducir(s) {
+    if (!DICC || s == null) return s;
+    const str = String(s);
+    const fechas = [];
+    const sinFechas = str.replace(RE_FECHA, (...g) => {
+      const f = fechaLocal(...g.slice(0, 9));
+      if (f == null) return g[0];
+      fechas.push(f);
+      return "{fecha}";
+    });
+    const reponer = t => (fechas.length ? t.replace(/\{fecha\}/g, () => fechas.shift() ?? "") : t);
+    if (!LETRA.test(sinFechas.replace(/\{fecha\}/g, ""))) return reponer(convertirNumeros(sinFechas));
+    const ini = str.match(/^\s*/)[0], fin = str.match(/\s*$/)[0];
+    const n = sinFechas.trim().replace(/\s+/g, " ");
+    const t = traducirNucleo(n);
+    if (t == null) { if (!ESTACION.test(n)) SIN_TRADUCIR.add(n); return str; }
+    return ini + reponer(t) + fin;
+  }
+
+  function vigilarIdioma(raiz) {
+    if (!DICC || !raiz || typeof MutationObserver !== "function" || typeof document.createTreeWalker !== "function") return;
+    const ATRS = ["title", "aria-label", "placeholder", "alt", "label"];   // label: <optgroup>/<option>
+    const hechos = new WeakMap();      // nodo de texto → lo que escribimos (no se vuelve a traducir)
+    const NO = new Set(["SCRIPT", "STYLE", "TEXTAREA", "NOSCRIPT"]);
+    const fuera = el => !el || NO.has(el.tagName) || (el.getAttribute && el.getAttribute("translate") === "no");
+    const filtro = { acceptNode: x => (x.nodeType === 1 && fuera(x) ? 2 /* rechaza el subárbol */ : 1) };
+    const texto = n => {
+      const v = n.nodeValue;
+      if (!v || !v.trim() || hechos.get(n) === v) return;
+      const t = traducir(v);
+      hechos.set(n, t);
+      if (t !== v) n.nodeValue = t;
+    };
+    const atributos = el => {
+      for (const a of ATRS) {
+        const v = el.getAttribute(a);
+        if (!v || el[`__hm_${a}`] === v) continue;
+        const t = traducir(v);
+        el[`__hm_${a}`] = t;
+        if (t !== v) el.setAttribute(a, t);
+      }
+    };
+    const recorrer = n => {
+      if (n.nodeType === 3) { if (!fuera(n.parentElement)) texto(n); return; }
+      if (n.nodeType !== 1 || fuera(n)) return;
+      atributos(n);
+      const tw = document.createTreeWalker(n, 5, filtro);
+      let x = tw.nextNode();
+      while (x) {
+        if (x.nodeType === 3) texto(x); else atributos(x);
+        x = tw.nextNode();
+      }
+    };
+    // en un cambio suelto (un texto o un atributo) se mira toda la ascendencia: dentro de un
+    // bloque translate="no" (el selector de idioma, nombres propios) no se traduce nada
+    const dentroDeNo = el => !el || (el.closest && el.closest('[translate="no"], script, style, textarea, noscript'));
+    const obs = new MutationObserver(ms => {
+      for (const m of ms) {
+        if (m.type === "characterData") { if (!dentroDeNo(m.target.parentElement)) texto(m.target); }
+        else if (m.type === "attributes") { if (!dentroDeNo(m.target)) atributos(m.target); }
+        else m.addedNodes.forEach(n => { if (!dentroDeNo(n.nodeType === 1 ? n.parentElement : n.parentElement)) recorrer(n); });
+      }
+    });
+    recorrer(raiz);
+    obs.observe(raiz, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ATRS });
+  }
+
+  // Selector ES · EN · 中文 (barra superior y pantalla de ingreso). Sus rótulos no se traducen.
+  function selectorIdioma(caja) {
+    if (!caja) return;
+    caja.classList.add("hm-idioma");
+    caja.setAttribute("role", "group");
+    caja.setAttribute("aria-label", "Idioma / Language / 语言");
+    caja.setAttribute("translate", "no");
+    caja.innerHTML = Object.entries(IDIOMAS).map(([id, d]) =>
+      `<button type="button" data-idioma="${id}" aria-pressed="${id === idioma()}" title="${d.nombre}" lang="${d.lang}">${d.etiqueta}</button>`).join("");
+    caja.querySelectorAll("[data-idioma]").forEach(b => { b.onclick = () => ponerIdioma(b.dataset.idioma); });
+  }
+  function ponerSelectorBarra() {
+    const estado = document.querySelector("#topbar .estado");
+    if (!estado || document.getElementById("topbar-idioma")) return;
+    const caja = document.createElement("div");
+    caja.id = "topbar-idioma";
+    estado.insertBefore(caja, estado.firstChild);
+    selectorIdioma(caja);
+  }
+
+  /* ---------------- acceso privado (visor en línea) ----------------
+     Pedido del dueño (2026-10-03): «un ingreso con usuario y contraseña, algo que bloquee el
+     libre acceso». Un sitio estático no tiene autenticación de verdad: esto impide ver el visor
+     sin la clave, pero los archivos publicados siguen siendo descargables por quien conozca su
+     dirección. La clave NO está escrita aquí: solo su huella PBKDF2-SHA256 de 150 000 vueltas,
+     así que leer este código no la revela. Fuera del visor publicado se prueba con «?acceso». */
+  const ACCESO = {
+    sal: "ad87833e5a864bd90ca12f2bc28223c0", vueltas: 150000,
+    huella: "ece3e6f72934d2ae90212831007267f38226de7f9610129886d304f0f8c5acdc",
+  };
+  const CLAVE_SESION = "hm-sesion";
+  const DIAS_RECORDAR = 7;
+
+  function accesoRequerido() {
+    if (window.HIDROMET_VISOR) return true;
+    try { return new URLSearchParams(location.search).has("acceso"); } catch (e) { return false; }
+  }
+  function sesionValida() {
+    for (const almacen of [window.sessionStorage, window.localStorage]) {
+      try {
+        const s = JSON.parse(almacen.getItem(CLAVE_SESION) || "null");
+        if (s && s.h === ACCESO.huella && s.vence > Date.now()) return true;
+      } catch (e) { /* sin almacenamiento: se pide la clave */ }
+    }
+    return false;
+  }
+  function guardarSesion(recordar) {
+    const s = JSON.stringify({ h: ACCESO.huella, vence: Date.now() + (recordar ? DIAS_RECORDAR : 1) * 86400000 });
+    try { (recordar ? localStorage : sessionStorage).setItem(CLAVE_SESION, s); } catch (e) { /* sigue sin recordar */ }
+  }
+  function cerrarSesion() {
+    for (const almacen of [window.sessionStorage, window.localStorage]) {
+      try { almacen.removeItem(CLAVE_SESION); } catch (e) { /* nada que borrar */ }
+    }
+    location.reload();
+  }
+  async function huellaDe(usuario, clave) {
+    const sal = new Uint8Array(ACCESO.sal.match(/../g).map(h => parseInt(h, 16)));
+    const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(`${usuario}\n${clave}`),
+                                               "PBKDF2", false, ["deriveBits"]);
+    const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt: sal, iterations: ACCESO.vueltas, hash: "SHA-256" },
+                                                base, 256);
+    return [...new Uint8Array(bits)].map(b => b.toString(16).padStart(2, "0")).join("");
+  }
+  function huellasIguales(a, b) {   // sin salir antes: el tiempo no delata cuántos caracteres coinciden
+    if (a.length !== b.length) return false;
+    let d = 0;
+    for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    return d === 0;
+  }
+
+  /* Logotipo: una gota (agua) con dos ondas, atravesada por una órbita con un satélite (el
+     monitoreo desde el espacio). Vector puro: nítido en el ícono de la pestaña y a pantalla
+     completa. «p» separa los degradados de cada copia en la página. */
+  function logoSVG(p = "hml", animado = false) {
+    const orbita = "M57 23 A26 9 -20 0 1 7 41 A26 9 -20 0 1 57 23";
+    return `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="HidroMet">
+      <defs>
+        <linearGradient id="${p}-agua" x1="18" y1="8" x2="46" y2="56" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stop-color="#5EEAD4"/><stop offset=".48" stop-color="#22B8F0"/><stop offset="1" stop-color="#3159E8"/>
+        </linearGradient>
+        <linearGradient id="${p}-orb" x1="4" y1="42" x2="60" y2="22" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stop-color="#fff" stop-opacity=".2"/><stop offset=".55" stop-color="#fff" stop-opacity=".95"/><stop offset="1" stop-color="#fff" stop-opacity=".3"/>
+        </linearGradient>
+      </defs>
+      <path d="M7 41 A26 9 -20 0 1 57 23" fill="none" stroke="url(#${p}-orb)" stroke-width="2" stroke-linecap="round" opacity=".5"/>
+      <path d="M32 6.5C32 6.5 15 25 15 38a17 17 0 0 0 34 0C49 25 32 6.5 32 6.5Z" fill="url(#${p}-agua)"/>
+      <path d="M24.2 29.5c-2.3 3.2-3.5 6.2-3.6 8.8" fill="none" stroke="#fff" stroke-opacity=".5" stroke-width="2.3" stroke-linecap="round"/>
+      <path d="M21 42.5q5.5-4.2 11 0t11 0" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="M24.5 49q3.75-2.8 7.5 0t7.5 0" fill="none" stroke="#fff" stroke-opacity=".75" stroke-width="2.1" stroke-linecap="round"/>
+      <path d="M57 23 A26 9 -20 0 1 7 41" fill="none" stroke="url(#${p}-orb)" stroke-width="2" stroke-linecap="round"/>
+      <circle r="2.7" fill="#FFC93C" ${animado ? "" : 'cx="52.2" cy="35.1"'}>${animado
+        ? `<animateMotion dur="9s" repeatCount="indefinite" path="${orbita}"/>` : ""}</circle>
+    </svg>`;
+  }
+
+  // Curvas de nivel suaves para el fondo del ingreso (se generan: nada que descargar).
+  function curvasDeFondo(svg) {
+    if (!svg) return;
+    const W = 1600, H = 1000, lineas = [];
+    for (let i = 0; i < 17; i++) {
+      const y0 = 30 + i * 58, a = 16 + (i % 5) * 7, f = 0.0038 + (i % 3) * 0.0011, fase = i * 0.87;
+      let d = "";
+      for (let x = -40; x <= W + 40; x += 32) {
+        const y = y0 + a * Math.sin(x * f + fase) + 9 * Math.sin(x * f * 2.4 + fase * 1.6);
+        d += `${x === -40 ? "M" : "L"}${x} ${y.toFixed(1)} `;
+      }
+      lineas.push(`<path d="${d}"/>`);
+    }
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.setAttribute("preserveAspectRatio", "xMidYMid slice");
+    svg.innerHTML = lineas.join("");
+  }
+
+  const OJO_ABIERTO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+  const OJO_CERRADO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18"/><path d="M10.6 5.1A10.9 10.9 0 0 1 12 5c6.4 0 10 7 10 7a17.8 17.8 0 0 1-3.2 4.2M6.6 6.6C3.9 8.4 2 12 2 12s3.6 7 10 7a9.8 9.8 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
+
+  // Pantalla de ingreso. Devuelve una promesa que se cumple cuando la clave es correcta.
+  function mostrarAcceso() {
+    return new Promise(listo => {
+      const capa = document.createElement("div");
+      capa.id = "acceso";
+      capa.className = "acceso";
+      capa.setAttribute("role", "dialog");
+      capa.setAttribute("aria-modal", "true");
+      capa.setAttribute("aria-labelledby", "acceso-tit");
+      capa.innerHTML = `
+        <div class="acceso-fondo" aria-hidden="true">
+          <i class="acceso-luz l1"></i><i class="acceso-luz l2"></i><i class="acceso-luz l3"></i>
+          <svg class="acceso-curvas"></svg>
+        </div>
+        <form class="acceso-tarjeta" novalidate autocomplete="on">
+          <div class="acceso-logo">${logoSVG("hma", true)}</div>
+          <h1 id="acceso-tit" class="acceso-marca" translate="no">Hidro<span>Met</span></h1>
+          <p class="acceso-sub">Inteligencia hidrometeorológica</p>
+          <label class="acceso-campo" for="acceso-u"><span>Usuario</span>
+            <input id="acceso-u" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
+          <label class="acceso-campo" for="acceso-p"><span>Contraseña</span>
+            <span class="acceso-clave"><input id="acceso-p" name="password" type="password" autocomplete="current-password" required>
+              <button type="button" class="acceso-ojo" aria-label="Mostrar la contraseña" aria-pressed="false">${OJO_ABIERTO}</button></span></label>
+          <label class="acceso-recordar"><input type="checkbox" id="acceso-r"> <span>Recordarme en este equipo</span></label>
+          <div class="acceso-error" role="alert" aria-live="assertive"></div>
+          <button type="submit" class="acceso-entrar">Ingresar</button>
+          <div class="acceso-idioma" id="acceso-idioma"></div>
+          <p class="acceso-pie">Acceso privado · El Oro, Ecuador</p>
+        </form>`;
+      document.body.appendChild(capa);
+      document.documentElement.classList.add("hm-acceso-abierto");
+      // lo de atrás no se alcanza con el teclado ni con el lector de pantalla mientras tanto
+      const app = document.getElementById("capa-app");
+      if (app) app.inert = true;
+      curvasDeFondo(capa.querySelector(".acceso-curvas"));
+      selectorIdioma(capa.querySelector("#acceso-idioma"));
+      const tarjeta = capa.querySelector(".acceso-tarjeta");
+      const u = capa.querySelector("#acceso-u"), p = capa.querySelector("#acceso-p");
+      const err = capa.querySelector(".acceso-error"), btn = capa.querySelector(".acceso-entrar");
+      const ojo = capa.querySelector(".acceso-ojo");
+      requestAnimationFrame(() => requestAnimationFrame(() => capa.classList.add("visible")));
+      setTimeout(() => { try { u.focus({ preventScroll: true }); } catch (e) { /* sin foco */ } }, 420);
+      ojo.onclick = () => {
+        const ver = p.type === "password";
+        p.type = ver ? "text" : "password";
+        ojo.innerHTML = ver ? OJO_CERRADO : OJO_ABIERTO;
+        ojo.setAttribute("aria-pressed", String(ver));
+        ojo.setAttribute("aria-label", ver ? "Ocultar la contraseña" : "Mostrar la contraseña");
+      };
+      const sacudir = () => { tarjeta.classList.remove("sacude"); void tarjeta.offsetWidth; tarjeta.classList.add("sacude"); };
+      let intentos = 0;
+      tarjeta.onsubmit = async ev => {
+        ev.preventDefault();
+        err.textContent = "";
+        const usuario = u.value.trim().toLowerCase(), clave = p.value;
+        if (!usuario || !clave) { err.textContent = "Escriba su usuario y su contraseña."; sacudir(); return; }
+        btn.disabled = true;
+        btn.classList.add("cargando");
+        let ok = false;
+        try {
+          ok = huellasIguales(await huellaDe(usuario, clave), ACCESO.huella);
+        } catch (e) {
+          err.textContent = "Este navegador no puede verificar la clave: abra el visor con https.";
+        }
+        // pausa que crece con cada intento fallido: probar claves a mano se vuelve lento
+        await new Promise(r => setTimeout(r, 300 + Math.min(2500, intentos * 500)));
+        btn.disabled = false;
+        btn.classList.remove("cargando");
+        if (!ok) {
+          intentos += 1;
+          if (!err.textContent) err.textContent = "Usuario o contraseña incorrectos.";
+          p.value = "";
+          try { p.focus({ preventScroll: true }); } catch (e) { /* sin foco */ }
+          sacudir();
+          return;
+        }
+        guardarSesion(capa.querySelector("#acceso-r").checked);
+        capa.classList.add("saliendo");
+        document.documentElement.classList.remove("hm-acceso-abierto");
+        if (app) app.inert = false;
+        setTimeout(() => capa.remove(), 700);
+        listo();
+      };
+    });
+  }
+
+  function ponerBotonSalir() {
+    const pie = document.querySelector(".sidebar-pie");
+    if (!pie || document.getElementById("btn-salir")) return;
+    const b = document.createElement("button");
+    b.id = "btn-salir";
+    b.type = "button";
+    b.className = "boton-fantasma";
+    b.title = "Cerrar sesión";
+    b.innerHTML = `<span class="bf-icono" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5M5 12h11"/></svg></span><span class="bf-txt">Cerrar sesión</span>`;
+    b.onclick = cerrarSesion;
+    pie.insertBefore(b, document.getElementById("btn-tema"));
+  }
+
   async function iniciar() {
     inyectarEstilosBloqueo();
     vigilarMarcaInstitucional(document.body);
     idiomaGraficos();
     const guardado = localStorage.getItem("hidromet-tema");
     if (guardado) document.documentElement.dataset.tema = guardado;
+    await cargarIdioma();
+    vigilarIdioma(document.documentElement);
+    ponerSelectorBarra();
+    // Sin sesión, nada del visor se pide ni se pinta hasta que la clave sea correcta.
+    if (accesoRequerido()) {
+      if (!sesionValida()) await mostrarAcceso();
+      ponerBotonSalir();
+    }
     document.getElementById("btn-tema").onclick = () =>
       tema(tema() === "claro" ? "oscuro" : "claro");
     pintarBotonTema();
@@ -1008,7 +1437,7 @@ const App = (() => {
 
   function fmtFecha(iso) {
     if (!iso) return "—";
-    return new Date(iso).toLocaleDateString("es-EC", { year: "numeric", month: "short", day: "numeric" });
+    return new Date(iso).toLocaleDateString(locale(), { year: "numeric", month: "short", day: "numeric" });
   }
 
   /* ---------------- números en castellano ----------------
@@ -1333,7 +1762,8 @@ const App = (() => {
            plotlyLayoutSerie, plotlyConfig, pinchZoomMapa, hayTareaActiva, cancelarTarea, cancelarTodas, panel, vistaPestanas, restaurador,
            rutaAProducto, leerJsonGzip, hoyEC, redEtiqueta, nombreEstacion, sinMarcaInstitucional,
            acentoModulo, geoProvincias, trazasContornoProvincias, ajustarAltoMapa,
-           fmtNum, fmtSigno, textoServidor, textosServidor };
+           fmtNum, fmtSigno, textoServidor, textosServidor,
+           idioma, locale, localeGraficos, selectorIdioma, cargarIdioma, t: traducir, sinTraducir: () => [...SIN_TRADUCIR] };
 })();
 
 /* Superficie pura para las pruebas en Node (formateo de números en castellano y
@@ -1347,6 +1777,8 @@ if (typeof module === "object" && module.exports) module.exports = Object.freeze
   // utilidades de mapa: los módulos las llaman al montar (el banco de montaje las necesita)
   geoProvincias: App.geoProvincias, trazasContornoProvincias: App.trazasContornoProvincias,
   ajustarAltoMapa: App.ajustarAltoMapa,
+  // traductor ES → EN/中文: diccionario, fechas del servidor y frases compuestas
+  idioma: App.idioma, cargarIdioma: App.cargarIdioma, t: App.t, sinTraducir: App.sinTraducir,
 });
 
 /* ---------------- MODO VISOR: SOLO EXPLORACIÓN ----------------
